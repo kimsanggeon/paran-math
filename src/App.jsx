@@ -418,7 +418,7 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
               const newJson = JSON.stringify(firebaseStudents);
               if (prevJson !== newJson) {
                 window.__paranStudents = firebaseStudents;
-                try { localStorage.setItem('paran:students', JSON.stringify(firebaseStudents)); } catch(e) {}
+                try { localStorage.setItem(getStudentKey(), JSON.stringify(firebaseStudents)); } catch(e) {}
                 return firebaseStudents;
               }
               return prev;
@@ -38986,11 +38986,12 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
   const addStudent = () => {
     if (!newStudent.name) return;
 
+    const assignedTeacherId = (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : newStudent.teacherId;
     const student = {
       id: Date.now().toString(),
       ...newStudent,
       // ★ 선생님이 직접 학생 추가 시 자동으로 본인 담당으로 배정
-      teacherId: (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : newStudent.teacherId,
+      teacherId: assignedTeacherId,
       parentPassword: newStudent.parentPassword || '0000',
       exp: 0,
       streak: 0,
@@ -39001,6 +39002,7 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
       createdAt: new Date().toISOString()
     };
 
+    console.log('학생 추가:', student.name, 'teacherId:', student.teacherId, 'userType:', userType);
     saveStudents([...students, student]);
     setShowAddModal(false);
     setActiveTab('basic');
