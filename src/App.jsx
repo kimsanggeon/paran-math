@@ -404,6 +404,34 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
     loadStaff();
   }, [firebaseConnected]);
 
+  // ★ Firebase 실시간 폴링 (30초마다 학생 데이터 동기화)
+  // 원장이 다른 기기에서 학생을 등록하면 선생님 페이지에도 자동 반영
+  useEffect(() => {
+    if (!firebaseConnected || !userType) return;
+    const pollInterval = setInterval(async () => {
+      try {
+        if (isFirebaseConnected()) {
+          const firebaseStudents = await loadStudentsFromFirebase();
+          if (firebaseStudents && firebaseStudents.length > 0) {
+            setStudents(prev => {
+              const prevJson = JSON.stringify(prev);
+              const newJson = JSON.stringify(firebaseStudents);
+              if (prevJson !== newJson) {
+                window.__paranStudents = firebaseStudents;
+                try { localStorage.setItem('paran:students', JSON.stringify(firebaseStudents)); } catch(e) {}
+                return firebaseStudents;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (e) {
+        console.log('폴링 동기화 오류:', e);
+      }
+    }, 30000); // 30초
+    return () => clearInterval(pollInterval);
+  }, [firebaseConnected, userType]);
+
   // 학원별 격리된 스토리지 키 생성 (slug 없으면 'default' 사용, 구버전 키 참조 방지)
   const getStudentKey = () => {
     const sub = JSON.parse(localStorage.getItem('mathiq:activeSub') || 'null');
@@ -1051,7 +1079,7 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
           <ScheduleTab students={myStudents} />
         )}
         {activeTab === 'students' && (
-          <StudentManagementTab students={myStudents} saveStudents={saveMergedStudents} teachers={teachers} userType={userType} />
+          <StudentManagementTab students={myStudents} saveStudents={saveMergedStudents} teachers={teachers} userType={userType} loggedInTeacher={loggedInTeacher} />
         )}
         {activeTab === 'parent-pw' && (
           <ParentPasswordTab students={students} saveStudents={saveStudents} />
@@ -38858,7 +38886,7 @@ function HomeworkTab({ students, saveStudents }) {
 }
 
 // ========== 5. 학생 관리 탭 ==========
-function StudentManagementTab({ students, saveStudents, teachers = [], userType = 'teacher' }) {
+function StudentManagementTab({ students, saveStudents, teachers = [], userType = 'teacher', loggedInTeacher = null }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [activeTab, setActiveTab] = useState('basic'); // basic, school, goals
@@ -38961,6 +38989,8 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
     const student = {
       id: Date.now().toString(),
       ...newStudent,
+      // ★ 선생님이 직접 학생 추가 시 자동으로 본인 담당으로 배정
+      teacherId: (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : newStudent.teacherId,
       parentPassword: newStudent.parentPassword || '0000',
       exp: 0,
       streak: 0,
@@ -39210,12 +39240,14 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                   >
                     <Edit3 size={18} />
                   </button>
+                  {userType !== 'teacher' && (
                   <button
                     onClick={() => deleteStudent(student)}
                     className="p-1 text-red-600 hover:bg-red-50 rounded"
                   >
                     <Trash2 size={18} />
                   </button>
+                  )}
                 </div>
               </div>
               
@@ -39301,7 +39333,7 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
             {userType === 'teacher' ? (
               <>
                 <p className="text-gray-500 font-medium mb-2">배정된 학생이 없습니다</p>
-                <p className="text-sm text-gray-400">원장님이 이 계정에 학생을 배정하면 여기에 표시됩니다.</p>
+                <p className="text-sm text-gray-400">아래 버튼으로 학생을 직접 추가하거나, 원장님이 배정하면 여기에 표시됩니다.</p>
               </>
             ) : (
               <p className="text-gray-400">등록된 학생이 없습니다</p>
@@ -39469,6 +39501,13 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                         ))}
                       </select>
                       <p className="text-xs text-orange-600 mt-1">선생님 로그인 시 이 학생만 보입니다</p>
+                    </div>
+                  )}
+                  {/* 선생님 로그인 시 자동 담당 배정 안내 */}
+                  {userType === 'teacher' && loggedInTeacher && (
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-800 font-medium">👨‍🏫 담당 선생님: {loggedInTeacher.name}</p>
+                      <p className="text-xs text-blue-600 mt-1">학생이 자동으로 본인 담당으로 배정됩니다</p>
                     </div>
                   )}
                 </>
