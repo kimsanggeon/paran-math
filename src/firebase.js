@@ -1,327 +1,261 @@
 // Firebase 설정 및 유틸리티
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc, query, where } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
 
 let db = null;
+
+// ★ Firebase 설정 하드코딩 (모든 기기 자동 연결)
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAmqER5913WWFzhVcoABBEibhouvFk2WUg",
+  authDomain:        "paran-math.firebaseapp.com",
+  projectId:         "paran-math",
+  storageBucket:     "paran-math.firebasestorage.app",
+  messagingSenderId: "876432468378",
+  appId:             "1:876432468378:web:0d921baad20f3522293223"
+};
 
 // Firebase 설정 저장/로드
 export const saveFirebaseConfig = (config) => {
   localStorage.setItem('paran:firebaseConfig', JSON.stringify(config));
 };
-
-export const loadFirebaseConfig = () => {
-  try {
-    const saved = localStorage.getItem('paran:firebaseConfig');
-    return saved ? JSON.parse(saved) : null;
-  } catch (e) {
-    return null;
-  }
-};
+export const loadFirebaseConfig = () => FIREBASE_CONFIG;
 
 // Firebase 초기화
 export const initializeFirebase = (config) => {
   try {
-    if (!config || !config.apiKey || !config.projectId) {
-      console.log('Firebase 설정이 없습니다.');
-      return false;
-    }
-    
-    // 값 정리 (공백 제거)
-    const cleanConfig = {
-      apiKey: (config.apiKey || '').trim(),
-      authDomain: (config.authDomain || '').trim(),
-      projectId: (config.projectId || '').trim(),
-      storageBucket: (config.storageBucket || '').trim(),
-      messagingSenderId: (config.messagingSenderId || '').trim(),
-      appId: (config.appId || '').trim()
-    };
-    
-    console.log('Firebase 초기화 시도:', cleanConfig.projectId);
-    
-    // 이미 초기화된 앱이 있으면 그것을 사용
+    const cfg = config || FIREBASE_CONFIG;
     let app;
     if (getApps().length > 0) {
       app = getApp();
-      console.log('기존 Firebase 앱 사용');
     } else {
-      app = initializeApp(cleanConfig);
-      console.log('새 Firebase 앱 초기화');
+      app = initializeApp(cfg);
     }
-    
     db = getFirestore(app);
-    console.log('Firebase 초기화 성공');
+    console.log('Firebase 초기화 성공:', cfg.projectId);
     return true;
   } catch (e) {
-    console.error('Firebase 초기화 실패:', e);
-    console.error('에러 상세:', e.message);
+    console.error('Firebase 초기화 실패:', e.message);
     return false;
   }
 };
 
-// Firebase 연결 테스트 (실제 읽기/쓰기 테스트)
+// ★ 앱 시작 시 자동 초기화
+initializeFirebase(FIREBASE_CONFIG);
+
 export const testFirebaseConnection = async () => {
   if (!db) return { success: false, message: 'Firebase가 초기화되지 않았습니다.' };
-  
   try {
-    // 테스트 문서 쓰기
     const testRef = doc(db, 'test', 'connection');
-    await setDoc(testRef, { 
-      timestamp: new Date().toISOString(),
-      test: true 
-    });
-    
-    // 테스트 문서 읽기
+    await setDoc(testRef, { timestamp: new Date().toISOString(), test: true });
     const testDoc = await getDoc(testRef);
-    if (testDoc.exists()) {
-      console.log('Firebase 연결 테스트 성공');
-      return { success: true, message: '연결 성공!' };
-    } else {
-      return { success: false, message: '문서를 읽을 수 없습니다.' };
-    }
+    if (testDoc.exists()) return { success: true, message: '연결 성공!' };
+    return { success: false, message: '문서를 읽을 수 없습니다.' };
   } catch (e) {
-    console.error('Firebase 연결 테스트 실패:', e);
     return { success: false, message: `연결 실패: ${e.message}` };
   }
 };
 
-// Firebase 연결 상태 확인
-export const isFirebaseConnected = () => {
-  return db !== null;
-};
+export const isFirebaseConnected = () => db !== null;
 
-// ========== 학생 데이터 ==========
-
-// 학생 목록 저장
+// ========== 학생 데이터 (개별 문서 저장 - 1MB 제한 해결) ==========
 export const saveStudentsToFirebase = async (students, academyId = 'default') => {
   if (!db) return false;
   try {
-    const docRef = doc(db, 'academies', academyId, 'data', 'students');
-    await setDoc(docRef, { 
-      students, 
-      updatedAt: new Date().toISOString() 
+    const studentsCol = collection(db, 'academies', academyId, 'students');
+
+    // 현재 Firebase에 있는 학생 ID 목록 조회
+    const existingSnap = await getDocs(studentsCol);
+    const existingIds = new Set();
+    existingSnap.forEach(d => existingIds.add(d.id));
+
+    // 새 학생 목록의 ID
+    const newIds = new Set(students.map(s => String(s.id)));
+
+    // 삭제된 학생 제거
+    const batch = writeBatch(db);
+    existingSnap.forEach(d => {
+      if (!newIds.has(d.id)) {
+        batch.delete(d.ref);
+      }
     });
-    console.log('학생 데이터 Firebase 저장 완료');
+    await batch.commit();
+
+    // 각 학생을 개별 문서로 저장 (병렬 처리)
+    await Promise.all(students.map(student =>
+      setDoc(doc(db, 'academies', academyId, 'students', String(student.id)), {
+        ...student,
+        updatedAt: new Date().toISOString()
+      })
+    ));
+
     return true;
   } catch (e) {
-    console.error('학생 데이터 저장 실패:', e);
+    console.error('학생 저장 실패:', e);
     return false;
   }
 };
 
-// 학생 목록 로드
 export const loadStudentsFromFirebase = async (academyId = 'default') => {
   if (!db) return null;
   try {
-    const docRef = doc(db, 'academies', academyId, 'data', 'students');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      console.log('학생 데이터 Firebase 로드 완료');
-      return docSnap.data().students;
+    // 새 방식: 개별 문서 서브컬렉션에서 로드
+    const studentsCol = collection(db, 'academies', academyId, 'students');
+    const snap = await getDocs(studentsCol);
+    if (!snap.empty) {
+      const students = [];
+      snap.forEach(d => {
+        const data = d.data();
+        delete data.updatedAt;
+        students.push(data);
+      });
+      return students;
     }
+
+    // 하위 호환: 기존 단일 문서에서 로드 (마이그레이션 전 데이터)
+    const oldSnap = await getDoc(doc(db, 'academies', academyId, 'data', 'students'));
+    if (oldSnap.exists() && oldSnap.data().students) {
+      const oldStudents = oldSnap.data().students;
+      // 자동 마이그레이션: 개별 문서로 저장
+      console.log('학생 데이터 마이그레이션 시작:', oldStudents.length, '명');
+      await Promise.all(oldStudents.map(student =>
+        setDoc(doc(db, 'academies', academyId, 'students', String(student.id)), {
+          ...student,
+          updatedAt: new Date().toISOString()
+        })
+      ));
+      console.log('학생 데이터 마이그레이션 완료');
+      return oldStudents;
+    }
+
     return null;
   } catch (e) {
-    console.error('학생 데이터 로드 실패:', e);
+    console.error('학생 로드 실패:', e);
     return null;
   }
+};
+
+// ========== 선생님 데이터 ==========
+export const saveTeachersToFirebase = async (teachers, academyId = 'default') => {
+  if (!db) return false;
+  try {
+    await setDoc(doc(db, 'academies', academyId, 'data', 'teachers'), {
+      teachers, updatedAt: new Date().toISOString()
+    });
+    return true;
+  } catch (e) { return false; }
+};
+
+export const loadTeachersFromFirebase = async (academyId = 'default') => {
+  if (!db) return null;
+  try {
+    const snap = await getDoc(doc(db, 'academies', academyId, 'data', 'teachers'));
+    return snap.exists() ? snap.data().teachers : null;
+  } catch (e) { return null; }
 };
 
 // ========== 학습 보고서 ==========
-
-// 학습 보고서 저장
 export const saveReportToFirebase = async (studentName, reportData, academyId = 'default') => {
   if (!db) return false;
   try {
-    const docRef = doc(db, 'academies', academyId, 'reports', studentName);
-    await setDoc(docRef, { 
-      ...reportData, 
-      studentName,
-      updatedAt: new Date().toISOString() 
+    await setDoc(doc(db, 'academies', academyId, 'reports', studentName), {
+      ...reportData, studentName, updatedAt: new Date().toISOString()
     });
-    console.log(`${studentName} 학습 보고서 Firebase 저장 완료`);
     return true;
-  } catch (e) {
-    console.error('학습 보고서 저장 실패:', e);
-    return false;
-  }
+  } catch (e) { return false; }
 };
 
-// 학습 보고서 로드
 export const loadReportFromFirebase = async (studentName, academyId = 'default') => {
   if (!db) return null;
   try {
-    const docRef = doc(db, 'academies', academyId, 'reports', studentName);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      console.log(`${studentName} 학습 보고서 Firebase 로드 완료`);
-      const data = docSnap.data();
-      delete data.studentName;
-      delete data.updatedAt;
-      return data;
-    }
-    return null;
-  } catch (e) {
-    console.error('학습 보고서 로드 실패:', e);
-    return null;
-  }
+    const snap = await getDoc(doc(db, 'academies', academyId, 'reports', studentName));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    delete data.studentName; delete data.updatedAt;
+    return data;
+  } catch (e) { return null; }
 };
 
 // ========== 메시지 ==========
-
-// 메시지 저장
 export const saveMessagesToFirebase = async (studentName, messages, academyId = 'default') => {
   if (!db) return false;
   try {
-    const docRef = doc(db, 'academies', academyId, 'messages', studentName);
-    await setDoc(docRef, { 
-      messages, 
-      updatedAt: new Date().toISOString() 
+    await setDoc(doc(db, 'academies', academyId, 'messages', studentName), {
+      messages, updatedAt: new Date().toISOString()
     });
     return true;
-  } catch (e) {
-    console.error('메시지 저장 실패:', e);
-    return false;
-  }
+  } catch (e) { return false; }
 };
 
-// 메시지 로드
 export const loadMessagesFromFirebase = async (studentName, academyId = 'default') => {
   if (!db) return null;
   try {
-    const docRef = doc(db, 'academies', academyId, 'messages', studentName);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data().messages;
-    }
-    return null;
-  } catch (e) {
-    console.error('메시지 로드 실패:', e);
-    return null;
-  }
+    const snap = await getDoc(doc(db, 'academies', academyId, 'messages', studentName));
+    return snap.exists() ? snap.data().messages : null;
+  } catch (e) { return null; }
 };
 
 // ========== 설정 데이터 ==========
-
-// 설정 저장
 export const saveSettingsToFirebase = async (settings, academyId = 'default') => {
   if (!db) return false;
   try {
-    const docRef = doc(db, 'academies', academyId, 'data', 'settings');
-    await setDoc(docRef, { 
-      ...settings, 
-      updatedAt: new Date().toISOString() 
+    await setDoc(doc(db, 'academies', academyId, 'data', 'settings'), {
+      ...settings, updatedAt: new Date().toISOString()
     });
     return true;
-  } catch (e) {
-    console.error('설정 저장 실패:', e);
-    return false;
-  }
+  } catch (e) { return false; }
 };
 
-// 설정 로드
 export const loadSettingsFromFirebase = async (academyId = 'default') => {
   if (!db) return null;
   try {
-    const docRef = doc(db, 'academies', academyId, 'data', 'settings');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data();
-    }
-    return null;
-  } catch (e) {
-    console.error('설정 로드 실패:', e);
-    return null;
-  }
+    const snap = await getDoc(doc(db, 'academies', academyId, 'data', 'settings'));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { return null; }
 };
 
 // ========== 전체 데이터 동기화 ==========
-
-// 모든 데이터를 Firebase에 업로드
 export const uploadAllDataToFirebase = async (academyId = 'default') => {
   if (!db) return { success: false, message: 'Firebase가 연결되지 않았습니다.' };
-  
   try {
-    // 학생 데이터
     const studentsData = localStorage.getItem('paran:students');
-    if (studentsData) {
-      const students = JSON.parse(studentsData);
-      await saveStudentsToFirebase(students, academyId);
-    }
-    
-    // 학습 보고서들
+    if (studentsData) await saveStudentsToFirebase(JSON.parse(studentsData), academyId);
     const keys = Object.keys(localStorage);
     for (const key of keys) {
       if (key.startsWith('report:') || key.startsWith('paran:report:')) {
         const studentName = key.replace('paran:report:', '').replace('report:', '');
-        const reportData = JSON.parse(localStorage.getItem(key));
-        if (reportData) {
-          await saveReportToFirebase(studentName, reportData, academyId);
-        }
+        const data = JSON.parse(localStorage.getItem(key));
+        if (data) await saveReportToFirebase(studentName, data, academyId);
       }
       if (key.startsWith('paran:messages:')) {
         const studentName = key.replace('paran:messages:', '');
-        const messages = JSON.parse(localStorage.getItem(key));
-        if (messages) {
-          await saveMessagesToFirebase(studentName, messages, academyId);
-        }
+        const data = JSON.parse(localStorage.getItem(key));
+        if (data) await saveMessagesToFirebase(studentName, data, academyId);
       }
     }
-    
-    // 설정
-    const settings = {
-      academyName: localStorage.getItem('paran:academyName'),
-      academyLogo: localStorage.getItem('paran:academyLogo'),
-      notices: localStorage.getItem('paran:notices'),
-      schedules: localStorage.getItem('paran:schedules'),
-    };
-    await saveSettingsToFirebase(settings, academyId);
-    
     return { success: true, message: '모든 데이터가 Firebase에 업로드되었습니다.' };
   } catch (e) {
     return { success: false, message: `업로드 실패: ${e.message}` };
   }
 };
 
-// Firebase에서 모든 데이터 다운로드
 export const downloadAllDataFromFirebase = async (academyId = 'default') => {
   if (!db) return { success: false, message: 'Firebase가 연결되지 않았습니다.' };
-  
   try {
-    // 학생 데이터
     const students = await loadStudentsFromFirebase(academyId);
-    if (students) {
-      localStorage.setItem('paran:students', JSON.stringify(students));
-    }
-    
-    // 학습 보고서들
+    if (students) localStorage.setItem('paran:students', JSON.stringify(students));
     const reportsRef = collection(db, 'academies', academyId, 'reports');
     const reportsSnap = await getDocs(reportsRef);
-    reportsSnap.forEach(doc => {
-      const data = doc.data();
-      const studentName = doc.id;
-      delete data.studentName;
-      delete data.updatedAt;
-      localStorage.setItem(`report:${studentName}`, JSON.stringify(data));
-      localStorage.setItem(`paran:report:${studentName}`, JSON.stringify(data));
+    reportsSnap.forEach(d => {
+      const data = d.data(); const name = d.id;
+      delete data.studentName; delete data.updatedAt;
+      localStorage.setItem(`report:${name}`, JSON.stringify(data));
+      localStorage.setItem(`paran:report:${name}`, JSON.stringify(data));
     });
-    
-    // 메시지
     const messagesRef = collection(db, 'academies', academyId, 'messages');
     const messagesSnap = await getDocs(messagesRef);
-    messagesSnap.forEach(doc => {
-      const data = doc.data();
-      const studentName = doc.id;
-      localStorage.setItem(`paran:messages:${studentName}`, JSON.stringify(data.messages));
+    messagesSnap.forEach(d => {
+      localStorage.setItem(`paran:messages:${d.id}`, JSON.stringify(d.data().messages));
     });
-    
-    // 설정
-    const settings = await loadSettingsFromFirebase(academyId);
-    if (settings) {
-      if (settings.academyName) localStorage.setItem('paran:academyName', settings.academyName);
-      if (settings.academyLogo) localStorage.setItem('paran:academyLogo', settings.academyLogo);
-      if (settings.notices) localStorage.setItem('paran:notices', settings.notices);
-      if (settings.schedules) localStorage.setItem('paran:schedules', settings.schedules);
-    }
-    
     return { success: true, message: 'Firebase에서 모든 데이터를 다운로드했습니다.' };
   } catch (e) {
     return { success: false, message: `다운로드 실패: ${e.message}` };

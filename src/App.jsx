@@ -542,20 +542,26 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
   };
 
   const saveStudents = async (newStudents) => {
+    // ★ localStorage + state 업데이트를 먼저 (Firebase 실패해도 로컬은 반영)
+    const studentKey = getStudentKey();
     try {
-      const studentKey = getStudentKey();
+      localStorage.setItem(studentKey, JSON.stringify(newStudents));
+    } catch (e) {
+      console.log('localStorage 저장 오류:', e);
+    }
+    setStudents(newStudents);
+
+    try {
       if (typeof window !== 'undefined' && window.storage && typeof window.storage.set === 'function') {
         await window.storage.set(studentKey, JSON.stringify(newStudents));
       }
-      localStorage.setItem(studentKey, JSON.stringify(newStudents));
-      setStudents(newStudents);
-      
-      // Firebase에도 저장
-      if (firebaseConnected) {
-        saveStudentsToFirebase(newStudents).catch(e => console.log('Firebase 학생 저장 오류:', e));
-      }
     } catch (e) {
-      console.log('학생 저장 오류:', e);
+      console.log('window.storage 저장 오류:', e);
+    }
+
+    // Firebase에도 저장 (실패해도 로컬 데이터는 이미 반영됨)
+    if (firebaseConnected) {
+      saveStudentsToFirebase(newStudents).catch(e => console.log('Firebase 학생 저장 오류:', e));
     }
   };
 
@@ -696,13 +702,13 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
 
   // 선생님이 saveStudents 호출할 때 전체 학생 목록에 병합해서 저장
   // (필터링된 myStudents만 저장하면 다른 선생님 학생이 사라지는 버그 방지)
-  const saveMergedStudents = (updatedMyStudents) => {
+  const saveMergedStudents = async (updatedMyStudents) => {
     if (userType === 'teacher' && loggedInTeacher) {
       // 내 담당이 아닌 학생은 그대로 유지, 내 담당 학생만 교체
       const otherStudents = students.filter(s => s.teacherId !== loggedInTeacher.id);
-      saveStudents([...otherStudents, ...updatedMyStudents]);
+      await saveStudents([...otherStudents, ...updatedMyStudents]);
     } else {
-      saveStudents(updatedMyStudents);
+      await saveStudents(updatedMyStudents);
     }
   };
 
@@ -38983,35 +38989,41 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
     }
   };
 
-  const addStudent = () => {
+  const addStudent = async () => {
     if (!newStudent.name) return;
 
-    const assignedTeacherId = (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : newStudent.teacherId;
-    const student = {
-      id: Date.now().toString(),
-      ...newStudent,
-      // ★ 선생님이 직접 학생 추가 시 자동으로 본인 담당으로 배정
-      teacherId: assignedTeacherId,
-      parentPassword: newStudent.parentPassword || '0000',
-      exp: 0,
-      streak: 0,
-      badges: [],
-      homework: [],
-      wrongNotes: [],
-      tests: [],
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const assignedTeacherId = (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : newStudent.teacherId;
+      const student = {
+        id: Date.now().toString(),
+        ...newStudent,
+        // ★ 선생님이 직접 학생 추가 시 자동으로 본인 담당으로 배정
+        teacherId: assignedTeacherId,
+        parentPassword: newStudent.parentPassword || '0000',
+        exp: 0,
+        streak: 0,
+        badges: [],
+        homework: [],
+        wrongNotes: [],
+        tests: [],
+        createdAt: new Date().toISOString()
+      };
 
-    console.log('학생 추가:', student.name, 'teacherId:', student.teacherId, 'userType:', userType);
-    saveStudents([...students, student]);
-    setShowAddModal(false);
-    setActiveTab('basic');
-    setNewStudent({ 
-      name: '', grade: '', className: '', phone: '', parentPhone: '', parentName: '',
-      parentPassword: '0000', teacherId: '',
-      schoolName: '', schoolGrade: '', schoolSemester: '', levelStage: '',
-      schoolScores: [], shortTermGoal: '', longTermGoal: ''
-    });
+      console.log('학생 추가 시도:', student.name, 'teacherId:', student.teacherId, 'userType:', userType);
+      await saveStudents([...students, student]);
+      console.log('학생 추가 완료:', student.name);
+      setShowAddModal(false);
+      setActiveTab('basic');
+      setNewStudent({
+        name: '', grade: '', className: '', phone: '', parentPhone: '', parentName: '',
+        parentPassword: '0000', teacherId: '',
+        schoolName: '', schoolGrade: '', schoolSemester: '', levelStage: '',
+        schoolScores: [], shortTermGoal: '', longTermGoal: ''
+      });
+    } catch (e) {
+      console.error('학생 추가 오류:', e);
+      alert('학생 추가 중 오류가 발생했습니다: ' + e.message);
+    }
   };
 
   const updateStudent = () => {
