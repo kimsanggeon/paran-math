@@ -344,6 +344,28 @@ export default function AppRouter() {
   return <ParanMathSystem businessType={businessType} resetBusinessType={resetBusinessType} />;
 }
 
+// ★ 앱 버전 (서비스워커 캐시 디버깅용)
+const APP_VERSION = '2026.03.24.2';
+console.log('%c[파란수학] 앱 버전: ' + APP_VERSION, 'color: blue; font-size: 16px; font-weight: bold;');
+
+// ★ 서비스워커 강제 업데이트 및 캐시 삭제
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(reg => {
+      reg.update();
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+    });
+  });
+  // 캐시 스토리지 클리어
+  if ('caches' in window) {
+    caches.keys().then(names => {
+      names.forEach(name => caches.delete(name));
+    });
+  }
+}
+
 // ========== 메인 학원 관리 시스템 ==========
 function ParanMathSystem({ businessType, resetBusinessType }) {
   const isAdminMode = new URLSearchParams(window.location.search).has('admin');
