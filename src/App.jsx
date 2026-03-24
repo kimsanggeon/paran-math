@@ -38990,16 +38990,30 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
   };
 
   const addStudent = async () => {
-    if (!newStudent.name) return;
+    if (!newStudent.name) {
+      alert('학생 이름을 입력해주세요.');
+      return;
+    }
 
     try {
-      const assignedTeacherId = (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : newStudent.teacherId;
+      const assignedTeacherId = (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : (newStudent.teacherId || '');
       const student = {
         id: Date.now().toString(),
-        ...newStudent,
-        // ★ 선생님이 직접 학생 추가 시 자동으로 본인 담당으로 배정
+        name: newStudent.name,
+        grade: newStudent.grade || '',
+        className: newStudent.className || '',
+        phone: newStudent.phone || '',
+        parentPhone: newStudent.parentPhone || '',
+        parentName: newStudent.parentName || '',
         teacherId: assignedTeacherId,
         parentPassword: newStudent.parentPassword || '0000',
+        schoolName: newStudent.schoolName || '',
+        schoolGrade: newStudent.schoolGrade || '',
+        schoolSemester: newStudent.schoolSemester || '',
+        levelStage: newStudent.levelStage || '',
+        schoolScores: newStudent.schoolScores || [],
+        shortTermGoal: newStudent.shortTermGoal || '',
+        longTermGoal: newStudent.longTermGoal || '',
         exp: 0,
         streak: 0,
         badges: [],
@@ -39009,9 +39023,9 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
         createdAt: new Date().toISOString()
       };
 
-      console.log('학생 추가 시도:', student.name, 'teacherId:', student.teacherId, 'userType:', userType);
+      console.log('학생 추가 시도:', student.name, 'teacherId:', student.teacherId, 'userType:', userType, '기존학생수:', students.length);
       await saveStudents([...students, student]);
-      console.log('학생 추가 완료:', student.name);
+      alert('✅ ' + student.name + ' 학생이 등록되었습니다.');
       setShowAddModal(false);
       setActiveTab('basic');
       setNewStudent({
