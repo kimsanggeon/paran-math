@@ -290,9 +290,12 @@ export default function AppRouter() {
 
   const isAdminMode = new URLSearchParams(window.location.search).has('admin');
   
-  // 비즈니스 유형 미선택 → 게이트웨이 (admin이 아닐 때)
+  // ★ 파란수학 전용 사이트: businessType 미선택 시 자동으로 'academy' 설정
+  // (학원/교습소/공부방 선택 화면을 건너뛰고 바로 학원 랜딩 페이지로 이동)
   if (!businessType && !isAdminMode) {
-    return <BusinessTypeSelector onSelect={selectBusinessType} />;
+    localStorage.setItem('mathiq:businessType', 'academy');
+    setBusinessType('academy');
+    return null;
   }
   
   // 학원 강사 → 별도 앱
