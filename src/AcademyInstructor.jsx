@@ -658,7 +658,7 @@ function InstructorApp({ mode = 'instructor' }) {
         </div>
         <div style={{ padding:"12px 18px",borderTop:"1px solid rgba(255,255,255,.08)" }}>
           <div style={{ fontSize:11,color:"#64748B" }}>{mode==='tutor'?'과외 선생님':'김수학 강사님'}</div>
-          <div style={{ fontSize:12,color:"#94A3B8",marginTop:2 }}>스마트빌드 (SmartBuild)</div>
+          <div style={{ fontSize:12,color:"#94A3B8",marginTop:2 }}>파란수학학원 몰입관</div>
         </div>
       </div>
 

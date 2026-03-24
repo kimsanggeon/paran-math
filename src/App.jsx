@@ -1036,7 +1036,7 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
       <div className={`bg-gradient-to-r ${getHeaderColor()} text-white p-4 shadow-lg`}>
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold">🔵 {subscription?.academy || '스마트빌드 (SmartBuild)'} 몰입관</h1>
+            <h1 className="text-2xl font-bold">🔵 {subscription?.academy || '파란수학학원 몰입관'} 몰입관</h1>
             <p className="text-white/80 text-sm">
               통합 학원 관리 시스템 ({getUserTypeLabel()}
               {userType === 'teacher' && loggedInTeacher && ` · ${loggedInTeacher.name} · 담당 ${myStudents.length}명`}
@@ -1815,7 +1815,7 @@ function MathIQLanding({ onSubscribe, expiredSub }) {
             const sub = { ...form, plan: plan.name, billing: yearly?'yearly':'monthly', status:'trial', appliedAt:now, trialExpiry, paidAt:null, slug: makeSlug(form.academy) };
             setSubData(sub); setStep('success');
           }}>
-            {[['academy','학원명','예) 스마트빌드 (SmartBuild)',true,'text'],['director','원장 이름','예) 홍길동',true,'text'],['email','이메일','example@email.com',true,'email'],['phone','연락처','010-0000-0000',false,'text'],['region','지역','예) 서울 강남구',false,'text']].map(([k,label,ph,req,type]) => (
+            {[['academy','학원명','예) 파란수학학원 몰입관',true,'text'],['director','원장 이름','예) 홍길동',true,'text'],['email','이메일','example@email.com',true,'email'],['phone','연락처','010-0000-0000',false,'text'],['region','지역','예) 서울 강남구',false,'text']].map(([k,label,ph,req,type]) => (
               <div key={k} style={{ marginBottom:'12px' }}>
                 <label style={{ display:'block', fontSize:'12px', fontWeight:700, color:'#9aabc2', marginBottom:'5px' }}>{label}{req&&<span style={{ color:'#ff4757' }}> *</span>}</label>
                 <input type={type} placeholder={ph} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} required={req}
@@ -3475,7 +3475,7 @@ function AcademyLandingDesigner({ subscription, onClose, autoCloseAfterSave = fa
               {/* 텍스트 설정 */}
               <div style={{ background:'#f9fafb', border:'1px solid #e5e7eb', borderRadius:'12px', padding:'14px', marginBottom:'14px' }}>
                 <div style={{ fontSize:'12px', fontWeight:800, color:'#374151', marginBottom:'12px' }}>텍스트 설정</div>
-                {inp('학원 이름 (비우면 학원명 자동)', 'logoText', 'text', '예) 스마트빌드 (SmartBuild)')}
+                {inp('학원 이름 (비우면 학원명 자동)', 'logoText', 'text', '예) 파란수학학원 몰입관')}
                 {inp('서브텍스트', 'logoSubText', 'text', '예) 몰입관')}
               </div>
 
@@ -4523,7 +4523,7 @@ function AcademyLandingPreview({ design, subscription }) {
 // ========== 랜딩 페이지 기본 콘텐츠 (원장이 편집 가능) ==========
 const DEFAULT_LANDING = {
   // 네비게이션
-  nav_name: '스마트빌드 (SmartBuild)',
+  nav_name: '파란수학학원 몰입관',
   nav_sub: '몰입관',
 
   // 히어로
@@ -4531,7 +4531,7 @@ const DEFAULT_LANDING = {
   hero_headline1: '수학이 두렵다면,',
   hero_headline2: '몰입으로 바꿔드립니다',
   hero_sub1: '수포자도 자신감 있는 수학 실력자로 만드는',
-  hero_sub2: '스마트빌드 (SmartBuild)의 차별화된 수학 교육을 경험하세요.',
+  hero_sub2: '파란수학학원 몰입관의 차별화된 수학 교육을 경험하세요.',
   hero_cta1: '🚀 학원 시스템 접속',
   hero_cta2: '학원 소개 ↓',
 
@@ -4542,7 +4542,7 @@ const DEFAULT_LANDING = {
   stat3_num: '∞',  stat3_label: '오답 반복 복습 시스템',
 
   // 특장점 섹션
-  feat_section_badge: '왜 스마트빌드 (SmartBuild)인가요?',
+  feat_section_badge: '왜 파란수학학원 몰입관인가요?',
   feat_section_h2a: '일반 학원과는 다른',
   feat_section_h2b: '파란만의 차별점',
   feat_section_desc: '단순 문제 풀이가 아닌 진짜 이해와 몰입으로, 수학의 재미를 찾아드립니다.',
@@ -4598,7 +4598,7 @@ const DEFAULT_LANDING = {
 
   // 감성 CTA 섹션
   cta_h2a: '수학 불안을 자신감으로.',
-  cta_h2b: '스마트빌드 (SmartBuild)이 함께합니다.',
+  cta_h2b: '파란수학학원 몰입관이 함께합니다.',
   cta_sub1: '"수학은 원래 어렵다"는 말은 틀렸습니다.',
   cta_sub2: '제대로 된 방법으로 배운 적이 없었을 뿐입니다.',
   cta_q0: '수학을 포기했나요?',    cta_a0: '수포자 탈출 집중 프로그램',
@@ -4611,7 +4611,7 @@ const DEFAULT_LANDING = {
   login_sub: '학생·학부모·선생님·원장 모두 이 시스템을 통해 연결됩니다.',
 
   // 푸터
-  footer_name: '스마트빌드 (SmartBuild)',
+  footer_name: '파란수학학원 몰입관',
   footer_tagline: '몰입으로 완성하는 수학 실력 · 수포자도 자신감 있는 수학 실력자로',
 };
 
@@ -4849,7 +4849,7 @@ function LoginScreen({ students, teachers, staff, passwords, onLogin, subscripti
   if (mode === 'select' || ['superadmin','director','teacher','staff','parent','student'].includes(mode)) {
     const current = loginOptions.find(o => o.type === mode);
     const dLeft = subscription ? Math.max(0, Math.ceil((new Date(subscription.trialExpiry).getTime() - Date.now()) / 86400000)) : 0;
-    const academyName = subscription?.academy || '스마트빌드 (SmartBuild)';
+    const academyName = subscription?.academy || '파란수학학원 몰입관';
     const loginTheme = getEffectiveTheme(academyDesign);
     const loginIsDark = loginTheme.heroStyle === 'dark';
     return (
@@ -8258,7 +8258,7 @@ function ParentView({ student, students, onLogout, subscription }) {
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 shadow-lg">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold">🔵 스마트빌드 (SmartBuild)</h1>
+            <h1 className="text-xl font-bold">🔵 파란수학학원 몰입관</h1>
             <p className="text-green-100 text-sm">{student.name} 학부모님</p>
           </div>
           <button
@@ -11579,7 +11579,7 @@ function ParentView({ student, students, onLogout, subscription }) {
         {/* 하단 안내 */}
         <div className="text-center text-gray-400 text-sm py-4">
           <p>문의사항이 있으시면 학원으로 연락해주세요.</p>
-          <p className="font-medium text-blue-600">스마트빌드 (SmartBuild)</p>
+          <p className="font-medium text-blue-600">파란수학학원 몰입관</p>
         </div>
       </div>
     </div>
@@ -13344,7 +13344,7 @@ function StudentView({ student, students, onLogout, subscription }) {
 
         {/* 하단 */}
         <div className="text-center text-gray-400 text-sm py-4">
-          <p>🔵 스마트빌드 (SmartBuild)</p>
+          <p>🔵 파란수학학원 몰입관</p>
         </div>
       </div>
     </div>
@@ -15393,7 +15393,7 @@ function DirectorDashboardTab({ students, saveStudents, teachers }) {
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-bold mb-2">🏢 원장 대시보드</h1>
-            <p className="text-indigo-200">스마트빌드 (SmartBuild) 전체 현황을 한눈에 확인하세요</p>
+            <p className="text-indigo-200">파란수학학원 몰입관 전체 현황을 한눈에 확인하세요</p>
           </div>
           <div className="text-right">
             <p className="text-indigo-200 text-sm">{new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</p>
@@ -17879,7 +17879,7 @@ function SettingsTab({ userType, passwords, saveSettings, students, saveStudents
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = `스마트빌드 (SmartBuild)_백업_${new Date().toISOString().split('T')[0]}.json`;
+                      a.download = `파란수학학원 몰입관_백업_${new Date().toISOString().split('T')[0]}.json`;
                       document.body.appendChild(a);
                       a.click();
                       document.body.removeChild(a);
@@ -17891,7 +17891,7 @@ function SettingsTab({ userType, passwords, saveSettings, students, saveStudents
                         const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(exportData);
                         const a = document.createElement('a');
                         a.href = dataUri;
-                        a.download = `스마트빌드 (SmartBuild)_백업_${new Date().toISOString().split('T')[0]}.json`;
+                        a.download = `파란수학학원 몰입관_백업_${new Date().toISOString().split('T')[0]}.json`;
                         a.click();
                       } catch (e2) {
                         console.error('Data URI 방식 실패:', e2);
@@ -17911,7 +17911,7 @@ function SettingsTab({ userType, passwords, saveSettings, students, saveStudents
                 <ol className="text-yellow-700 text-xs mt-1 space-y-1">
                   <li>1. "클립보드에 복사" 버튼 클릭</li>
                   <li>2. 메모장 열기 → Ctrl+V 붙여넣기</li>
-                  <li>3. 파일 → 다른 이름으로 저장 → <code className="bg-yellow-200 px-1 rounded">스마트빌드 (SmartBuild)_백업.json</code></li>
+                  <li>3. 파일 → 다른 이름으로 저장 → <code className="bg-yellow-200 px-1 rounded">파란수학학원 몰입관_백업.json</code></li>
                 </ol>
               </div>
               <textarea
@@ -17925,7 +17925,7 @@ function SettingsTab({ userType, passwords, saveSettings, students, saveStudents
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(exportData).then(() => {
-                      alert('✅ 클립보드에 복사되었습니다!\n\n메모장에 붙여넣기 후\n스마트빌드 (SmartBuild)_백업.json 으로 저장하세요.');
+                      alert('✅ 클립보드에 복사되었습니다!\n\n메모장에 붙여넣기 후\n파란수학학원 몰입관_백업.json 으로 저장하세요.');
                     }).catch(() => {
                       alert('복사 실패. 텍스트를 직접 선택해서 복사하세요.');
                     });
@@ -18994,7 +18994,7 @@ function AccountingTab({ students, saveStudents, staff, slug, teachers }) {
 
   // 수납 알림 메시지 생성
   const generateReminderMessage = (student, invoice) => {
-    const academyName = '스마트빌드 (SmartBuild)';
+    const academyName = '파란수학학원 몰입관';
     return `[${academyName}] ${student}님 학부모님께\n\n${filterMonth.replace('-', '년 ')}월 수업료 안내드립니다.\n\n• 수업료: ${(invoice?.originalFee || 0).toLocaleString()}원${invoice?.discountInfo ? `\n• 할인: ${invoice.discountInfo}` : ''}\n• 납부금액: ${(invoice?.finalFee || 0).toLocaleString()}원\n• 납부기한: ${filterMonth}-10\n\n감사합니다. 🙏`;
   };
 
@@ -22558,12 +22558,12 @@ function LandingContentEditorTab({ subscription }) {
 
         {activeSection === 'nav' && (<>
           <div className="text-sm font-black text-gray-700 mb-4">🔗 네비게이션 메뉴</div>
-          {inp('학원 이름 (로고 옆)', 'nav_name', 'text', '예) 스마트빌드 (SmartBuild)')}
+          {inp('학원 이름 (로고 옆)', 'nav_name', 'text', '예) 파란수학학원 몰입관')}
           {inp('메뉴 1', 'nav_menu1', 'text', '예) 특장점')}
           {inp('메뉴 2', 'nav_menu2', 'text', '예) 프로그램')}
           {inp('메뉴 3', 'nav_menu3', 'text', '예) 수강신청')}
           {inp('로그인 버튼 텍스트', 'nav_login_btn', 'text', '예) 로그인')}
-          {inp('푸터 학원 이름', 'footer_name', 'text', '예) 스마트빌드 (SmartBuild)')}
+          {inp('푸터 학원 이름', 'footer_name', 'text', '예) 파란수학학원 몰입관')}
           {inp('푸터 주소', 'footer_address', 'text', '예) 서울 강남구')}
           {inp('푸터 전화번호', 'footer_phone', 'text', '예) 02-1234-5678')}
         </>)}
@@ -23186,7 +23186,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
   <div class="page">
     <div class="header">
       <h1>🧪 성격/적성 검사지</h1>
-      <p style="color:#6b7280;">스마트빌드 (SmartBuild)</p>
+      <p style="color:#6b7280;">파란수학학원 몰입관</p>
     </div>
     
     <div class="info-box">
@@ -23347,7 +23347,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
     </div>
     
     <div class="footer" style="margin-top:30px;">
-      <p>스마트빌드 (SmartBuild) 성격/적성 검사지 | 결과 입력은 앱에서 진행해 주세요.</p>
+      <p>파란수학학원 몰입관 성격/적성 검사지 | 결과 입력은 앱에서 진행해 주세요.</p>
     </div>
   </div>
 </body>
@@ -26924,7 +26924,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   
                   <!-- 학원명 & 직인 -->
                   <div style="text-align: center; padding-bottom: 15px; position: relative;">
-                    <span style="font-size: 11pt; color: #333; font-weight: 500;">스마트빌드 원장</span>
+                    <span style="font-size: 11pt; color: #333; font-weight: 500;">파란수학학원 원장</span>
                     <div style="
                       display: inline-block;
                       margin-left: 10px;
@@ -27766,7 +27766,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
 <div class="card">
   <div class="header">
     <h1 class="header-title">📚 수학 학습 보고서${reportNumber ? ` (${reportNumber}회분)` : ''}</h1>
-    <p class="header-subtitle">스마트빌드 (SmartBuild)</p>
+    <p class="header-subtitle">파란수학학원 몰입관</p>
     <p class="header-slogan">몰입으로 완성하는 수학 실력</p>
   </div>
 </div>
@@ -28625,7 +28625,7 @@ ${(reportData.nextClassPrep || []).filter(p => p).length > 0 ? `<div class="card
 </div>
 
 <div class="footer">
-  <p class="footer-title">스마트빌드 (SmartBuild)</p>
+  <p class="footer-title">파란수학학원 몰입관</p>
   <p class="footer-slogan">몰입으로 완성하는 수학 실력</p>
 </div>
 
@@ -28869,7 +28869,7 @@ ${(reportData.nextClassPrep || []).filter(p => p).length > 0 ? `<div class="card
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <h1 className="text-lg font-bold text-gray-800">📚 수학 학습 보고서</h1>
-              <p className="text-blue-600 text-xs font-medium">스마트빌드 (SmartBuild)</p>
+              <p className="text-blue-600 text-xs font-medium">파란수학학원 몰입관</p>
               <p className="text-gray-400 text-xs">몰입으로 완성하는 수학 실력</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -37276,7 +37276,7 @@ function WrongNotesTab({ students, saveStudents }) {
       <body>
         <div class="header">
           <h1>📊 오답 분석 보고서</h1>
-          <div class="subtitle">스마트빌드 (SmartBuild) | ${today}</div>
+          <div class="subtitle">파란수학학원 몰입관 | ${today}</div>
         </div>
         
         <div class="student-info">
@@ -37458,7 +37458,7 @@ function WrongNotesTab({ students, saveStudents }) {
         </div>
         
         <div class="footer">
-          <p>스마트빌드 (SmartBuild) 오답 분석 보고서 | 생성일: ${new Date().toLocaleString('ko-KR')}</p>
+          <p>파란수학학원 몰입관 오답 분석 보고서 | 생성일: ${new Date().toLocaleString('ko-KR')}</p>
           <p>본 보고서는 학생의 오답 패턴을 분석하여 효과적인 학습 방향을 제시합니다.</p>
         </div>
       </body>
@@ -46837,7 +46837,7 @@ function TutoringLandingLayout({ C, t, templates, selTemplate, setSelTemplate, f
         </div>
       </div>
 
-      <div style={{ padding:'20px', background:'#111827', textAlign:'center' }}><p style={{ fontSize:11, color:'#4b5563' }}>© 2026 스마트빌드 (SmartBuild) · 교습소를 위한 스마트 관리 시스템</p></div>
+      <div style={{ padding:'20px', background:'#111827', textAlign:'center' }}><p style={{ fontSize:11, color:'#4b5563' }}>© 2026 파란수학학원 몰입관 · 교습소를 위한 스마트 관리 시스템</p></div>
     </div>
   );
 }
@@ -47008,7 +47008,7 @@ function StudyRoomLandingLayout({ C, t, templates, selTemplate, setSelTemplate, 
         </div>
       </div>
 
-      <div style={{ padding:'20px', background:'#422006', textAlign:'center' }}><p style={{ fontSize:11, color:'#92400e' }}>© 2026 스마트빌드 (SmartBuild) · 공부방을 위한 스마트 관리 시스템</p></div>
+      <div style={{ padding:'20px', background:'#422006', textAlign:'center' }}><p style={{ fontSize:11, color:'#92400e' }}>© 2026 파란수학학원 몰입관 · 공부방을 위한 스마트 관리 시스템</p></div>
     </div>
   );
 }
@@ -47277,7 +47277,7 @@ function TutoringCenterSystem({ subscription, onReset }) {
 
         {/* 하단 푸터 */}
         <div style={{ position:'relative', zIndex:10, textAlign:'center', padding:'20px', borderTop:'1px solid rgba(255,255,255,0.04)' }}>
-          <p style={{ fontSize:11, color:'#374151' }}>© 2026 {acName} · Powered by 스마트빌드</p>
+          <p style={{ fontSize:11, color:'#374151' }}>© 2026 {acName} · Powered by 파란수학학원</p>
         </div>
       </div>
     );
@@ -47897,7 +47897,7 @@ function StudyRoomSystem({ subscription, onReset }) {
 
         {/* 하단 */}
         <div style={{ position:'relative', zIndex:10, textAlign:'center', padding:'16px 20px', borderTop:'1px solid rgba(120,53,15,0.08)' }}>
-          <p style={{ fontSize:11, color:'#a16207' }}>© 2026 {acName} · Powered by 스마트빌드</p>
+          <p style={{ fontSize:11, color:'#a16207' }}>© 2026 {acName} · Powered by 파란수학학원</p>
         </div>
       </div>
     );
