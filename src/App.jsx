@@ -14199,7 +14199,30 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
           personalityTest: null
         };
         
-        setReportData(prev => ({ ...defaults, ...loadedData, studentName: studentName }));
+        // ★ 오늘 날짜와 저장된 보고서 날짜가 다르면 코멘트/가이드 초기화 (새로 작성)
+        const today = new Date().toISOString().split('T')[0];
+        const savedDate = loadedData.reportDate || '';
+        const dateChanged = savedDate && savedDate !== today;
+
+        const finalData = { ...defaults, ...loadedData, studentName: studentName };
+        if (dateChanged) {
+          finalData.teacherComment = '';
+          finalData.homeStudyGuide = '';
+          finalData.reportDate = today;
+          finalData._dateAutoSet = true;
+          // 이전 코멘트를 히스토리로 보존
+          if (loadedData.teacherComment || loadedData.homeStudyGuide) {
+            const commentHistory = loadedData._commentHistory || [];
+            commentHistory.push({
+              date: savedDate,
+              teacherComment: loadedData.teacherComment || '',
+              homeStudyGuide: loadedData.homeStudyGuide || ''
+            });
+            finalData._commentHistory = commentHistory.slice(-10); // 최근 10개까지 보관
+          }
+        }
+
+        setReportData(prev => finalData);
         setSaveStatus('saved');
         setIsLoading(false);
         return true;
