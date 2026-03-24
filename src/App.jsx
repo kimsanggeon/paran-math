@@ -662,41 +662,8 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
   };
 
   // ── URL 기반 모드 분기 ──
-  // ?admin 파라미터가 없으면 → 항상 MathIQ Pro 판매 랜딩
-  // ?admin 있으면 → 관리 시스템 (구독 확인 후 로그인)
-
-  // 판매 랜딩: admin 파라미터 없는 일반 방문자
-  if (!isAdminMode) {
-    return (
-      <div style={{ position:'relative' }}>
-        {businessType && (
-          <button onClick={resetBusinessType} style={{ position:'fixed', top:12, left:12, zIndex:999, padding:'6px 14px', background:'rgba(0,0,0,0.6)', color:'#fff', border:'none', borderRadius:8, fontSize:12, cursor:'pointer', fontWeight:700, backdropFilter:'blur(4px)' }}>← 다른 서비스</button>
-        )}
-        <MathIQLanding
-        onSubscribe={(subData) => {
-          localStorage.setItem('mathiq:activeSub', JSON.stringify(subData));
-          setSubscription(subData);
-          // 신청 완료 후 관리 시스템 입장 시 ?admin으로 이동
-        }}
-        expiredSub={subscription?.status === 'expired' ? subscription : null}
-      />
-      </div>
-    );
-  }
-
-  // 관리 시스템: ?admin 파라미터 있을 때
-  // 구독 없거나 만료 → 판매 랜딩으로
-  if (!subscription || subscription.status === 'expired') {
-    return (
-      <MathIQLanding
-        onSubscribe={(subData) => {
-          localStorage.setItem('mathiq:activeSub', JSON.stringify(subData));
-          setSubscription(subData);
-        }}
-        expiredSub={subscription?.status === 'expired' ? subscription : null}
-      />
-    );
-  }
+  // ★ 파란수학 전용 사이트: MathIQ Pro 랜딩을 건너뛰고 바로 학원 시스템으로 진입
+  // (구독 없어도 파란수학 랜딩 페이지 → 로그인 화면 표시)
 
   // 로그인 전: 로그인 화면
   if (!userType) {
