@@ -656,17 +656,17 @@ export default function ParanMathSystem() {
           <StudentManagementTab students={myStudents} saveStudents={readOnlySave} teachers={teachers} userType={userType} isReadOnly={isReadOnly} loggedInTeacher={loggedInTeacher} />
         )}
         {activeTab === 'parent-pw' && (
-          <ParentPasswordTab students={students} saveStudents={saveStudents} />
+          <ParentPasswordTab students={myStudents} saveStudents={readOnlySave} />
         )}
         {activeTab === 'statistics' && (
-          <StatisticsTab students={students} isReadOnly={isReadOnly} />
+          <StatisticsTab students={myStudents} isReadOnly={isReadOnly} />
         )}
         {activeTab === 'settings' && (
-          <SettingsTab 
+          <SettingsTab
             userType={userType}
             passwords={passwords}
             saveSettings={saveSettings}
-            students={students}
+            students={myStudents}
             saveStudents={saveStudents}
             teachers={teachers}
             saveTeachers={saveTeachers}
