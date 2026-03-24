@@ -404,16 +404,26 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
     loadStaff();
   }, [firebaseConnected]);
 
+  // ★ 저장 중 폴링 차단용 플래그
+  const savingRef = React.useRef(false);
+
   // ★ Firebase 실시간 폴링 (30초마다 학생 데이터 동기화)
   // 원장이 다른 기기에서 학생을 등록하면 선생님 페이지에도 자동 반영
   useEffect(() => {
     if (!firebaseConnected || !userType) return;
     const pollInterval = setInterval(async () => {
+      // ★ 저장 중이면 폴링 건너뜀 (경쟁 조건 방지)
+      if (savingRef.current) {
+        console.log('폴링 건너뜀: 저장 진행 중');
+        return;
+      }
       try {
         if (isFirebaseConnected()) {
           const firebaseStudents = await loadStudentsFromFirebase();
           if (firebaseStudents && firebaseStudents.length > 0) {
             setStudents(prev => {
+              // ★ 저장 완료 직후일 수 있으므로 다시 확인
+              if (savingRef.current) return prev;
               const prevJson = JSON.stringify(prev);
               const newJson = JSON.stringify(firebaseStudents);
               if (prevJson !== newJson) {
@@ -542,6 +552,9 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
   };
 
   const saveStudents = async (newStudents) => {
+    // ★ 저장 시작 - 폴링 차단
+    savingRef.current = true;
+
     // ★ localStorage + state 업데이트를 먼저 (Firebase 실패해도 로컬은 반영)
     const studentKey = getStudentKey();
     try {
@@ -550,6 +563,7 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
       console.log('localStorage 저장 오류:', e);
     }
     setStudents(newStudents);
+    window.__paranStudents = newStudents;
 
     try {
       if (typeof window !== 'undefined' && window.storage && typeof window.storage.set === 'function') {
@@ -559,10 +573,18 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
       console.log('window.storage 저장 오류:', e);
     }
 
-    // Firebase에도 저장 (실패해도 로컬 데이터는 이미 반영됨)
+    // ★ Firebase에도 저장 (await로 완료 대기 → 폴링이 구 데이터를 덮어쓰는 것 방지)
     if (firebaseConnected) {
-      saveStudentsToFirebase(newStudents).catch(e => console.log('Firebase 학생 저장 오류:', e));
+      try {
+        await saveStudentsToFirebase(newStudents);
+        console.log('Firebase 학생 저장 완료:', newStudents.length, '명');
+      } catch (e) {
+        console.log('Firebase 학생 저장 오류:', e);
+      }
     }
+
+    // ★ 저장 완료 - 폴링 재개 (약간의 딜레이로 안전 보장)
+    setTimeout(() => { savingRef.current = false; }, 3000);
   };
 
   const saveTeachers = async (newTeachers) => {
@@ -703,12 +725,21 @@ function ParanMathSystem({ businessType, resetBusinessType }) {
   // 선생님이 saveStudents 호출할 때 전체 학생 목록에 병합해서 저장
   // (필터링된 myStudents만 저장하면 다른 선생님 학생이 사라지는 버그 방지)
   const saveMergedStudents = async (updatedMyStudents) => {
-    if (userType === 'teacher' && loggedInTeacher) {
-      // 내 담당이 아닌 학생은 그대로 유지, 내 담당 학생만 교체
-      const otherStudents = students.filter(s => s.teacherId !== loggedInTeacher.id);
-      await saveStudents([...otherStudents, ...updatedMyStudents]);
-    } else {
-      await saveStudents(updatedMyStudents);
+    try {
+      if (userType === 'teacher' && loggedInTeacher) {
+        // ★ 최신 전체 학생 목록에서 내 담당만 교체
+        const currentAll = window.__paranStudents || students;
+        const otherStudents = currentAll.filter(s => s.teacherId !== loggedInTeacher.id);
+        const merged = [...otherStudents, ...updatedMyStudents];
+        console.log('saveMergedStudents(teacher):', '다른선생님학생:', otherStudents.length, '내학생:', updatedMyStudents.length, '전체:', merged.length);
+        await saveStudents(merged);
+      } else {
+        console.log('saveMergedStudents(director):', '전체:', updatedMyStudents.length);
+        await saveStudents(updatedMyStudents);
+      }
+    } catch (e) {
+      console.error('saveMergedStudents 오류:', e);
+      throw e;
     }
   };
 
