@@ -19318,17 +19318,18 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                         date: session.date,
                         displayDate: session.date ? session.date.slice(5) : '',
                         name: session.testType === '기타' ? (session.customTestName || '기타') : session.testType,
+                        testType: session.testType,
                         scope: session.testScope || '',
                         correct,
                         wrong,
                         total: answers.length,
                         percent: Math.round((correct / answers.length) * 100),
                         cumPercent: Math.round((runningCorrect / runningTotal) * 100),
-                        passed: wrong <= (reportData?.passThreshold ?? 5)
+                        passed: session.testType === '기타' ? null : wrong <= (reportData?.passThreshold ?? 5)
                       });
                     }
                   }
-                  
+
                   // 다중 시험
                   (session.tests || []).forEach(test => {
                     if (test.testType && test.testAnswers && test.testAnswers.length > 0) {
@@ -19342,13 +19343,14 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                           date: session.date,
                           displayDate: session.date ? session.date.slice(5) : '',
                           name: test.testType === '기타' ? (test.customTestName || '기타') : test.testType,
+                          testType: test.testType,
                           scope: test.testScope || '',
                           correct,
                           wrong,
                           total: answers.length,
                           percent: Math.round((correct / answers.length) * 100),
                           cumPercent: Math.round((runningCorrect / runningTotal) * 100),
-                          passed: wrong <= (reportData?.passThreshold ?? 5)
+                          passed: test.testType === '기타' ? null : wrong <= (reportData?.passThreshold ?? 5)
                         });
                       }
                     }
@@ -19398,9 +19400,11 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                     {data.scope && <p className="text-gray-500">{data.scope}</p>}
                                     <p>정답: <strong>{data.correct}/{data.total}</strong> ({data.percent}%)</p>
                                     <p>누적: <strong className="text-emerald-600">{data.cumPercent}%</strong></p>
-                                    <p className={data.passed ? 'text-green-600' : 'text-red-600'}>
-                                      {data.passed ? '✅ 통과' : '🔄 재시험'}
-                                    </p>
+                                    {data.passed !== null && (
+                                      <p className={data.passed ? 'text-green-600' : 'text-red-600'}>
+                                        {data.passed ? '✅ 통과' : '🔄 재시험'}
+                                      </p>
+                                    )}
                                   </div>
                                 );
                               }
@@ -20657,8 +20661,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                 </div>
                               )}
                               
-                              {/* 통과/재시험 판정 */}
-                              {currentSession.testAnswers.filter(a => a !== null && a !== undefined).length > 0 && (
+                              {/* 통과/재시험 판정 (기타 시험 제외) */}
+                              {currentSession.testType !== '기타' && currentSession.testAnswers.filter(a => a !== null && a !== undefined).length > 0 && (
                                 <div className="mt-2">
                                   <span className={`px-2 py-0.5 rounded font-bold text-xs ${ currentSession.testAnswers.filter(a => a === false).length <= (reportData.passThreshold ?? 5) ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300' }`}>
                                     {currentSession.testAnswers.filter(a => a === false).length <= (reportData.passThreshold ?? 5) ? '✅ 단원 통과' : '🔄 재시험 필요'}
@@ -21223,8 +21227,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                           {pct}%
                                         </span>
                                       )}
-                                      {/* 통과/재시험 판정 */}
-                                      {test.testAnswers.some(a => a !== null && a !== undefined) && (
+                                      {/* 통과/재시험 판정 (기타 시험 제외) */}
+                                      {test.testType !== '기타' && test.testAnswers.some(a => a !== null && a !== undefined) && (
                                         <span className={`px-2 py-0.5 rounded text-xs font-bold ${ test.testAnswers.filter(a => a === false).length <= (reportData.passThreshold ?? 5) ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300' }`}>
                                           {test.testAnswers.filter(a => a === false).length <= (reportData.passThreshold ?? 5) ? '✅ 통과' : '🔄 재시험'}
                                         </span>
@@ -32480,16 +32484,17 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
               testResults.push({
                 date: sessionDate,
                 name: session.testType === '기타' ? (session.customTestName || '기타') : session.testType,
+                testType: session.testType,
                 scope: session.testScope || '',
                 correct,
                 wrong,
                 total: answers.length,
                 percent: Math.round((correct / answers.length) * 100),
-                passed: wrong <= (reportData?.passThreshold ?? 5)
+                passed: session.testType === '기타' ? null : wrong <= (reportData?.passThreshold ?? 5)
               });
             }
           }
-          
+
           // 다중 시험
           (session.tests || []).forEach(test => {
             if (test.testType && test.testAnswers && test.testAnswers.length > 0) {
@@ -32500,12 +32505,13 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                 testResults.push({
                   date: sessionDate,
                   name: test.testType === '기타' ? (test.customTestName || '기타') : test.testType,
+                  testType: test.testType,
                   scope: test.testScope || '',
                   correct,
                   wrong,
                   total: answers.length,
                   percent: Math.round((correct / answers.length) * 100),
-                  passed: wrong <= (reportData?.passThreshold ?? 5)
+                  passed: test.testType === '기타' ? null : wrong <= (reportData?.passThreshold ?? 5)
                 });
               }
             }
@@ -33727,9 +33733,11 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                                       {data.scope && <p className="text-gray-500 text-xs">{data.scope}</p>}
                                       <p className="mt-1">정답: <strong>{data.correct}/{data.total}</strong> ({data.percent}%)</p>
                                       <p>누적: <strong>{data.cumPercent}%</strong></p>
-                                      <p className={data.passed ? 'text-green-600' : 'text-red-600'}>
-                                        {data.passed ? '✅ 통과' : '🔄 재시험'}
-                                      </p>
+                                      {data.passed !== null && (
+                                        <p className={data.passed ? 'text-green-600' : 'text-red-600'}>
+                                          {data.passed ? '✅ 통과' : '🔄 재시험'}
+                                        </p>
+                                      )}
                                     </div>
                                   );
                                 }
@@ -33768,8 +33776,8 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                                 </td>
                                 <td className="p-2 text-center font-bold text-emerald-600">{t.cumPercent}%</td>
                                 <td className="p-2 text-center">
-                                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${t.passed ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
-                                    {t.passed ? '✅ 통과' : '🔄 재시험'}
+                                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${t.passed === null ? 'bg-gray-200 text-gray-600' : t.passed ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                                    {t.passed === null ? '-' : t.passed ? '✅ 통과' : '🔄 재시험'}
                                   </span>
                                 </td>
                               </tr>
