@@ -32629,6 +32629,104 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
     setGraphLoading(false);
   };
 
+  // 학생 카드 렌더링 함수 (선생님별 그룹/일반 목록 공용)
+  const renderStudentCard = (student, levelInfo, recentScore) => (
+    <div key={student.id} className="bg-white rounded-xl shadow-lg p-4">
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-lg text-gray-800">{student.name}</h3>
+            {levelInfo && (
+              <span className={`px-2 py-0.5 rounded text-xs font-medium border ${levelInfo.color}`}>
+                {levelInfo.label}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-500">{student.grade} · {student.className}
+            {student.classSchedule === 'mwf' && <span className="ml-1.5 px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-bold border border-yellow-300">월수금</span>}
+            {student.classSchedule === 'tts' && <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-300">화목토</span>}
+          </p>
+          {student.schoolName && (
+            <p className="text-xs text-blue-600">🏫 {student.schoolName}</p>
+          )}
+        </div>
+        <div className="flex gap-1">
+          <button onClick={() => loadGraphData(student)} className="p-1 text-green-600 hover:bg-green-50 rounded" title="성적 그래프">
+            <TrendingUp size={18} />
+          </button>
+          {!isReadOnly && (
+          <button onClick={() => { setEditingStudent(student); setActiveTab('basic'); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded">
+            <Edit3 size={18} />
+          </button>
+          )}
+          {!isReadOnly && userType !== 'teacher' && (
+          <button onClick={() => deleteStudent(student)} className="p-1 text-red-600 hover:bg-red-50 rounded">
+            <Trash2 size={18} />
+          </button>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center text-sm">
+        <div className="bg-yellow-50 rounded p-2">
+          <p className="font-bold text-yellow-600">Lv.{Math.floor((student.exp || 0) / 100) + 1}</p>
+          <p className="text-xs text-gray-500">레벨</p>
+        </div>
+        <div className="bg-orange-50 rounded p-2">
+          <p className="font-bold text-orange-600">{student.streak || 0}</p>
+          <p className="text-xs text-gray-500">스트릭</p>
+        </div>
+        <div className="bg-purple-50 rounded p-2">
+          <p className="font-bold text-purple-600">{student.badges?.length || 0}</p>
+          <p className="text-xs text-gray-500">뱃지</p>
+        </div>
+      </div>
+      {/* 담당 선생님 표시 (원장만) */}
+      {userType === 'director' && teachers.length > 0 && (
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-xs text-gray-500 flex-shrink-0">👨‍🏫 담당:</span>
+          <select
+            value={student.teacherId || ''}
+            onChange={(e) => {
+              const updated = students.map(s =>
+                s.id === student.id ? { ...s, teacherId: e.target.value } : s
+              );
+              saveStudents(updated);
+            }}
+            className={`flex-1 text-xs p-1 border rounded-lg ${ student.teacherId ? 'border-orange-300 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-400' }`}
+          >
+            <option value="">미배정</option>
+            {teachers.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {recentScore && (
+        <div className="mt-3 p-2 bg-blue-50 rounded-lg text-xs">
+          <div className="flex justify-between items-center">
+            <span className="text-blue-700 font-medium">📊 {recentScore.year} {recentScore.semester} {recentScore.examType}</span>
+            <span className="font-bold text-blue-800">{recentScore.score}점</span>
+          </div>
+          {recentScore.rank && recentScore.totalStudents && (
+            <p className="text-blue-600 mt-1">등수: {recentScore.rank}/{recentScore.totalStudents}</p>
+          )}
+        </div>
+      )}
+      {(student.shortTermGoal || student.longTermGoal) && (
+        <div className="mt-2 text-xs space-y-1">
+          {student.shortTermGoal && <p className="text-green-600 truncate">🎯 단기: {student.shortTermGoal}</p>}
+          {student.longTermGoal && <p className="text-purple-600 truncate">🚀 장기: {student.longTermGoal}</p>}
+        </div>
+      )}
+      {(student.phone || student.parentPhone) && (
+        <div className="mt-3 pt-3 border-t text-xs text-gray-500">
+          {student.phone && <p>📱 {student.phone}</p>}
+          {student.parentPhone && <p>👪 {student.parentName}: {student.parentPhone}</p>}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {isReadOnly && (
@@ -32654,7 +32752,50 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
         )}
       </div>
 
-      {/* 학생 목록 */}
+      {/* 학생 목록 — 선생님 담당별 그룹 (원장용) */}
+      {userType !== 'teacher' && teachers.length > 0 && (() => {
+        const getTeacherName = (tid) => {
+          if (!tid) return '담당 미지정';
+          const t = teachers.find(t => t.id === tid);
+          return t ? t.name : '담당 미지정';
+        };
+        const grouped = {};
+        students.forEach(s => {
+          const tName = getTeacherName(s.teacherId);
+          if (!grouped[tName]) grouped[tName] = [];
+          grouped[tName].push(s);
+        });
+        const teacherColors = {
+          0: 'from-blue-500 to-indigo-600',
+          1: 'from-emerald-500 to-teal-600',
+          2: 'from-purple-500 to-violet-600',
+          3: 'from-orange-500 to-amber-600',
+        };
+        return Object.entries(grouped).map(([tName, tStudents], groupIdx) => (
+          <div key={tName} className="mb-6">
+            <div className={`bg-gradient-to-r ${teacherColors[groupIdx % 4] || 'from-gray-500 to-slate-600'} rounded-xl px-4 py-3 mb-3 flex items-center justify-between`}>
+              <div className="flex items-center gap-2">
+                <span className="text-white text-lg">👨‍🏫</span>
+                <span className="text-white font-bold text-base">{tName}</span>
+              </div>
+              <span className="text-white/80 text-sm font-medium">{tStudents.length}명</span>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {tStudents.map(student => {
+                const levelInfo = levelStageOptions.find(l => l.value === student.levelStage);
+                const recentScore = (student.schoolScores || []).sort((a, b) => {
+                  if (a.year !== b.year) return b.year - a.year;
+                  return b.semester.localeCompare(a.semester);
+                })[0];
+                return renderStudentCard(student, levelInfo, recentScore);
+              })}
+            </div>
+          </div>
+        ));
+      })()}
+
+      {/* 학생 목록 — 선생님 로그인 시 일반 목록 */}
+      {(userType === 'teacher' || teachers.length === 0) && (
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {students.map(student => {
           const levelInfo = levelStageOptions.find(l => l.value === student.levelStage);
@@ -32662,129 +32803,7 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
             if (a.year !== b.year) return b.year - a.year;
             return b.semester.localeCompare(a.semester);
           })[0];
-          
-          return (
-            <div key={student.id} className="bg-white rounded-xl shadow-lg p-4">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-lg text-gray-800">{student.name}</h3>
-                    {levelInfo && (
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium border ${levelInfo.color}`}>
-                        {levelInfo.label}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500">{student.grade} · {student.className}
-                    {student.classSchedule === 'mwf' && <span className="ml-1.5 px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-bold border border-yellow-300">월수금</span>}
-                    {student.classSchedule === 'tts' && <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold border border-emerald-300">화목토</span>}
-                  </p>
-                  {student.schoolName && (
-                    <p className="text-xs text-blue-600">🏫 {student.schoolName}</p>
-                  )}
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => loadGraphData(student)}
-                    className="p-1 text-green-600 hover:bg-green-50 rounded"
-                    title="성적 그래프"
-                  >
-                    <TrendingUp size={18} />
-                  </button>
-                  {!isReadOnly && (
-                  <button
-                    onClick={() => {
-                      setEditingStudent(student);
-                      setActiveTab('basic');
-                    }}
-                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                  >
-                    <Edit3 size={18} />
-                  </button>
-                  )}
-                  {!isReadOnly && userType !== 'teacher' && (
-                  <button
-                    onClick={() => deleteStudent(student)}
-                    className="p-1 text-red-600 hover:bg-red-50 rounded"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                  )}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                <div className="bg-yellow-50 rounded p-2">
-                  <p className="font-bold text-yellow-600">Lv.{Math.floor((student.exp || 0) / 100) + 1}</p>
-                  <p className="text-xs text-gray-500">레벨</p>
-                </div>
-                <div className="bg-orange-50 rounded p-2">
-                  <p className="font-bold text-orange-600">{student.streak || 0}</p>
-                  <p className="text-xs text-gray-500">스트릭</p>
-                </div>
-                <div className="bg-purple-50 rounded p-2">
-                  <p className="font-bold text-purple-600">{student.badges?.length || 0}</p>
-                  <p className="text-xs text-gray-500">뱃지</p>
-                </div>
-              </div>
-
-              {/* 담당 선생님 표시 (원장만) */}
-              {userType === 'director' && teachers.length > 0 && (
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-xs text-gray-500 flex-shrink-0">👨‍🏫 담당:</span>
-                  <select
-                    value={student.teacherId || ''}
-                    onChange={(e) => {
-                      const updated = students.map(s =>
-                        s.id === student.id ? { ...s, teacherId: e.target.value } : s
-                      );
-                      saveStudents(updated);
-                    }}
-                    className={`flex-1 text-xs p-1 border rounded-lg ${ student.teacherId ? 'border-orange-300 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-400' }`}
-                  >
-                    <option value="">미배정</option>
-                    {teachers.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* 최근 학교 성적 */}
-              {recentScore && (
-                <div className="mt-3 p-2 bg-blue-50 rounded-lg text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-blue-700 font-medium">
-                      📊 {recentScore.year} {recentScore.semester} {recentScore.examType}
-                    </span>
-                    <span className="font-bold text-blue-800">{recentScore.score}점</span>
-                  </div>
-                  {recentScore.rank && recentScore.totalStudents && (
-                    <p className="text-blue-600 mt-1">등수: {recentScore.rank}/{recentScore.totalStudents}</p>
-                  )}
-                </div>
-              )}
-
-              {/* 목표 표시 */}
-              {(student.shortTermGoal || student.longTermGoal) && (
-                <div className="mt-2 text-xs space-y-1">
-                  {student.shortTermGoal && (
-                    <p className="text-green-600 truncate">🎯 단기: {student.shortTermGoal}</p>
-                  )}
-                  {student.longTermGoal && (
-                    <p className="text-purple-600 truncate">🚀 장기: {student.longTermGoal}</p>
-                  )}
-                </div>
-              )}
-
-              {(student.phone || student.parentPhone) && (
-                <div className="mt-3 pt-3 border-t text-xs text-gray-500">
-                  {student.phone && <p>📱 {student.phone}</p>}
-                  {student.parentPhone && <p>👪 {student.parentName}: {student.parentPhone}</p>}
-                </div>
-              )}
-            </div>
-          );
+          return renderStudentCard(student, levelInfo, recentScore);
         })}
 
         {students.length === 0 && (
@@ -32807,6 +32826,7 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
           </div>
         )}
       </div>
+      )}
 
       {/* 학생 추가 모달 */}
       {showAddModal && (
