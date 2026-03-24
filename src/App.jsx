@@ -10316,6 +10316,7 @@ function DirectorDashboardTab({ students, saveStudents, teachers, isReadOnly = f
   const [teacherNotices, setTeacherNotices] = useState([]);
   const [teacherConsults, setTeacherConsults] = useState([]);
   const [teacherWrongNotes, setTeacherWrongNotes] = useState({}); // {studentName: [notes]}
+  const [studentExits, setStudentExits] = useState([]); // 퇴원/관이동 기록
 
   // ★ 원장 대시보드 내 뒤로가기: useBackButton 사용
   const viewHistory = useRef([]);
@@ -10342,7 +10343,11 @@ function DirectorDashboardTab({ students, saveStudents, teachers, isReadOnly = f
         const cr = await window.storage.get('paran:consults', true);
         if (cr?.value) setTeacherConsults(typeof cr.value === 'string' ? JSON.parse(cr.value) : cr.value);
       } catch(e) {}
-      // 학생별 오답노트 (wrongNotes는 students 배열에 이미 포함)
+      // 퇴원/관이동 기록 로드
+      try {
+        const er = await window.storage.get('paran:student-exits', true);
+        if (er?.value) setStudentExits(typeof er.value === 'string' ? JSON.parse(er.value) : er.value);
+      } catch(e) {}
     };
     loadTeacherData();
   }, []);
@@ -10377,12 +10382,12 @@ function DirectorDashboardTab({ students, saveStudents, teachers, isReadOnly = f
   
   // ========== 전체 통계 계산 (퇴원생/관이동 제외) ==========
   const activeStudents = students.filter(s => s.status !== 'withdrawn' && s.status !== 'transferred');
-  const withdrawnStudents = students.filter(s => s.status === 'withdrawn');
-  const transferredStudents = students.filter(s => s.status === 'transferred');
+  const withdrawnExits = studentExits.filter(e => e.type === 'withdrawn');
+  const transferredExits = studentExits.filter(e => e.type === 'transferred');
   const stats = {
     totalStudents: activeStudents.length,
-    withdrawnCount: withdrawnStudents.length,
-    transferredCount: transferredStudents.length,
+    withdrawnCount: withdrawnExits.length,
+    transferredCount: transferredExits.length,
     activeStudents: activeStudents.filter(s => s.status !== 'inactive').length,
     todayAttendance: activeStudents.filter(s => s.lastAttendance === today).length,
     totalExp: activeStudents.reduce((sum, s) => sum + (s.exp || 0), 0),
@@ -10471,10 +10476,17 @@ function DirectorDashboardTab({ students, saveStudents, teachers, isReadOnly = f
           </div>
           <div className="text-right flex-shrink-0">
             <p className="text-indigo-200 text-xs whitespace-nowrap">{new Date().toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' })}</p>
-            <p className="text-lg md:text-2xl font-bold mt-0.5 whitespace-nowrap">총 {stats.totalStudents}명
-              {stats.withdrawnCount > 0 && <span className="text-xs font-normal text-indigo-200 ml-1">(퇴원 {stats.withdrawnCount})</span>}
-              {stats.transferredCount > 0 && <span className="text-xs font-normal text-indigo-200 ml-1">(관이동 {stats.transferredCount})</span>}
-            </p>
+            <p className="text-lg md:text-2xl font-bold mt-0.5 whitespace-nowrap">총 {stats.totalStudents}명</p>
+            {(stats.withdrawnCount > 0 || stats.transferredCount > 0) && (
+              <div className="text-xs text-indigo-200 mt-1 space-y-0.5">
+                {stats.transferredCount > 0 && (
+                  <p>🏫 관이동 {stats.transferredCount}명: {transferredExits.map(e => e.name).join(', ')}</p>
+                )}
+                {stats.withdrawnCount > 0 && (
+                  <p>🚪 퇴원 {stats.withdrawnCount}명: {withdrawnExits.map(e => e.name).join(', ')}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
