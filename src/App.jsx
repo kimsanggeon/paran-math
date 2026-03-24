@@ -432,29 +432,24 @@ export default function ParanMathSystem() {
   // 선생님이 saveStudents 호출할 때 전체 학생 목록에 병합해서 저장
   // (필터링된 myStudents만 저장하면 다른 선생님 학생이 사라지는 버그 방지)
   const saveMergedStudents = async (updatedMyStudents) => {
-    try {
-      // ★ window.__paranStudents에서 최신 전체 목록 참조 (state 지연 방지)
-      const currentAll = window.__paranStudents || students;
-      if (userType === 'teacher' && loggedInTeacher) {
-        const otherStudents = currentAll.filter(s => s.teacherId !== loggedInTeacher.id);
-        const myWithdrawnOrTransferred = currentAll.filter(s =>
-          s.teacherId === loggedInTeacher.id && (s.status === 'withdrawn' || s.status === 'transferred') &&
-          !updatedMyStudents.some(u => u.id === s.id)
-        );
-        const merged = [...otherStudents, ...myWithdrawnOrTransferred, ...updatedMyStudents];
-        console.log('saveMergedStudents(teacher):', '다른선생님학생:', otherStudents.length, '내학생:', updatedMyStudents.length, '전체:', merged.length);
-        await saveStudents(merged);
-      } else {
-        const preservedStudents = currentAll.filter(s =>
-          (s.status === 'withdrawn' || s.status === 'transferred') &&
-          !updatedMyStudents.some(u => u.id === s.id)
-        );
-        console.log('saveMergedStudents(director):', '전체:', updatedMyStudents.length + preservedStudents.length);
-        await saveStudents([...preservedStudents, ...updatedMyStudents]);
-      }
-    } catch (e) {
-      console.error('saveMergedStudents 오류:', e);
-      throw e;
+    // ★ window.__paranStudents에서 최신 전체 목록 참조 (state 지연 방지)
+    const currentAll = window.__paranStudents || students;
+    if (userType === 'teacher' && loggedInTeacher) {
+      const otherStudents = currentAll.filter(s => s.teacherId !== loggedInTeacher.id);
+      const myWithdrawnOrTransferred = currentAll.filter(s =>
+        s.teacherId === loggedInTeacher.id && (s.status === 'withdrawn' || s.status === 'transferred') &&
+        !updatedMyStudents.some(u => u.id === s.id)
+      );
+      const merged = [...otherStudents, ...myWithdrawnOrTransferred, ...updatedMyStudents];
+      console.log('saveMergedStudents(teacher):', '다른선생님학생:', otherStudents.length, '내학생:', updatedMyStudents.length, '전체:', merged.length);
+      await saveStudents(merged);
+    } else {
+      const preservedStudents = currentAll.filter(s =>
+        (s.status === 'withdrawn' || s.status === 'transferred') &&
+        !updatedMyStudents.some(u => u.id === s.id)
+      );
+      console.log('saveMergedStudents(director):', '전체:', updatedMyStudents.length + preservedStudents.length);
+      await saveStudents([...preservedStudents, ...updatedMyStudents]);
     }
   };
 
@@ -661,7 +656,7 @@ export default function ParanMathSystem() {
           <ScheduleTab students={myStudents} />
         )}
         {activeTab === 'students' && (
-          <StudentManagementTab students={myStudents} saveStudents={readOnlySave} teachers={teachers} userType={userType} isReadOnly={isReadOnly} />
+          <StudentManagementTab students={myStudents} saveStudents={readOnlySave} teachers={teachers} userType={userType} isReadOnly={isReadOnly} loggedInTeacher={loggedInTeacher} />
         )}
         {activeTab === 'parent-pw' && (
           <ParentPasswordTab students={students} saveStudents={saveStudents} />
@@ -32276,7 +32271,7 @@ function HomeworkTab({ students, saveStudents }) {
 }
 
 // ========== 5. 학생 관리 탭 ==========
-function StudentManagementTab({ students, saveStudents, teachers = [], userType = 'teacher', isReadOnly = false }) {
+function StudentManagementTab({ students, saveStudents, teachers = [], userType = 'teacher', isReadOnly = false, loggedInTeacher = null }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [activeTab, setActiveTab] = useState('basic'); // basic, school, goals
