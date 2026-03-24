@@ -13374,12 +13374,6 @@ function SystemManagementTab({ passwords, saveSettings }) {
 const getSessionTotalProblems = (session) => {
   return (session.problemSets || []).reduce((sum, ps) => sum + (ps.totalProblems || 0), 0);
 };
-  // Pre-computed values to avoid division operators in JSX (esbuild compat)
-  const _goalPct = safeReportStats.goalAccuracy > 0 
-    ? _pct(safeReportStats.accuracy, safeReportStats.goalAccuracy || 100)
-    : 0;
-
-
 const getSessionTotalCorrect = (session) => {
   return (session.problemSets || []).reduce((sum, ps) => sum + (ps.correctAnswers || 0), 0);
 };
