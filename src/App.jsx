@@ -8155,7 +8155,7 @@ function DirectorReportsView({ students, allReports, teachers }) {
                           {acc}%
                         </span>
                       )}
-                      {!isSimpleEntry && (wrongNums.length <= (reportData?.passThreshold ?? 5) ? (
+                      {!isSimpleEntry && test.testType !== '기타' && (wrongNums.length <= (reportData?.passThreshold ?? 5) ? (
                         <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold">✅ 통과</span>
                       ) : (
                         <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold">🔄 재시험</span>
@@ -16089,6 +16089,9 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
         if (prev.reportDate !== today) {
           updates.reportDate = today;
           updates._dateAutoSet = true;
+          // ★ 날짜가 바뀌면 선생님 코멘트 & 가정학습 가이드 초기화 (새로 작성)
+          updates.teacherComment = '';
+          updates.homeStudyGuide = '';
         }
       }
       if (Object.keys(updates).length === 0) return prev;
@@ -17480,11 +17483,12 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
               actualText = `<br><span class="text-green">📊 실제 정답률: ${t.actualAccuracyMin || t.actualAccuracyMax}%</span>`;
             }
           }
-          // 통과/재시험 판정
+          // 통과/재시험 판정 (기타 시험은 통과 기준 미적용)
           const pthr = reportData.passThreshold ?? 5;
-          const passText = t.wrongNumbers.length <= pthr 
-            ? '<span class="tag tag-green">✅ 통과</span>' 
-            : '<span class="tag tag-red">🔄 재시험</span>';
+          const isEtcTest = t.type === '기타';
+          const passText = isEtcTest ? '' : (t.wrongNumbers.length <= pthr
+            ? '<span class="tag tag-green">✅ 통과</span>'
+            : '<span class="tag tag-red">🔄 재시험</span>');
           testHtml = `<p><strong>📋 시험:</strong> ${t.name}${diffText} - <span class="bold">${t.score}/${t.total}</span>점 <span class="tag tag-purple">${t.percent}%</span> ${passText}${timeText}${scopeText}${actualText}${wrongText}</p>`;
         } else {
           const testRows = allTests.map((t, i) => {
@@ -17500,11 +17504,12 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                 actualText = `<span class="text-green">${t.actualAccuracyMin || t.actualAccuracyMax}%</span>`;
               }
             }
-            // 통과/재시험 판정
+            // 통과/재시험 판정 (기타 시험은 통과 기준 미적용)
             const pthr2 = reportData.passThreshold ?? 5;
-            const passText = t.wrongNumbers.length <= pthr2 
-              ? '<span class="tag tag-green">✅ 통과</span>' 
-              : '<span class="tag tag-red">🔄 재시험</span>';
+            const isEtcTest2 = t.type === '기타';
+            const passText = isEtcTest2 ? '-' : (t.wrongNumbers.length <= pthr2
+              ? '<span class="tag tag-green">✅ 통과</span>'
+              : '<span class="tag tag-red">🔄 재시험</span>');
             return `<tr> <td>${t.name}</td> <td class="center text-small">${diffText}</td> <td class="center bold">${t.score}/${t.total}</td> <td class="center"><span class="tag ${t.percent === 100 ? 'tag-yellow' : t.percent >= 90 ? 'tag-green' : 'tag-purple'}">${t.percent}%</span></td> <td class="center">${passText}</td> <td class="center text-small">${actualText}</td> <td class="center text-small">${timeText}</td> <td class="text-small">${t.scope || '-'}</td> <td class="text-small">${wrongText || '-'}</td> </tr>`;
           }).join('');
           testHtml = `<div style="margin: 8px 0;"> <p><strong>📋 시험 (${allTests.length}개):</strong></p> <table style="margin-top:4px"> <tr><th>시험</th><th class="center" style="width:7%">난이도</th><th class="center" style="width:10%">점수</th><th class="center" style="width:7%">비율</th><th class="center" style="width:8%">판정</th><th class="center" style="width:8%">실제</th><th class="center" style="width:6%">시간</th><th>범위</th><th>틀린 문제</th></tr> ${testRows} </table> </div>`;
@@ -18147,12 +18152,12 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
   </div>` : ''} </div> <div class="card"> <div class="section-header"><span class="section-title">📈 성장 추이</span><span class="section-badge">자동</span></div> ${sessions.length > 0 ? `<table>
     <tr><th class="center" style="width:10%">회차</th><th class="center" style="width:15%">날짜</th><th class="center" style="width:10%">출결</th><th class="center" style="width:12%">정답률</th><th class="center" style="width:12%">시험</th><th class="center" style="width:12%">종합</th><th class="center" style="width:15%">변화</th></tr>
     ${growthRows}
-  </table>${growthSummary}` : '<p class="text-gray center">수업 기록이 없습니다</p>'} </div> <div class="card"> <div class="section-header"><span class="section-title">🎯 목표 달성률</span><span class="section-badge">자동</span></div> <div class="stat-grid"> <div class="stat-item" style="margin-right:8px"><div class="stat-label">목표 정답률</div><div class="stat-value text-blue">${reportData.goalAccuracy}%</div></div> <div class="stat-item" style="margin-right:8px"><div class="stat-label">현재 정답률</div><div class="stat-value text-green">${filteredAccuracy()}%</div></div> <div class="stat-item"><div class="stat-label">달성률</div><div class="stat-value text-purple">${filteredGoalAchievement()}%</div></div> </div> <div style="margin-top:12px"><div class="progress-bg"><div class="progress-bar" style="width:${Math.min(filteredGoalAchievement(), 100)}%"></div></div></div> ${reportData.goalDescription ? `<p style="margin-top:8px" class="text-gray"><strong>목표:</strong> ${reportData.goalDescription}</p>` : ''} </div> ${(() => { /* 시험 결과 요약 생성 */ const testSummary = []; let runningCorrect = 0, runningTotal = 0; sessions.forEach(s => { /* 레거시 시험 */ if (s.testType && s.testAnswers && s.testAnswers.length > 0) { const wrongCount = s.testAnswers.filter(a => a === false).length; const correctCount = s.testAnswers.filter(a => a === true).length; const total = s.testAnswers.filter(a => a !== null && a !== undefined).length; if (total > 0) { runningCorrect += correctCount; runningTotal += total; testSummary.push({ date: s.date, displayDate: s.date ? s.date.slice(5) : '', testName: s.testType === '기타' ? (s.customTestName || '기타') : s.testType, scope: s.testScope || '', correct: correctCount, wrong: wrongCount, total: total, percent: Math.round((correctCount / total) * 100), cumPercent: Math.round((runningCorrect / runningTotal) * 100), passed: wrongCount <= (reportData.passThreshold ?? 5) }); } } /* 다중 시험 */ (s.tests || []).forEach(test => { if (test.testType && test.testAnswers && test.testAnswers.length > 0) { const wrongCount = test.testAnswers.filter(a => a === false).length; const correctCount = test.testAnswers.filter(a => a === true).length; const total = test.testAnswers.filter(a => a !== null && a !== undefined).length; if (total > 0) { runningCorrect += correctCount; runningTotal += total; testSummary.push({ date: s.date, displayDate: s.date ? s.date.slice(5) : '', testName: test.testType === '기타' ? (test.customTestName || '기타') : test.testType, scope: test.testScope || '', correct: correctCount, wrong: wrongCount, total: total, percent: Math.round((correctCount / total) * 100), cumPercent: Math.round((runningCorrect / runningTotal) * 100), passed: wrongCount <= (reportData.passThreshold ?? 5) }); } } }); }); if (testSummary.length === 0) return ''; const passedCount = testSummary.filter(t => t.passed).length; const retestCount = testSummary.filter(t => !t.passed).length; const avgPercent = Math.round(testSummary.reduce((sum, t) => sum + t.percent, 0) / testSummary.length); /* 텍스트 기반 막대 그래프 생성 (Word 호환) */ const graphData = testSummary.slice(-10); const makeBar = (percent, color) => { const filled = Math.round(percent / 10); /* 0-10개 블록 */ const bar = '█'.repeat(filled) + '░'.repeat(10 - filled); return `<span style="color:${color};font-family:monospace;font-size:9pt;">${bar}</span>`; }; const graphRows = graphData.map(t => { const barColor = t.percent >= 80 ? '#22c55e' : t.percent >= 60 ? '#eab308' : '#ef4444'; return `<tr>
+  </table>${growthSummary}` : '<p class="text-gray center">수업 기록이 없습니다</p>'} </div> <div class="card"> <div class="section-header"><span class="section-title">🎯 목표 달성률</span><span class="section-badge">자동</span></div> <div class="stat-grid"> <div class="stat-item" style="margin-right:8px"><div class="stat-label">목표 정답률</div><div class="stat-value text-blue">${reportData.goalAccuracy}%</div></div> <div class="stat-item" style="margin-right:8px"><div class="stat-label">현재 정답률</div><div class="stat-value text-green">${filteredAccuracy()}%</div></div> <div class="stat-item"><div class="stat-label">달성률</div><div class="stat-value text-purple">${filteredGoalAchievement()}%</div></div> </div> <div style="margin-top:12px"><div class="progress-bg"><div class="progress-bar" style="width:${Math.min(filteredGoalAchievement(), 100)}%"></div></div></div> ${reportData.goalDescription ? `<p style="margin-top:8px" class="text-gray"><strong>목표:</strong> ${reportData.goalDescription}</p>` : ''} </div> ${(() => { /* 시험 결과 요약 생성 */ const testSummary = []; let runningCorrect = 0, runningTotal = 0; sessions.forEach(s => { /* 레거시 시험 */ if (s.testType && s.testAnswers && s.testAnswers.length > 0) { const wrongCount = s.testAnswers.filter(a => a === false).length; const correctCount = s.testAnswers.filter(a => a === true).length; const total = s.testAnswers.filter(a => a !== null && a !== undefined).length; if (total > 0) { runningCorrect += correctCount; runningTotal += total; testSummary.push({ date: s.date, displayDate: s.date ? s.date.slice(5) : '', testName: s.testType === '기타' ? (s.customTestName || '기타') : s.testType, testType: s.testType, scope: s.testScope || '', correct: correctCount, wrong: wrongCount, total: total, percent: Math.round((correctCount / total) * 100), cumPercent: Math.round((runningCorrect / runningTotal) * 100), passed: s.testType === '기타' ? null : wrongCount <= (reportData.passThreshold ?? 5) }); } } /* 다중 시험 */ (s.tests || []).forEach(test => { if (test.testType && test.testAnswers && test.testAnswers.length > 0) { const wrongCount = test.testAnswers.filter(a => a === false).length; const correctCount = test.testAnswers.filter(a => a === true).length; const total = test.testAnswers.filter(a => a !== null && a !== undefined).length; if (total > 0) { runningCorrect += correctCount; runningTotal += total; testSummary.push({ date: s.date, displayDate: s.date ? s.date.slice(5) : '', testName: test.testType === '기타' ? (test.customTestName || '기타') : test.testType, testType: test.testType, scope: test.testScope || '', correct: correctCount, wrong: wrongCount, total: total, percent: Math.round((correctCount / total) * 100), cumPercent: Math.round((runningCorrect / runningTotal) * 100), passed: test.testType === '기타' ? null : wrongCount <= (reportData.passThreshold ?? 5) }); } } }); }); if (testSummary.length === 0) return ''; const gradedTests = testSummary.filter(t => t.passed !== null); const passedCount = gradedTests.filter(t => t.passed).length; const retestCount = gradedTests.filter(t => !t.passed).length; const avgPercent = Math.round(testSummary.reduce((sum, t) => sum + t.percent, 0) / testSummary.length); /* 텍스트 기반 막대 그래프 생성 (Word 호환) */ const graphData = testSummary.slice(-10); const makeBar = (percent, color) => { const filled = Math.round(percent / 10); /* 0-10개 블록 */ const bar = '█'.repeat(filled) + '░'.repeat(10 - filled); return `<span style="color:${color};font-family:monospace;font-size:9pt;">${bar}</span>`; }; const graphRows = graphData.map(t => { const barColor = t.percent >= 80 ? '#22c55e' : t.percent >= 60 ? '#eab308' : '#ef4444'; return `<tr>
       <td style="padding:4px;font-size:8pt;text-align:center;width:15%;">${t.displayDate}</td>
       <td style="padding:4px;font-size:8pt;width:20%;">${t.testName.slice(0, 8)}</td>
       <td style="padding:4px;width:35%;">${makeBar(t.percent, barColor)} <strong style="color:${barColor};">${t.percent}%</strong></td>
       <td style="padding:4px;width:20%;">${makeBar(t.cumPercent, '#10b981')} <strong style="color:#10b981;">${t.cumPercent}%</strong></td>
-      <td style="padding:4px;font-size:8pt;text-align:center;width:10%;color:${t.passed ? '#16a34a' : '#dc2626'};font-weight:bold;">${t.passed ? '✓' : '✗'}</td>
+      <td style="padding:4px;font-size:8pt;text-align:center;width:10%;color:${t.passed === null ? '#6b7280' : t.passed ? '#16a34a' : '#dc2626'};font-weight:bold;">${t.passed === null ? '-' : t.passed ? '✓' : '✗'}</td>
     </tr>`; }).join(''); const rows = testSummary.map(t => `<tr style="background:${t.passed ? '#f0fdf4' : '#fef2f2'}">
     <td class="center">${t.date}</td>
     <td>${t.testName}</td>
@@ -18161,7 +18166,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
     <td class="center"><span class="tag ${t.percent >= 90 ? 'tag-green' : t.percent >= 70 ? 'tag-blue' : 'tag-red'}">${t.percent}%</span></td>
     <td class="center text-green bold">${t.cumPercent}%</td>
     <td class="center text-red bold">${t.wrong}개</td>
-    <td class="center"><span class="tag ${t.passed ? 'tag-green' : 'tag-red'}">${t.passed ? '✅ 통과' : '🔄 재시험'}</span></td>
+    <td class="center"><span class="tag ${t.passed === null ? 'tag-gray' : t.passed ? 'tag-green' : 'tag-red'}">${t.passed === null ? '-' : t.passed ? '✅ 통과' : '🔄 재시험'}</span></td>
   </tr>`).join(''); return `<div class="card">
     <div class="section-header"><span class="section-title">📋 시험 결과 요약</span><span class="section-badge">자동</span></div>
     <div class="stat-grid" style="margin-bottom:10px">
@@ -18169,7 +18174,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
       <div class="stat-item" style="margin-right:6px;background:#f0fdf4"><div class="stat-label">✅ 통과</div><div class="stat-value text-green">${passedCount}회</div></div>
       <div class="stat-item" style="margin-right:6px;background:#fef2f2"><div class="stat-label">🔄 재시험</div><div class="stat-value text-red">${retestCount}회</div></div>
       <div class="stat-item" style="margin-right:6px;background:#eff6ff"><div class="stat-label">평균</div><div class="stat-value text-blue">${avgPercent}%</div></div>
-      <div class="stat-item" style="background:#faf5ff"><div class="stat-label">통과율</div><div class="stat-value text-purple">${testSummary.length > 0 ? Math.round((passedCount / testSummary.length) * 100) : 0}%</div></div>
+      <div class="stat-item" style="background:#faf5ff"><div class="stat-label">통과율</div><div class="stat-value text-purple">${gradedTests.length > 0 ? Math.round((passedCount / gradedTests.length) * 100) : 0}%</div></div>
     </div>
     
     <!-- 시험 성적 추이 그래프 (텍스트 기반) -->
@@ -18869,7 +18874,16 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                 </select>
                 <input type="text" value={reportData.teacher} onChange={(e) => updateField('teacher', e.target.value)} className="p-2 border rounded-lg text-sm" placeholder="담당 선생님" />
                 <div className="relative">
-                  <input type="date" value={reportData.reportDate} onChange={(e) => { updateField('reportDate', e.target.value); updateField('_dateAutoSet', false); }}
+                  <input type="date" value={reportData.reportDate} onChange={(e) => {
+                    const newDate = e.target.value;
+                    if (newDate !== reportData.reportDate) {
+                      updateField('reportDate', newDate);
+                      updateField('_dateAutoSet', false);
+                      // ★ 날짜 변경 시 코멘트 & 가이드 초기화 (새로 작성)
+                      updateField('teacherComment', '');
+                      updateField('homeStudyGuide', '');
+                    }
+                  }}
                     className={`w-full p-2 border rounded-lg text-sm pr-8 ${reportData._dateAutoSet ? 'bg-blue-50 border-blue-200' : ''}`} title="작성일" />
                   <span className="absolute -top-1 left-2 text-xs text-gray-400 bg-white px-1">작성일</span>
                   {(reportData.sessions || []).length > 0 && (
