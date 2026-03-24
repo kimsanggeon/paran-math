@@ -444,12 +444,9 @@ export default function ParanMathSystem() {
       console.log('saveMergedStudents(teacher):', '다른선생님학생:', otherStudents.length, '내학생:', updatedMyStudents.length, '전체:', merged.length);
       await saveStudents(merged);
     } else {
-      const preservedStudents = currentAll.filter(s =>
-        (s.status === 'withdrawn' || s.status === 'transferred') &&
-        !updatedMyStudents.some(u => u.id === s.id)
-      );
-      console.log('saveMergedStudents(director):', '전체:', updatedMyStudents.length + preservedStudents.length);
-      await saveStudents([...preservedStudents, ...updatedMyStudents]);
+      // ★ 원장은 전체 권한이므로, 전달된 목록 그대로 저장 (삭제/이동 학생 보존 안 함)
+      console.log('saveMergedStudents(director):', '전체:', updatedMyStudents.length);
+      await saveStudents(updatedMyStudents);
     }
   };
 
