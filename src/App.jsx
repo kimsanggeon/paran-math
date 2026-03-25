@@ -10169,14 +10169,18 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
       if (s.testType) allT.push({ ...s, _date: s.date });
       (s.tests || []).forEach(t => allT.push({ ...t, _date: s.date }));
 
-      // ★ 빠른 입력 필드도 수집
-      if (s.hasJunggiGosa && (s.junggiGosaScore || s.junggiGosaTotal)) {
-        const pct = s.junggiGosaScore && s.junggiGosaTotal ? Math.round(parseInt(s.junggiGosaScore) / parseInt(s.junggiGosaTotal) * 100) : null;
-        regularExams.push({ date: s.date, score: s.junggiGosaScore, total: s.junggiGosaTotal, rank: s.junggiGosaRank, rankTotal: s.junggiGosaRankTotal, pct, name: s.junggiGosaName || '정기고사' });
+      // ★ 빠른 입력 필드 수집 (tests[] 배열에 같은 종류가 없을 때만 - 중복 방지)
+      const hasTestArrayJunggi = (s.tests || []).some(t => t.testType === '정기고사');
+      const hasTestArraySungchwi = (s.tests || []).some(t => t.testType === '성취도평가');
+      if (!hasTestArrayJunggi && s.hasJunggiGosa && s.junggiGosaScore) {
+        const total = s.junggiGosaTotal || '100';
+        const pct = Math.round(parseFloat(s.junggiGosaScore) / parseInt(total) * 100);
+        regularExams.push({ date: s.date, score: s.junggiGosaScore, total, rank: s.junggiGosaRank, rankTotal: s.junggiGosaRankTotal, pct, name: s.junggiGosaName || '정기고사' });
       }
-      if (s.hasSungchwidoPyeong && (s.sungchwidoPyeongScore || s.sungchwidoPyeongTotal)) {
-        const pct = s.sungchwidoPyeongScore && s.sungchwidoPyeongTotal ? Math.round(parseInt(s.sungchwidoPyeongScore) / parseInt(s.sungchwidoPyeongTotal) * 100) : null;
-        achievementExams.push({ date: s.date, score: s.sungchwidoPyeongScore, total: s.sungchwidoPyeongTotal, grade: s.sungchwidoPyeongGrade, pct, name: s.sungchwidoPyeongName || '성취도평가' });
+      if (!hasTestArraySungchwi && s.hasSungchwidoPyeong && s.sungchwidoPyeongScore) {
+        const total = s.sungchwidoPyeongTotal || '100';
+        const pct = Math.round(parseFloat(s.sungchwidoPyeongScore) / parseInt(total) * 100);
+        achievementExams.push({ date: s.date, score: s.sungchwidoPyeongScore, total, grade: s.sungchwidoPyeongGrade, pct, name: s.sungchwidoPyeongName || '성취도평가' });
       }
 
       allT.forEach(t => {
@@ -32579,20 +32583,26 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
               if (s.testType) allTests.push({ ...s, _date: s.date });
               (s.tests || []).forEach(t => allTests.push({ ...t, _date: s.date }));
 
-              // ★ 빠른 입력 필드 (hasJunggiGosa / hasSungchwidoPyeong)도 수집
-              if (s.hasJunggiGosa && (s.junggiGosaScore || s.junggiGosaTotal)) {
+              // tests[] 배열에 정기고사/성취도평가가 있는지 확인 (중복 방지)
+              const hasTestArrayJunggi = (s.tests || []).some(t => t.testType === '정기고사');
+              const hasTestArraySungchwi = (s.tests || []).some(t => t.testType === '성취도평가');
+
+              // ★ 빠른 입력 필드는 tests[] 배열에 같은 종류가 없을 때만 수집
+              if (!hasTestArrayJunggi && s.hasJunggiGosa && s.junggiGosaScore) {
+                const total = s.junggiGosaTotal || '100';
                 tests.regular.push({
-                  date: s.date, score: s.junggiGosaScore, total: s.junggiGosaTotal,
+                  date: s.date, score: s.junggiGosaScore, total: total,
                   rank: s.junggiGosaRank, rankTotal: s.junggiGosaRankTotal,
-                  percent: s.junggiGosaScore && s.junggiGosaTotal ? Math.round(parseInt(s.junggiGosaScore) / parseInt(s.junggiGosaTotal) * 100) : null,
+                  percent: Math.round(parseFloat(s.junggiGosaScore) / parseInt(total) * 100),
                   name: s.junggiGosaName || '정기고사'
                 });
               }
-              if (s.hasSungchwidoPyeong && (s.sungchwidoPyeongScore || s.sungchwidoPyeongTotal)) {
+              if (!hasTestArraySungchwi && s.hasSungchwidoPyeong && s.sungchwidoPyeongScore) {
+                const total = s.sungchwidoPyeongTotal || '100';
                 tests.achievement.push({
-                  date: s.date, score: s.sungchwidoPyeongScore, total: s.sungchwidoPyeongTotal,
+                  date: s.date, score: s.sungchwidoPyeongScore, total: total,
                   grade: s.sungchwidoPyeongGrade,
-                  percent: s.sungchwidoPyeongScore && s.sungchwidoPyeongTotal ? Math.round(parseInt(s.sungchwidoPyeongScore) / parseInt(s.sungchwidoPyeongTotal) * 100) : null,
+                  percent: Math.round(parseFloat(s.sungchwidoPyeongScore) / parseInt(total) * 100),
                   name: s.sungchwidoPyeongName || '성취도평가'
                 });
               }
