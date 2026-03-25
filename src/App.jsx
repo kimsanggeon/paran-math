@@ -10329,8 +10329,8 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
         const regularRanking = studentScores
           .filter(s => s.regularExams.length > 0)
           .map(s => {
-            const latest = s.regularExams[s.regularExams.length - 1];
-            return { studentName: s.name, className: s.className, teacherName: getTeacherName(s.teacherId), testName: latest.name, ...latest, name: undefined };
+            const t = s.regularExams[s.regularExams.length - 1];
+            return { studentName: s.name, className: s.className, teacherName: getTeacherName(s.teacherId), date: t.date, score: t.score, total: t.total, rank: t.rank, rankTotal: t.rankTotal, pct: t.pct, scope: t.scope, testName: t.name };
           })
           .sort((a, b) => (b.pct || 0) - (a.pct || 0));
 
@@ -10338,8 +10338,8 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
         const achievementRanking = studentScores
           .filter(s => s.achievementExams.length > 0)
           .map(s => {
-            const latest = s.achievementExams[s.achievementExams.length - 1];
-            return { studentName: s.name, className: s.className, teacherName: getTeacherName(s.teacherId), testName: latest.name, ...latest, name: undefined };
+            const t = s.achievementExams[s.achievementExams.length - 1];
+            return { studentName: s.name, className: s.className, teacherName: getTeacherName(s.teacherId), date: t.date, score: t.score, total: t.total, grade: t.grade, pct: t.pct, scope: t.scope, testName: t.name };
           })
           .sort((a, b) => (b.pct || 0) - (a.pct || 0));
 
