@@ -16353,11 +16353,16 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
     });
   };
 
-  const addSession = (sessionType = 'regular') => {
+  const addSession = (sessionType = 'regular', examOnly = false) => {
     if (isReadOnly) { alert('읽기 전용 모드입니다.'); return; }
     setReportData(prev => {
       const lastSessionNumber = prev.sessions.length > 0 ? Math.max(...prev.sessions.map(s => s.sessionNumber)) : 0;
-      return { ...prev, sessions: [...prev.sessions, createNewSession(lastSessionNumber + 1, sessionType)], currentSessionIndex: prev.sessions.length };
+      const newSession = createNewSession(lastSessionNumber + 1, sessionType);
+      if (examOnly) {
+        newSession._examOnly = true;
+        newSession.tests = [createNewTest()];
+      }
+      return { ...prev, sessions: [...prev.sessions, newSession], currentSessionIndex: prev.sessions.length };
     });
     setShowAddSessionModal(false);
   };
@@ -17094,6 +17099,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
   };
 
   const currentSession = reportData.sessions[reportData.currentSessionIndex];
+  const isExamOnly = currentSession?._examOnly === true;
 
   // ========== 채점 기능 함수들 ==========
   const questionTypes = ['계산', '개념', '응용', '서술형', '도형', '방정식', '함수', '확률', '기타'];
@@ -19934,30 +19940,36 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-blue-700">{currentSession.sessionNumber}회차</h3>
-                      <select 
-                        value={currentSession.sessionType || 'regular'} 
-                        onChange={(e) => updateSessionField('sessionType', e.target.value)}
-                        className={`px-2 py-1 rounded text-xs font-medium border ${sessionTypeLabels[currentSession.sessionType || 'regular']?.bgColor || 'bg-blue-100'} ${sessionTypeLabels[currentSession.sessionType || 'regular']?.textColor || 'text-blue-700'} ${sessionTypeLabels[currentSession.sessionType || 'regular']?.borderColor || 'border-blue-300'}`}
-                      >
-                        <option value="regular">정규 수업</option>
-                        <option value="special">특강</option>
-                        <option value="supplementary">보충 수업</option>
-                      </select>
+                      {isExamOnly ? (
+                        <span className="px-2 py-1 rounded text-xs font-medium border bg-red-100 text-red-700 border-red-300">🧪 시험</span>
+                      ) : (
+                        <select
+                          value={currentSession.sessionType || 'regular'}
+                          onChange={(e) => updateSessionField('sessionType', e.target.value)}
+                          className={`px-2 py-1 rounded text-xs font-medium border ${sessionTypeLabels[currentSession.sessionType || 'regular']?.bgColor || 'bg-blue-100'} ${sessionTypeLabels[currentSession.sessionType || 'regular']?.textColor || 'text-blue-700'} ${sessionTypeLabels[currentSession.sessionType || 'regular']?.borderColor || 'border-blue-300'}`}
+                        >
+                          <option value="regular">정규 수업</option>
+                          <option value="special">특강</option>
+                          <option value="supplementary">보충 수업</option>
+                        </select>
+                      )}
                     </div>
                     <button onClick={() => removeSession(reportData.currentSessionIndex)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     <input type="date" value={currentSession.date} onChange={(e) => updateSessionField('date', e.target.value)} className="p-2 border rounded text-sm" />
-                    <select value={currentSession.attendanceStatus} onChange={(e) => updateSessionField('attendanceStatus', e.target.value)} className="p-2 border rounded text-sm">
-                      <option value="present">✅ 출석</option>
-                      <option value="late">⚠️ 지각</option>
-                      <option value="absent">❌ 결석</option>
-                    </select>
+                    {!isExamOnly && (
+                      <select value={currentSession.attendanceStatus} onChange={(e) => updateSessionField('attendanceStatus', e.target.value)} className="p-2 border rounded text-sm">
+                        <option value="present">✅ 출석</option>
+                        <option value="late">⚠️ 지각</option>
+                        <option value="absent">❌ 결석</option>
+                      </select>
+                    )}
                   </div>
 
                   {/* 결석 시 사유 입력 */}
-                  {currentSession.attendanceStatus === 'absent' && (
+                  {!isExamOnly && currentSession.attendanceStatus === 'absent' && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-3">
                       <div className="flex items-center gap-2">
                         <span className="text-red-600 font-medium text-sm">❌ 결석 사유</span>
@@ -20016,7 +20028,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   )}
 
                   {/* 추가 수업 (특강/보충) */}
-                  <div className="bg-gradient-to-r from-purple-50 to-orange-50 rounded-lg p-3 border border-purple-200">
+                  <div style={isExamOnly ? {display:'none'} : {}} className="bg-gradient-to-r from-purple-50 to-orange-50 rounded-lg p-3 border border-purple-200">
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-xs font-medium text-gray-700 flex items-center gap-1">
                         <Calendar size={14} className="text-purple-600" />
@@ -20067,7 +20079,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                       </div>
                     )}
                   </div>
-                  <div>
+                  <div style={isExamOnly ? {display:'none'} : {}}>
                     <label className="text-xs font-medium text-gray-700 flex items-center gap-1 mb-1"><BookOpen size={14} /> 학습 내용</label>
 
                     {/* ── 정기고사 / 성취도평가 빠른 입력 ── */}
@@ -20292,7 +20304,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   </div>
 
                   {/* 학습 평가 */}
-                  <div className="space-y-2">
+                  <div style={isExamOnly ? {display:'none'} : {}} className="space-y-2">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <ScoreSelector label="이해도" field="understanding" value={currentSession.understanding} onChange={(v) => updateSessionField('understanding', v)} icon={Target} />
                       <ScoreSelector label="참여도" field="participation" value={currentSession.participation} onChange={(v) => updateSessionField('participation', v)} icon={Award} />
@@ -21721,7 +21733,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   </div>
 
                   {/* 오답 유형 */}
-                  <div>
+                  <div style={isExamOnly ? {display:'none'} : {}}>
                     <label className="text-xs font-medium text-gray-700 flex items-center gap-1 mb-1"><AlertCircle size={14} /> 오답 유형</label>
                     {(currentSession.wrongTypes || ['']).map((wrong, idx) => (
                       <div key={idx} className="flex gap-1 mb-1">
@@ -21733,7 +21745,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   </div>
 
                   {/* 칭찬, 메모 */}
-                  <textarea value={currentSession.praiseMessage} onChange={(e) => updateSessionField('praiseMessage', e.target.value)} rows={2} className="w-full p-2 border rounded text-xs" placeholder="🌟 오늘의 칭찬" />
+                  <textarea style={isExamOnly ? {display:'none'} : {}} value={currentSession.praiseMessage} onChange={(e) => updateSessionField('praiseMessage', e.target.value)} rows={2} className="w-full p-2 border rounded text-xs" placeholder="🌟 오늘의 칭찬" />
                   <textarea value={currentSession.note} onChange={(e) => updateSessionField('note', e.target.value)} rows={2} className="w-full p-2 border rounded text-xs" placeholder="📝 메모" />
 
                   {/* 학생 학습 일지 (읽기 전용) */}
@@ -25972,6 +25984,18 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                       <div>
                         <p className="font-bold text-orange-700">보충 수업</p>
                         <p className="text-xs text-orange-600">추가 보충, 개별 지도</p>
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => addSession('regular', true)}
+                    className="w-full p-4 rounded-xl border-2 border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-400 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🧪</span>
+                      <div>
+                        <p className="font-bold text-red-700">시험</p>
+                        <p className="text-xs text-red-600">시험만 기록 (수업 내용 생략)</p>
                       </div>
                     </div>
                   </button>
