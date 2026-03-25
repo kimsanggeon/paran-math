@@ -10349,7 +10349,23 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
           .map(s => {
             const avgPct = Math.round(s.checkingTests.reduce((sum, t) => sum + (t.pct || 0), 0) / s.checkingTests.length);
             const latest = s.checkingTests[s.checkingTests.length - 1];
-            return { name: s.name, className: s.className, teacherName: getTeacherName(s.teacherId), avgPct, count: s.checkingTests.length, latest };
+            // A, B, C, D 단계별 시험 결과 분류
+            const byLevel = {};
+            s.checkingTests.forEach(t => {
+              const lv = t.level || '미지정';
+              if (!byLevel[lv]) byLevel[lv] = [];
+              byLevel[lv].push(t);
+            });
+            const levelStats = Object.entries(byLevel).map(([lv, tests]) => ({
+              level: lv,
+              count: tests.length,
+              avgPct: Math.round(tests.reduce((sum, t) => sum + (t.pct || 0), 0) / tests.length),
+              latest: tests[tests.length - 1]
+            })).sort((a, b) => {
+              const order = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 };
+              return (order[a.level] ?? 99) - (order[b.level] ?? 99);
+            });
+            return { name: s.name, className: s.className, teacherName: getTeacherName(s.teacherId), avgPct, count: s.checkingTests.length, latest, levelStats };
           })
           .sort((a, b) => b.avgPct - a.avgPct);
 
@@ -10424,18 +10440,36 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
                   </h4>
                   <div className="space-y-1">
                     {checkingRanking.map((s, idx) => (
-                      <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${idx < 3 ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
-                        <span className="w-7 text-center font-bold text-sm">{medalIcon(idx)}</span>
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-800 text-sm">{s.name}</span>
-                          <div className="flex gap-1.5 mt-0.5">
-                            <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{s.className || '미배정'}</span>
-                            <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">👨‍🏫 {s.teacherName}</span>
+                      <div key={s.name} className={`rounded-lg ${idx < 3 ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
+                        <div className="flex items-center gap-3 px-3 py-2">
+                          <span className="w-7 text-center font-bold text-sm">{medalIcon(idx)}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-gray-800 text-sm">{s.name}</span>
+                            <div className="flex gap-1.5 mt-0.5">
+                              <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{s.className || '미배정'}</span>
+                              <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">👨‍🏫 {s.teacherName}</span>
+                            </div>
                           </div>
+                          <span className="font-bold text-indigo-700 text-sm">평균 {s.avgPct}%</span>
+                          <span className="text-xs text-gray-500">({s.count}회)</span>
                         </div>
-                        <span className="font-bold text-indigo-700 text-sm">평균 {s.avgPct}%</span>
-                        <span className="text-xs text-gray-500">({s.count}회)</span>
-                        {s.latest.level && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.latest.level === 'A' ? 'bg-red-200 text-red-800' : s.latest.level === 'B' ? 'bg-orange-200 text-orange-800' : s.latest.level === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800'}`}>{s.latest.level}단계</span>}
+                        {/* A, B, C, D 단계별 결과 */}
+                        {s.levelStats.length > 0 && (
+                          <div className="px-3 pb-2 ml-10 flex flex-wrap gap-1.5">
+                            {s.levelStats.map(lv => (
+                              <div key={lv.level} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs ${
+                                lv.level === 'A' ? 'bg-red-50 border-red-200' : lv.level === 'B' ? 'bg-orange-50 border-orange-200' : lv.level === 'C' ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200'
+                              }`}>
+                                <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                                  lv.level === 'A' ? 'bg-red-200 text-red-800' : lv.level === 'B' ? 'bg-orange-200 text-orange-800' : lv.level === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800'
+                                }`}>{lv.level}</span>
+                                <span className="font-bold text-gray-700">{lv.avgPct}%</span>
+                                <span className="text-gray-400">({lv.count}회)</span>
+                                <span className="text-gray-400">최근 {lv.latest.date?.slice(5)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
