@@ -21091,7 +21091,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                             </div>
                             )}
                             
-                            {/* 정답률 범위 */}
+                            {/* 정답률 범위 (체킹누적테스트 제외) */}
+                            {test.testType !== '체킹누적테스트' && (
                             <div className="space-y-2 mb-2">
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">📈 실제 정답률 범위</label>
@@ -21110,8 +21111,10 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                 </div>
                               </div>
                             </div>
-                            
-                            {/* 시험 시간 */}
+                            )}
+
+                            {/* 시험 시간 (체킹누적테스트 제외) */}
+                            {test.testType !== '체킹누적테스트' && (
                             <div style={{marginBottom:"8px", padding:"8px", background:"#faf5ff", borderRadius:"6px", border:"1px solid #d8b4fe", width:"100%", boxSizing:"border-box", overflow:"hidden"}}>
                               <label className="text-xs text-purple-700 font-medium block mb-1">⏱️ 시험 시간</label>
                               <div className="flex flex-col gap-1.5">
@@ -21149,7 +21152,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                 </div>
                               )}
                             </div>
-                            
+                            )}
+
                             {/* 채점판 ── MC + 서술형 통합 */}
                             <div style={{background:"#f9fafb", borderRadius:"8px", border:"1px solid #e5e7eb", width:"100%", boxSizing:"border-box", overflow:"hidden"}}>
                               {/* ── 헤더: 문제 수 설정 ── */}
@@ -21420,8 +21424,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                       )}
                                     </div>
 
-                                    {/* ── 객관식 오답 유형 패널 ── */}
-                                    {mcCount > 0 && test.testAnswers.slice(0, mcCount).filter(a => a === false).length > 0 && (
+                                    {/* ── 객관식 오답 유형 패널 (체킹누적테스트 제외) ── */}
+                                    {test.testType !== '체킹누적테스트' && mcCount > 0 && test.testAnswers.slice(0, mcCount).filter(a => a === false).length > 0 && (
                                       <div style={{background:"#fff1f2", borderRadius:"8px", border:"1px solid #fecaca", padding:"8px", width:"100%", boxSizing:"border-box", overflow:"hidden"}}>
                                         <p className="text-xs font-bold text-red-700 mb-2">📊 객관식 오답 유형</p>
                                         <div className="space-y-1 w-full">
