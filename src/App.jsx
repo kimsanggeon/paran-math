@@ -20350,7 +20350,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   </div>
 
                   {/* 문제 풀이 */}
-                  <div>
+                  <div style={isExamOnly ? {display:'none'} : {}}>
                     <label className="text-xs font-medium text-gray-700 flex items-center gap-1 mb-1"><Edit3 size={14} /> 문제 풀이</label>
                     <div className="flex flex-wrap gap-1 mb-2 items-center">
                       <select
@@ -20549,7 +20549,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   </div>
 
                   {/* 과제 */}
-                  <div>
+                  <div style={isExamOnly ? {display:'none'} : {}}>
                     <label className="text-xs font-medium text-gray-700 flex items-center gap-1 mb-1">
                       <ClipboardList size={14} /> 과제
                     </label>
