@@ -16360,7 +16360,6 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
       const newSession = createNewSession(lastSessionNumber + 1, sessionType);
       if (examOnly) {
         newSession._examOnly = true;
-        newSession.tests = [createNewTest()];
       }
       return { ...prev, sessions: [...prev.sessions, newSession], currentSessionIndex: prev.sessions.length };
     });
