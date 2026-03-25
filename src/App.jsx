@@ -10490,6 +10490,7 @@ function DirectorDashboardTab({ students, saveStudents, teachers, isReadOnly = f
   const [teacherNotices, setTeacherNotices] = useState([]);
   const [teacherConsults, setTeacherConsults] = useState([]);
   const [teacherWrongNotes, setTeacherWrongNotes] = useState({}); // {studentName: [notes]}
+  const [directorReportCache, setDirectorReportCache] = useState({});
   const [studentExits, setStudentExits] = useState([]); // 퇴원/관이동 기록
 
   // ★ 원장 대시보드 내 뒤로가기: useBackButton 사용
@@ -10525,7 +10526,28 @@ function DirectorDashboardTab({ students, saveStudents, teachers, isReadOnly = f
     };
     loadTeacherData();
   }, []);
-  
+
+  // ★ 원장 대시보드용 보고서 캐시 로드 (window.storage + localStorage)
+  useEffect(() => {
+    const loadDirectorReports = async () => {
+      const cache = {};
+      for (const st of students) {
+        try {
+          let rd = null;
+          if (window.storage) {
+            const r = await window.storage.get(`report:${st.name}`, true);
+            if (r?.value) rd = JSON.parse(r.value);
+            if (!rd) { const r2 = await window.storage.get(`paran:report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
+          }
+          if (!rd) { const s = localStorage.getItem(`report:${st.name}`) || localStorage.getItem(`paran:report:${st.name}`); if (s) rd = JSON.parse(s); }
+          if (rd) cache[st.name] = rd;
+        } catch (e) {}
+      }
+      setDirectorReportCache(cache);
+    };
+    if (students.length > 0) loadDirectorReports();
+  }, [students]);
+
   const today = new Date().toISOString().split('T')[0];
   const currentMonth = new Date().toISOString().slice(0, 7);
   
@@ -10707,16 +10729,7 @@ function DirectorDashboardTab({ students, saveStudents, teachers, isReadOnly = f
         <ClassScoresDashboard
           students={activeStudents}
           teachers={teachers}
-          reportCache={(() => {
-            const cache = {};
-            activeStudents.forEach(s => {
-              try {
-                const saved = localStorage.getItem(`report:${s.name}`) || localStorage.getItem(`paran:report:${s.name}`);
-                if (saved) cache[s.name] = JSON.parse(saved);
-              } catch(e) {}
-            });
-            return cache;
-          })()}
+          reportCache={directorReportCache}
         />
       )}
 
