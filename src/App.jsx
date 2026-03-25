@@ -10403,18 +10403,19 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
                   </h4>
                   <div className="space-y-1">
                     {regularRanking.map((s, idx) => (
-                      <div key={s.studentName} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${idx < 3 ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`}>
-                        <span className="w-7 text-center font-bold text-sm">{medalIcon(idx)}</span>
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-800 text-sm">{s.studentName}</span>
-                          <div className="flex gap-1.5 mt-0.5">
-                            <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{s.className || '미배정'}</span>
-                            <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">👨‍🏫 {s.teacherName}</span>
-                          </div>
+                      <div key={s.studentName} className={`px-3 py-2 rounded-lg ${idx < 3 ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 text-center font-bold text-sm flex-shrink-0">{medalIcon(idx)}</span>
+                          <span className="font-bold text-gray-800 text-sm flex-shrink-0">{s.studentName}</span>
+                          <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.className || '미배정'}</span>
+                          <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.teacherName}</span>
+                          <span className="ml-auto font-bold text-red-700 text-sm flex-shrink-0">{s.score}/{s.total}점</span>
                         </div>
-                        <span className="font-bold text-red-700 text-sm">{s.score}/{s.total}점</span>
-                        {s.pct !== null && <span className={`text-xs font-bold px-2 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span>}
-                        {s.rank && <span className="text-xs text-gray-500">({s.rank}/{s.rankTotal}등)</span>}
+                        <div className="flex items-center gap-2 ml-8 mt-1">
+                          {s.pct !== null && <span className={`text-xs font-bold px-2 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span>}
+                          {s.rank && <span className="text-xs text-gray-500">{s.rank}/{s.rankTotal}등</span>}
+                          {s.scope && <span className="text-[10px] text-gray-400 truncate">{s.scope}</span>}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -10429,18 +10430,19 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
                   </h4>
                   <div className="space-y-1">
                     {achievementRanking.map((s, idx) => (
-                      <div key={s.studentName} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${idx < 3 ? 'bg-green-50 border border-green-100' : 'bg-gray-50'}`}>
-                        <span className="w-7 text-center font-bold text-sm">{medalIcon(idx)}</span>
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-800 text-sm">{s.studentName}</span>
-                          <div className="flex gap-1.5 mt-0.5">
-                            <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{s.className || '미배정'}</span>
-                            <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">👨‍🏫 {s.teacherName}</span>
-                          </div>
+                      <div key={s.studentName} className={`px-3 py-2 rounded-lg ${idx < 3 ? 'bg-green-50 border border-green-100' : 'bg-gray-50'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 text-center font-bold text-sm flex-shrink-0">{medalIcon(idx)}</span>
+                          <span className="font-bold text-gray-800 text-sm flex-shrink-0">{s.studentName}</span>
+                          <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.className || '미배정'}</span>
+                          <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.teacherName}</span>
+                          <span className="ml-auto font-bold text-green-700 text-sm flex-shrink-0">{s.score}/{s.total}점</span>
                         </div>
-                        <span className="font-bold text-green-700 text-sm">{s.score}/{s.total}점</span>
-                        {s.pct !== null && <span className={`text-xs font-bold px-2 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span>}
-                        {s.grade && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.grade === 'A' ? 'bg-green-200 text-green-800' : s.grade === 'B' ? 'bg-blue-200 text-blue-800' : s.grade === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>{s.grade}등급</span>}
+                        <div className="flex items-center gap-2 ml-8 mt-1">
+                          {s.pct !== null && <span className={`text-xs font-bold px-2 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span>}
+                          {s.grade && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.grade === 'A' ? 'bg-green-200 text-green-800' : s.grade === 'B' ? 'bg-blue-200 text-blue-800' : s.grade === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>{s.grade}등급</span>}
+                          {s.scope && <span className="text-[10px] text-gray-400 truncate">{s.scope}</span>}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -10456,17 +10458,13 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
                   <div className="space-y-1">
                     {checkingRanking.map((s, idx) => (
                       <div key={s.name} className={`rounded-lg ${idx < 3 ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
-                        <div className="flex items-center gap-3 px-3 py-2">
-                          <span className="w-7 text-center font-bold text-sm">{medalIcon(idx)}</span>
-                          <div className="flex-1 min-w-0">
-                            <span className="font-medium text-gray-800 text-sm">{s.name}</span>
-                            <div className="flex gap-1.5 mt-0.5">
-                              <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{s.className || '미배정'}</span>
-                              <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">👨‍🏫 {s.teacherName}</span>
-                            </div>
-                          </div>
-                          <span className="font-bold text-indigo-700 text-sm">평균 {s.avgPct}%</span>
-                          <span className="text-xs text-gray-500">({s.count}회)</span>
+                        <div className="flex items-center gap-2 px-3 py-2">
+                          <span className="w-6 text-center font-bold text-sm flex-shrink-0">{medalIcon(idx)}</span>
+                          <span className="font-bold text-gray-800 text-sm flex-shrink-0">{s.name}</span>
+                          <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.className || '미배정'}</span>
+                          <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.teacherName}</span>
+                          <span className="ml-auto font-bold text-indigo-700 text-sm flex-shrink-0">평균 {s.avgPct}%</span>
+                          <span className="text-xs text-gray-500 flex-shrink-0">({s.count}회)</span>
                         </div>
                         {/* A, B, C, D 단계별 결과 */}
                         {s.levelStats.length > 0 && (
