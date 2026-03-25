@@ -10535,11 +10535,11 @@ function DirectorDashboardTab({ students, saveStudents, teachers, isReadOnly = f
         try {
           let rd = null;
           if (window.storage) {
-            const r = await window.storage.get(`report:${st.name}`, true);
+            const r = await window.storage.get(`paran:report:${st.name}`, true);
             if (r?.value) rd = JSON.parse(r.value);
-            if (!rd) { const r2 = await window.storage.get(`paran:report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
+            if (!rd) { const r2 = await window.storage.get(`report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
           }
-          if (!rd) { const s = localStorage.getItem(`report:${st.name}`) || localStorage.getItem(`paran:report:${st.name}`); if (s) rd = JSON.parse(s); }
+          if (!rd) { const s = localStorage.getItem(`paran:report:${st.name}`) || localStorage.getItem(`report:${st.name}`); if (s) rd = JSON.parse(s); }
           if (rd) cache[st.name] = rd;
         } catch (e) {}
       }
@@ -35242,11 +35242,11 @@ function ClassDashboardTab({ students, saveStudents, teachers = [] }) {
         try {
           let rd = null;
           if (window.storage) {
-            const r = await window.storage.get(`report:${st.name}`, true);
+            const r = await window.storage.get(`paran:report:${st.name}`, true);
             if (r?.value) rd = JSON.parse(r.value);
-            if (!rd) { const r2 = await window.storage.get(`paran:report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
+            if (!rd) { const r2 = await window.storage.get(`report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
           }
-          if (!rd) { const s = localStorage.getItem(`report:${st.name}`) || localStorage.getItem(`paran:report:${st.name}`); if (s) rd = JSON.parse(s); }
+          if (!rd) { const s = localStorage.getItem(`paran:report:${st.name}`) || localStorage.getItem(`report:${st.name}`); if (s) rd = JSON.parse(s); }
           cache[st.name] = rd;
         } catch (e) { cache[st.name] = null; }
       }
@@ -35583,11 +35583,11 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
         try {
           let rd = null;
           if (window.storage) {
-            const r = await window.storage.get(`report:${st.name}`, true);
+            const r = await window.storage.get(`paran:report:${st.name}`, true);
             if (r?.value) rd = JSON.parse(r.value);
-            if (!rd) { const r2 = await window.storage.get(`paran:report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
+            if (!rd) { const r2 = await window.storage.get(`report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
           }
-          if (!rd) { const s = localStorage.getItem(`report:${st.name}`) || localStorage.getItem(`paran:report:${st.name}`); if (s) rd = JSON.parse(s); }
+          if (!rd) { const s = localStorage.getItem(`paran:report:${st.name}`) || localStorage.getItem(`report:${st.name}`); if (s) rd = JSON.parse(s); }
           cache[st.name] = rd;
         } catch (e) { cache[st.name] = null; }
       }
@@ -36087,7 +36087,7 @@ function ParentNotifyTab({ students, saveStudents }) {
         try {
           let rd = null;
           if (window.storage) { const r = await window.storage.get(`report:${st.name}`, true); if (r?.value) rd = JSON.parse(r.value); if (!rd) { const r2 = await window.storage.get(`paran:report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); } }
-          if (!rd) { const s = localStorage.getItem(`report:${st.name}`) || localStorage.getItem(`paran:report:${st.name}`); if (s) rd = JSON.parse(s); }
+          if (!rd) { const s = localStorage.getItem(`paran:report:${st.name}`) || localStorage.getItem(`report:${st.name}`); if (s) rd = JSON.parse(s); }
           cache[st.name] = rd;
         } catch (e) { cache[st.name] = null; }
       }
