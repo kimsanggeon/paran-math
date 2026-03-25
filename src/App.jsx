@@ -10401,23 +10401,34 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
                   <h4 className="font-bold text-red-700 text-sm mb-2 flex items-center gap-2">
                     📋 정기고사 순위 <span className="text-xs text-gray-400 font-normal">({regularRanking.length}명)</span>
                   </h4>
-                  <div className="space-y-1">
+                  <div className="overflow-hidden rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-red-50 text-red-700 text-xs">
+                          <th className="px-2 py-1.5 text-center w-8">#</th>
+                          <th className="px-2 py-1.5 text-left">이름</th>
+                          <th className="px-2 py-1.5 text-left hidden sm:table-cell">반</th>
+                          <th className="px-2 py-1.5 text-right">점수</th>
+                          <th className="px-2 py-1.5 text-center">%</th>
+                          <th className="px-2 py-1.5 text-center">등수</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                     {regularRanking.map((s, idx) => (
-                      <div key={s.studentName} className={`px-3 py-2 rounded-lg ${idx < 3 ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`}>
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 text-center font-bold text-sm flex-shrink-0">{medalIcon(idx)}</span>
-                          <span className="font-bold text-gray-800 text-sm flex-shrink-0">{s.studentName}</span>
-                          <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.className || '미배정'}</span>
-                          <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.teacherName}</span>
-                          <span className="ml-auto font-bold text-red-700 text-sm flex-shrink-0">{s.score}/{s.total}점</span>
-                        </div>
-                        <div className="flex items-center gap-2 ml-8 mt-1">
-                          {s.pct !== null && <span className={`text-xs font-bold px-2 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span>}
-                          {s.rank && <span className="text-xs text-gray-500">{s.rank}/{s.rankTotal}등</span>}
-                          {s.scope && <span className="text-[10px] text-gray-400 truncate">{s.scope}</span>}
-                        </div>
-                      </div>
+                      <tr key={s.studentName} className={idx < 3 ? 'bg-red-50/50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-2 py-2 text-center font-bold">{medalIcon(idx)}</td>
+                        <td className="px-2 py-2">
+                          <div className="font-bold text-gray-800">{s.studentName}</div>
+                          <div className="text-[10px] text-gray-400 sm:hidden">{s.className} · {s.teacherName}</div>
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-500 hidden sm:table-cell">{s.className}<br/><span className="text-orange-500">{s.teacherName}</span></td>
+                        <td className="px-2 py-2 text-right font-bold text-red-700">{s.score}/{s.total}</td>
+                        <td className="px-2 py-2 text-center"><span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span></td>
+                        <td className="px-2 py-2 text-center text-xs text-gray-600">{s.rank ? `${s.rank}/${s.rankTotal}` : '-'}</td>
+                      </tr>
                     ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -10428,23 +10439,34 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
                   <h4 className="font-bold text-green-700 text-sm mb-2 flex items-center gap-2">
                     📊 성취도평가 순위 <span className="text-xs text-gray-400 font-normal">({achievementRanking.length}명)</span>
                   </h4>
-                  <div className="space-y-1">
+                  <div className="overflow-hidden rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-green-50 text-green-700 text-xs">
+                          <th className="px-2 py-1.5 text-center w-8">#</th>
+                          <th className="px-2 py-1.5 text-left">이름</th>
+                          <th className="px-2 py-1.5 text-left hidden sm:table-cell">반</th>
+                          <th className="px-2 py-1.5 text-right">점수</th>
+                          <th className="px-2 py-1.5 text-center">%</th>
+                          <th className="px-2 py-1.5 text-center">등급</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                     {achievementRanking.map((s, idx) => (
-                      <div key={s.studentName} className={`px-3 py-2 rounded-lg ${idx < 3 ? 'bg-green-50 border border-green-100' : 'bg-gray-50'}`}>
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 text-center font-bold text-sm flex-shrink-0">{medalIcon(idx)}</span>
-                          <span className="font-bold text-gray-800 text-sm flex-shrink-0">{s.studentName}</span>
-                          <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.className || '미배정'}</span>
-                          <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.teacherName}</span>
-                          <span className="ml-auto font-bold text-green-700 text-sm flex-shrink-0">{s.score}/{s.total}점</span>
-                        </div>
-                        <div className="flex items-center gap-2 ml-8 mt-1">
-                          {s.pct !== null && <span className={`text-xs font-bold px-2 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span>}
-                          {s.grade && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.grade === 'A' ? 'bg-green-200 text-green-800' : s.grade === 'B' ? 'bg-blue-200 text-blue-800' : s.grade === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>{s.grade}등급</span>}
-                          {s.scope && <span className="text-[10px] text-gray-400 truncate">{s.scope}</span>}
-                        </div>
-                      </div>
+                      <tr key={s.studentName} className={idx < 3 ? 'bg-green-50/50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-2 py-2 text-center font-bold">{medalIcon(idx)}</td>
+                        <td className="px-2 py-2">
+                          <div className="font-bold text-gray-800">{s.studentName}</div>
+                          <div className="text-[10px] text-gray-400 sm:hidden">{s.className} · {s.teacherName}</div>
+                        </td>
+                        <td className="px-2 py-2 text-xs text-gray-500 hidden sm:table-cell">{s.className}<br/><span className="text-orange-500">{s.teacherName}</span></td>
+                        <td className="px-2 py-2 text-right font-bold text-green-700">{s.score}/{s.total}</td>
+                        <td className="px-2 py-2 text-center"><span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span></td>
+                        <td className="px-2 py-2 text-center">{s.grade ? <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.grade === 'A' ? 'bg-green-200 text-green-800' : s.grade === 'B' ? 'bg-blue-200 text-blue-800' : s.grade === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>{s.grade}</span> : '-'}</td>
+                      </tr>
                     ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -10458,13 +10480,18 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
                   <div className="space-y-1">
                     {checkingRanking.map((s, idx) => (
                       <div key={s.name} className={`rounded-lg ${idx < 3 ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
-                        <div className="flex items-center gap-2 px-3 py-2">
-                          <span className="w-6 text-center font-bold text-sm flex-shrink-0">{medalIcon(idx)}</span>
-                          <span className="font-bold text-gray-800 text-sm flex-shrink-0">{s.name}</span>
-                          <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.className || '미배정'}</span>
-                          <span className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded flex-shrink-0">{s.teacherName}</span>
-                          <span className="ml-auto font-bold text-indigo-700 text-sm flex-shrink-0">평균 {s.avgPct}%</span>
-                          <span className="text-xs text-gray-500 flex-shrink-0">({s.count}회)</span>
+                        <div className="px-3 py-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-sm">{medalIcon(idx)}</span>
+                              <span className="font-bold text-gray-800 text-sm">{s.name}</span>
+                              <span className="text-[10px] text-gray-400">{s.className} · {s.teacherName}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-indigo-700 text-sm">{s.avgPct}%</span>
+                              <span className="text-xs text-gray-400">({s.count}회)</span>
+                            </div>
+                          </div>
                         </div>
                         {/* A, B, C, D 단계별 결과 */}
                         {s.levelStats.length > 0 && (
