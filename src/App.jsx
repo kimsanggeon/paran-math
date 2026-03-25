@@ -10160,7 +10160,24 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
     const cumTests = [];
     sessions.forEach(s => { if (s.testType && s.testScore && s.testTotal) cumTests.push({ name: s.testType === '기타' ? (s.customTestName || s.testType) : s.testType, score: parseInt(s.testScore) || 0, total: parseInt(s.testTotal) || 0, date: s.date }); (s.tests || []).forEach(t => { if (t.testType && t.testScore && t.testTotal) cumTests.push({ name: t.testType === '기타' ? (t.customTestName || t.testType) : t.testType, score: parseInt(t.testScore) || 0, total: parseInt(t.testTotal) || 0, date: s.date }); }); });
     const cumTestPct = cumTests.length > 0 ? Math.round(cumTests.reduce((sum, t) => sum + (t.total > 0 ? t.score / t.total * 100 : 0), 0) / cumTests.length) : null;
-    return { ...st, totalSessions: sessions.length, todayTextbooks, todayTests, cumTextbooks, cumTextPct, cumTests, cumTestPct, hasTodayData: todayTextbooks.length > 0 || todayTests.length > 0 };
+    // ★ 시험 종류별 분류 (순위용)
+    const regularExams = []; // 정기고사
+    const achievementExams = []; // 성취도평가
+    const checkingTests = []; // 체킹누적테스트
+    sessions.forEach(s => {
+      const allT = [];
+      if (s.testType) allT.push({ ...s, _date: s.date });
+      (s.tests || []).forEach(t => allT.push({ ...t, _date: s.date }));
+      allT.forEach(t => {
+        const answers = (t.testAnswers || []).filter(a => a !== null && a !== undefined);
+        const correct = (t.testAnswers || []).filter(a => a === true).length;
+        const pct = answers.length > 0 ? Math.round(correct / answers.length * 100) : (t.testScore && t.testTotal ? Math.round(parseInt(t.testScore) / parseInt(t.testTotal) * 100) : null);
+        if (t.testType === '정기고사') regularExams.push({ date: t._date, score: t.testScore, total: t.testTotal, rank: t.testRank, rankTotal: t.testRankTotal, pct, name: t.customTestName, scope: t.testScope });
+        if (t.testType === '성취도평가') achievementExams.push({ date: t._date, score: t.testScore, total: t.testTotal, grade: t.achievementGrade, pct, name: t.customTestName, scope: t.testScope });
+        if (t.testType === '체킹누적테스트') checkingTests.push({ date: t._date, score: t.testScore, total: t.testTotal, level: t.checkingLevel, pct, scope: t.testScope });
+      });
+    });
+    return { ...st, totalSessions: sessions.length, todayTextbooks, todayTests, cumTextbooks, cumTextPct, cumTests, cumTestPct, hasTodayData: todayTextbooks.length > 0 || todayTests.length > 0, regularExams, achievementExams, checkingTests };
   };
 
   const studentScores = students.map(calcStudentScores);
@@ -10305,6 +10322,114 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
           </div>
         );
       })}
+
+      {/* ★ 시험 종류별 학생 순위 */}
+      {(() => {
+        // 정기고사 순위
+        const regularRanking = studentScores
+          .filter(s => s.regularExams.length > 0)
+          .map(s => {
+            const latest = s.regularExams[s.regularExams.length - 1];
+            return { name: s.name, className: s.className, ...latest };
+          })
+          .sort((a, b) => (b.pct || 0) - (a.pct || 0));
+
+        // 성취도평가 순위
+        const achievementRanking = studentScores
+          .filter(s => s.achievementExams.length > 0)
+          .map(s => {
+            const latest = s.achievementExams[s.achievementExams.length - 1];
+            return { name: s.name, className: s.className, ...latest };
+          })
+          .sort((a, b) => (b.pct || 0) - (a.pct || 0));
+
+        // 체킹누적테스트 순위 (평균 정답률)
+        const checkingRanking = studentScores
+          .filter(s => s.checkingTests.length > 0)
+          .map(s => {
+            const avgPct = Math.round(s.checkingTests.reduce((sum, t) => sum + (t.pct || 0), 0) / s.checkingTests.length);
+            const latest = s.checkingTests[s.checkingTests.length - 1];
+            return { name: s.name, className: s.className, avgPct, count: s.checkingTests.length, latest };
+          })
+          .sort((a, b) => b.avgPct - a.avgPct);
+
+        if (regularRanking.length === 0 && achievementRanking.length === 0 && checkingRanking.length === 0) return null;
+
+        const medalIcon = (idx) => idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`;
+
+        return (
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3">
+              <h3 className="text-white font-bold text-base">🏆 시험 종류별 학생 순위</h3>
+              <p className="text-white/70 text-xs">최신 시험 결과 기준</p>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* 정기고사 순위 */}
+              {regularRanking.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-red-700 text-sm mb-2 flex items-center gap-2">
+                    📋 정기고사 순위 <span className="text-xs text-gray-400 font-normal">({regularRanking.length}명)</span>
+                  </h4>
+                  <div className="space-y-1">
+                    {regularRanking.map((s, idx) => (
+                      <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${idx < 3 ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`}>
+                        <span className="w-7 text-center font-bold text-sm">{medalIcon(idx)}</span>
+                        <span className="font-medium text-gray-800 text-sm flex-1">{s.name}</span>
+                        <span className="text-xs text-gray-400">{s.className}</span>
+                        <span className="font-bold text-red-700 text-sm">{s.score}/{s.total}점</span>
+                        {s.pct !== null && <span className={`text-xs font-bold px-2 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span>}
+                        {s.rank && <span className="text-xs text-gray-500">({s.rank}/{s.rankTotal}등)</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 성취도평가 순위 */}
+              {achievementRanking.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-green-700 text-sm mb-2 flex items-center gap-2">
+                    📊 성취도평가 순위 <span className="text-xs text-gray-400 font-normal">({achievementRanking.length}명)</span>
+                  </h4>
+                  <div className="space-y-1">
+                    {achievementRanking.map((s, idx) => (
+                      <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${idx < 3 ? 'bg-green-50 border border-green-100' : 'bg-gray-50'}`}>
+                        <span className="w-7 text-center font-bold text-sm">{medalIcon(idx)}</span>
+                        <span className="font-medium text-gray-800 text-sm flex-1">{s.name}</span>
+                        <span className="text-xs text-gray-400">{s.className}</span>
+                        <span className="font-bold text-green-700 text-sm">{s.score}/{s.total}점</span>
+                        {s.pct !== null && <span className={`text-xs font-bold px-2 py-0.5 rounded ${s.pct >= 80 ? 'bg-green-100 text-green-700' : s.pct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.pct}%</span>}
+                        {s.grade && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.grade === 'A' ? 'bg-green-200 text-green-800' : s.grade === 'B' ? 'bg-blue-200 text-blue-800' : s.grade === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>{s.grade}등급</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 체킹누적테스트 순위 */}
+              {checkingRanking.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-indigo-700 text-sm mb-2 flex items-center gap-2">
+                    🔄 누적체킹테스트 순위 <span className="text-xs text-gray-400 font-normal">({checkingRanking.length}명, 평균 정답률 기준)</span>
+                  </h4>
+                  <div className="space-y-1">
+                    {checkingRanking.map((s, idx) => (
+                      <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${idx < 3 ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
+                        <span className="w-7 text-center font-bold text-sm">{medalIcon(idx)}</span>
+                        <span className="font-medium text-gray-800 text-sm flex-1">{s.name}</span>
+                        <span className="text-xs text-gray-400">{s.className}</span>
+                        <span className="font-bold text-indigo-700 text-sm">평균 {s.avgPct}%</span>
+                        <span className="text-xs text-gray-500">({s.count}회)</span>
+                        {s.latest.level && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.latest.level === 'A' ? 'bg-red-200 text-red-800' : s.latest.level === 'B' ? 'bg-orange-200 text-orange-800' : s.latest.level === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800'}`}>{s.latest.level}단계</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -32329,6 +32454,72 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
   const [graphStudent, setGraphStudent] = useState(null); // 성적 그래프 모달
   const [graphData, setGraphData] = useState(null); // 그래프 데이터
   const [graphLoading, setGraphLoading] = useState(false);
+  const [testCache, setTestCache] = useState({}); // 학생별 시험 결과 캐시
+
+  // 학생별 시험 결과 로드 (정기고사, 성취도평가, 체킹누적테스트)
+  useEffect(() => {
+    const loadTestResults = async () => {
+      const cache = {};
+      for (const student of students) {
+        try {
+          const reportKey = `paran:report:${student.name}`;
+          let reportData = null;
+          if (window.storage) {
+            const result = await window.storage.get(reportKey, true);
+            if (result?.value) reportData = JSON.parse(result.value);
+          }
+          if (!reportData) {
+            const local = localStorage.getItem(reportKey);
+            if (local) reportData = JSON.parse(local);
+          }
+          if (reportData && reportData.sessions) {
+            const tests = { regular: [], achievement: [], checking: [] };
+            reportData.sessions.forEach(s => {
+              const allTests = [];
+              if (s.testType) allTests.push({ ...s, _date: s.date });
+              (s.tests || []).forEach(t => allTests.push({ ...t, _date: s.date }));
+              allTests.forEach(t => {
+                if (t.testType === '정기고사' && (t.testScore || t.testAnswers?.length)) {
+                  const answers = (t.testAnswers || []).filter(a => a !== null && a !== undefined);
+                  const correct = (t.testAnswers || []).filter(a => a === true).length;
+                  tests.regular.push({
+                    date: t._date, score: t.testScore, total: t.testTotal,
+                    rank: t.testRank, rankTotal: t.testRankTotal,
+                    percent: answers.length > 0 ? Math.round(correct / answers.length * 100) : (t.testScore && t.testTotal ? Math.round(parseInt(t.testScore) / parseInt(t.testTotal) * 100) : null),
+                    scope: t.testScope, name: t.customTestName
+                  });
+                }
+                if (t.testType === '성취도평가' && (t.testScore || t.testAnswers?.length)) {
+                  const answers = (t.testAnswers || []).filter(a => a !== null && a !== undefined);
+                  const correct = (t.testAnswers || []).filter(a => a === true).length;
+                  tests.achievement.push({
+                    date: t._date, score: t.testScore, total: t.testTotal,
+                    grade: t.achievementGrade,
+                    percent: answers.length > 0 ? Math.round(correct / answers.length * 100) : (t.testScore && t.testTotal ? Math.round(parseInt(t.testScore) / parseInt(t.testTotal) * 100) : null),
+                    scope: t.testScope, name: t.customTestName
+                  });
+                }
+                if (t.testType === '체킹누적테스트' && (t.testScore || t.testAnswers?.length)) {
+                  const answers = (t.testAnswers || []).filter(a => a !== null && a !== undefined);
+                  const correct = (t.testAnswers || []).filter(a => a === true).length;
+                  const wrong = (t.testAnswers || []).filter(a => a === false).length;
+                  tests.checking.push({
+                    date: t._date, score: t.testScore, total: t.testTotal,
+                    level: t.checkingLevel, wrong,
+                    percent: answers.length > 0 ? Math.round(correct / answers.length * 100) : (t.testScore && t.testTotal ? Math.round(parseInt(t.testScore) / parseInt(t.testTotal) * 100) : null),
+                    scope: t.testScope
+                  });
+                }
+              });
+            });
+            cache[student.id] = tests;
+          }
+        } catch (e) { console.log('시험 결과 로드 오류:', student.name, e); }
+      }
+      setTestCache(cache);
+    };
+    if (students.length > 0) loadTestResults();
+  }, [students]);
   const [newStudent, setNewStudent] = useState({
     name: '',
     grade: '',
@@ -32710,6 +32901,64 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
           {recentScore.rank && recentScore.totalStudents && (
             <p className="text-blue-600 mt-1">등수: {recentScore.rank}/{recentScore.totalStudents}</p>
           )}
+        </div>
+      )}
+      {/* 시험 결과 표시 (정기고사, 성취도평가, 체킹누적테스트) */}
+      {testCache[student.id] && (testCache[student.id].regular.length > 0 || testCache[student.id].achievement.length > 0 || testCache[student.id].checking.length > 0) && (
+        <div className="mt-3 space-y-1.5">
+          {/* 정기고사 */}
+          {testCache[student.id].regular.length > 0 && (() => {
+            const latest = testCache[student.id].regular[testCache[student.id].regular.length - 1];
+            return (
+              <div className="p-2 bg-red-50 rounded-lg text-xs border border-red-200">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-red-700">📋 정기고사{latest.name ? ` (${latest.name})` : ''}</span>
+                  <span className="font-bold text-red-800">{latest.score}/{latest.total}점 {latest.percent !== null && <span className="text-red-600">({latest.percent}%)</span>}</span>
+                </div>
+                <div className="flex gap-2 mt-1">
+                  {latest.rank && <span className="text-red-600">🏅 {latest.rank}/{latest.rankTotal}등</span>}
+                  {latest.scope && <span className="text-gray-500">범위: {latest.scope}</span>}
+                  <span className="text-gray-400">{latest.date?.slice(5)}</span>
+                </div>
+              </div>
+            );
+          })()}
+          {/* 성취도평가 */}
+          {testCache[student.id].achievement.length > 0 && (() => {
+            const latest = testCache[student.id].achievement[testCache[student.id].achievement.length - 1];
+            return (
+              <div className="p-2 bg-green-50 rounded-lg text-xs border border-green-200">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-green-700">📊 성취도평가{latest.name ? ` (${latest.name})` : ''}</span>
+                  <span className="font-bold text-green-800">{latest.score}/{latest.total}점 {latest.percent !== null && <span className="text-green-600">({latest.percent}%)</span>}</span>
+                </div>
+                <div className="flex gap-2 mt-1">
+                  {latest.grade && <span className={`font-bold px-1.5 py-0.5 rounded ${latest.grade === 'A' ? 'bg-green-200 text-green-800' : latest.grade === 'B' ? 'bg-blue-200 text-blue-800' : latest.grade === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}`}>{latest.grade}등급</span>}
+                  {latest.scope && <span className="text-gray-500">범위: {latest.scope}</span>}
+                  <span className="text-gray-400">{latest.date?.slice(5)}</span>
+                </div>
+              </div>
+            );
+          })()}
+          {/* 체킹누적테스트 */}
+          {testCache[student.id].checking.length > 0 && (() => {
+            const checks = testCache[student.id].checking;
+            const latest = checks[checks.length - 1];
+            const avgPercent = Math.round(checks.reduce((s, c) => s + (c.percent || 0), 0) / checks.length);
+            return (
+              <div className="p-2 bg-indigo-50 rounded-lg text-xs border border-indigo-200">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-indigo-700">🔄 누적체킹 ({checks.length}회)</span>
+                  <span className="font-bold text-indigo-800">평균 {avgPercent}%</span>
+                </div>
+                <div className="flex gap-2 mt-1">
+                  {latest.level && <span className={`font-bold px-1.5 py-0.5 rounded ${latest.level === 'A' ? 'bg-red-200 text-red-800' : latest.level === 'B' ? 'bg-orange-200 text-orange-800' : latest.level === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800'}`}>{latest.level}단계</span>}
+                  <span className="text-indigo-600">최근: {latest.percent}%</span>
+                  <span className="text-gray-400">{latest.date?.slice(5)}</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
       {(student.shortTermGoal || student.longTermGoal) && (
