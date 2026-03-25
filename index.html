@@ -1,64 +1,43 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <!-- 기본 SEO -->
-    <title>스마트빌드 (SmartBuild) | 수학 전문 학원 · 몰입 교육 · 맞춤형 학습</title>
-    <meta name="description" content="스마트빌드 (SmartBuild)은 수학을 포기한 학생도 자신감 있는 수학 실력자로 변화시키는 전문 수학 학원입니다. 몰입 교육, 데이터 기반 맞춤 학습, 학부모 실시간 학습 리포트 제공." />
-    <meta name="keywords" content="스마트빌드 (SmartBuild), 스마트빌드 (SmartBuild), 수학학원, 수학 전문 학원, 수포자 탈출, 수학 몰입 교육, 맞춤형 수학, 초등 수학학원, 중등 수학학원, 고등 수학학원, 수학 개념, 수학 심화, 학습 보고서" />
-    <meta name="author" content="스마트빌드 (SmartBuild)" />
-    <meta name="robots" content="index, follow" />
+    <!-- ===== PWA 필수 ===== -->
     <meta name="theme-color" content="#1e40af" />
+    <link rel="manifest" href="/manifest.webmanifest" />
 
-    <!-- Open Graph (카카오, 네이버 공유) -->
+    <!-- iOS Safari PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="파란수학" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-startup-image" href="/icons/splash.png" />
+
+    <!-- SEO -->
+    <title>파란수학학원 몰입관 | 수학 전문 학원 · 몰입 교육 · 맞춤형 학습</title>
+    <meta name="description" content="파란수학학원 몰입관 — 학습 관리, 학부모 실시간 리포트, 맞춤형 수학 교육" />
+    <meta name="author" content="파란수학학원 몰입관" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="스마트빌드 (SmartBuild)" />
-    <meta property="og:title" content="스마트빌드 (SmartBuild) | 수포자도 자신감 있는 수학 실력자로!" />
-    <meta property="og:description" content="몰입 교육으로 수학의 즐거움을 찾아드립니다. 데이터 기반 맞춤 학습 리포트, 학부모 실시간 알림, 체계적인 복습 시스템으로 성적을 높여드립니다." />
+    <meta property="og:site_name" content="파란수학학원 몰입관" />
+    <meta property="og:title" content="파란수학학원 몰입관" />
+    <meta property="og:description" content="몰입 교육으로 수학의 즐거움을 찾아드립니다." />
     <meta property="og:locale" content="ko_KR" />
 
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="스마트빌드 (SmartBuild)" />
-    <meta name="twitter:description" content="몰입 교육으로 수학의 즐거움을 찾아드립니다." />
-
-    <!-- 구조화 데이터 (JSON-LD) -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "EducationalOrganization",
-      "name": "스마트빌드 (SmartBuild)",
-      "alternateName": "스마트빌드 (SmartBuild)",
-      "description": "수학을 포기한 학생도 자신감 있는 수학 실력자로 변화시키는 전문 수학 학원. 몰입 교육과 데이터 기반 맞춤 학습을 제공합니다.",
-      "url": "https://paran-math.com",
-      "image": "https://paran-math.com/logo.png",
-      "telephone": "",
-      "address": {
-        "@type": "PostalAddress",
-        "addressCountry": "KR",
-        "addressLocality": "대한민국"
-      },
-      "hasOfferCatalog": {
-        "@type": "OfferCatalog",
-        "name": "수학 교육 프로그램",
-        "itemListElement": [
-          { "@type": "Offer", "itemOffered": { "@type": "Course", "name": "초등 수학 몰입 과정" } },
-          { "@type": "Offer", "itemOffered": { "@type": "Course", "name": "중등 수학 몰입 과정" } },
-          { "@type": "Offer", "itemOffered": { "@type": "Course", "name": "고등 수학 몰입 과정" } },
-          { "@type": "Offer", "itemOffered": { "@type": "Course", "name": "수포자 탈출 집중 프로그램" } }
-        ]
-      }
-    }
-    </script>
-
-    <!-- 폰트 프리로드 -->
+    <!-- 폰트 -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Noto+Serif+KR:wght@400;700;900&display=swap" rel="stylesheet" />
-  </head>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+    </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
