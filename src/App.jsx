@@ -4707,7 +4707,7 @@ function StudentView({ student, students, saveStudents, onLogout }) {
       const updated = { ...prev, sessions: newSessions };
       // 즉시 저장
       const json = JSON.stringify(updated);
-      if (typeof window !== 'undefined' && window.storage) window.storage.set(`report:${student.name}`, json, true).catch(()=>{});
+      if (typeof window !== 'undefined' && window.storage) { window.storage.set(`report:${student.name}`, json, true).catch(()=>{}); window.storage.set(`paran:report:${student.name}`, json, true).catch(()=>{}); }
       localStorage.setItem(`report:${student.name}`, json);
       localStorage.setItem(`paran:report:${student.name}`, json);
       return updated;
@@ -4727,7 +4727,7 @@ function StudentView({ student, students, saveStudents, onLogout }) {
       const updated = { ...prev, sessions: newSessions };
       // 즉시 저장
       const json = JSON.stringify(updated);
-      if (typeof window !== 'undefined' && window.storage) window.storage.set(`report:${student.name}`, json, true).catch(()=>{});
+      if (typeof window !== 'undefined' && window.storage) { window.storage.set(`report:${student.name}`, json, true).catch(()=>{}); window.storage.set(`paran:report:${student.name}`, json, true).catch(()=>{}); }
       localStorage.setItem(`report:${student.name}`, json);
       localStorage.setItem(`paran:report:${student.name}`, json);
       return updated;
@@ -4745,7 +4745,7 @@ function StudentView({ student, students, saveStudents, onLogout }) {
       const updated = { ...prev, sessions: newSessions };
       // 즉시 저장
       const json = JSON.stringify(updated);
-      if (typeof window !== 'undefined' && window.storage) window.storage.set(`report:${student.name}`, json, true).catch(()=>{});
+      if (typeof window !== 'undefined' && window.storage) { window.storage.set(`report:${student.name}`, json, true).catch(()=>{}); window.storage.set(`paran:report:${student.name}`, json, true).catch(()=>{}); }
       localStorage.setItem(`report:${student.name}`, json);
       localStorage.setItem(`paran:report:${student.name}`, json);
       return updated;
@@ -14772,6 +14772,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
             try {
               if (typeof window !== 'undefined' && window.storage && typeof window.storage.set === 'function') {
                 await window.storage.set(`report:${studentName}`, JSON.stringify(reportData, true));
+                await window.storage.set(`paran:report:${studentName}`, JSON.stringify(reportData, true));
               }
               localStorage.setItem(`report:${studentName}`, JSON.stringify(reportData));
               successCount++;
@@ -14949,6 +14950,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
     try {
       const dataToSave = JSON.stringify(reportData);
       await window.storage.set(`report:${reportData.studentName.trim()}`, dataToSave, true);
+      await window.storage.set(`paran:report:${reportData.studentName.trim()}`, dataToSave, true);
       
       // 오답노트 및 오답 문제 은행 자동 연동
       if (students && saveStudents) {
@@ -32155,7 +32157,8 @@ function HomeworkTab({ students, saveStudents }) {
             
             const newReportData = { ...reportData, sessions: newSessions };
             await window.storage.set(`report:${studentName.trim()}`, JSON.stringify(newReportData, true));
-            
+            await window.storage.set(`paran:report:${studentName.trim()}`, JSON.stringify(newReportData, true));
+
             // 로컬 상태 업데이트
             setReportAssignments(prev => {
               const studentAssignments = prev[studentName] || [];
