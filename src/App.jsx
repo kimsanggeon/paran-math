@@ -7828,6 +7828,7 @@ function DirectorReportsView({ students, allReports, teachers }) {
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [expandedSessions, setExpandedSessions] = useState({});
   const [loadedReports, setLoadedReports] = useState({});
+  const [dirSessionPage, setDirSessionPage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   const errorTypeMap = {
@@ -8541,7 +8542,6 @@ function DirectorReportsView({ students, allReports, teachers }) {
         <div className="bg-white rounded-xl shadow p-4">
           {(() => {
             const DIR_PAGE_SIZE = 5;
-            const [dirSessionPage, setDirSessionPage] = React.useState(0);
             const totalPages = Math.ceil(sessions.length / DIR_PAGE_SIZE);
             const pagedSessions = sessions.slice(dirSessionPage * DIR_PAGE_SIZE, (dirSessionPage + 1) * DIR_PAGE_SIZE);
             return (
@@ -8732,7 +8732,7 @@ function DirectorReportsView({ students, allReports, teachers }) {
           {studentSummaries.map(({ stu, report, sessions, accuracy, presentCount, lastSession, avgTest, activeAlerts }) => (
             <div key={stu.id}
               className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-gray-100"
-              onClick={() => { setSelectedStudentId(stu.id); setViewMode('student'); setExpandedSessions({}); }}
+              onClick={() => { setSelectedStudentId(stu.id); setViewMode('student'); setExpandedSessions({}); setDirSessionPage(0); }}
             >
               {/* 카드 헤더 */}
               <div className="p-4 border-b bg-gradient-to-r from-indigo-50 to-purple-50 rounded-t-xl">
