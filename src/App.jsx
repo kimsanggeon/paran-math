@@ -7871,22 +7871,20 @@ function DirectorReportsView({ students, allReports, teachers }) {
     const merged = { ...allReports };
     const activeNameSet = new Set(activeStudentsForLoad.map(s => s.name));
     try {
-      if (typeof window !== 'undefined' && window.storage?.list) {
-        const keys = await window.storage.list('report:');
-        if (keys?.keys) {
-          for (const key of keys.keys) {
-            try {
-              const result = await window.storage.get(key);
-              if (result?.value) {
-                const data = JSON.parse(result.value);
-                const studentName = data.studentName || key.replace('report:', '');
-                // 퇴원/관이동 학생 제외
-                if (!activeNameSet.has(studentName)) continue;
-                const student = activeStudentsForLoad.find(s => s.name === studentName);
-                if (student) merged[student.id] = data;
-              }
-            } catch (e) {}
-          }
+      if (typeof window !== 'undefined' && window.storage) {
+        // paran:report: 키와 report: 키 모두 검색
+        for (const st of activeStudentsForLoad) {
+          if (merged[st.id]) continue; // 이미 로드된 학생은 스킵
+          try {
+            let rd = null;
+            const r1 = await window.storage.get(`paran:report:${st.name}`, true);
+            if (r1?.value) rd = JSON.parse(r1.value);
+            if (!rd) {
+              const r2 = await window.storage.get(`report:${st.name}`, true);
+              if (r2?.value) rd = JSON.parse(r2.value);
+            }
+            if (rd) merged[st.id] = rd;
+          } catch (e) {}
         }
       }
     } catch (e) {}
@@ -8311,7 +8309,27 @@ function DirectorReportsView({ students, allReports, teachers }) {
     );
   };
 
-  // 학생별 전체 보고서 뷰
+  // 학생별 전체 보고서 뷰 — 보고서 없을 때 안내 표시
+  if (viewMode === 'student' && selectedStudentId && !selectedStudentReport) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => { setViewMode('list'); setSelectedStudentId(null); }}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium flex items-center gap-2">
+            ← 목록으로
+          </button>
+          <h2 className="text-lg font-bold text-gray-800">{selectedStudent?.name || '학생'}</h2>
+        </div>
+        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+          {isLoading ? (
+            <div><div className="animate-spin inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mb-3" /><p className="text-gray-500">보고서를 불러오는 중...</p></div>
+          ) : (
+            <div><p className="text-gray-400 text-lg mb-2">📋</p><p className="text-gray-500 font-medium">이 학생의 학습 보고서가 아직 없습니다.</p><p className="text-sm text-gray-400 mt-1">선생님이 학습 보고서 탭에서 데이터를 입력하면 여기에 표시됩니다.</p></div>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (viewMode === 'student' && selectedStudentId && selectedStudentReport) {
     const report = selectedStudentReport;
     const stu = selectedStudent;
