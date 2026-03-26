@@ -19645,7 +19645,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                     {/* 그래프 */}
                     <div className="h-48 bg-white rounded-lg p-2">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={testData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                        <AreaChart data={testData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                           <defs>
                             <linearGradient id="colorTestPercent" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -19779,7 +19779,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                     {/* 그래프 */}
                     <div className="h-48 bg-white rounded-lg p-2">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={problemData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                        <BarChart data={problemData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                           <defs>
                             <linearGradient id="colorProblemPercent" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
@@ -34166,7 +34166,7 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                       </h4>
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={graphData.tests} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                          <AreaChart data={graphData.tests} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                             <defs>
                               <linearGradient id="colorPercent" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -34255,7 +34255,7 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                       </h4>
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={graphData.problems} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                          <BarChart data={graphData.problems} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                             <XAxis dataKey="displayDate" tick={{ fontSize: 11 }} />
                             <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} width={36} />
@@ -34294,7 +34294,7 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                       </h4>
                       <div className="h-48">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={graphData.schoolScores} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                          <BarChart data={graphData.schoolScores} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                             <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                             <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} width={36} />
@@ -38154,7 +38154,7 @@ function PerformanceAnalysis({ student }) {
         </h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={trendData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+            <AreaChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" tick={{ fontSize: 12 }} />
               <YAxis domain={[0, 100]} width={36} />
