@@ -20825,8 +20825,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                           <div className="space-y-2 mb-2">
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-600">문제 수</span>
-                              <input type="number" value={currentSession.testQuestionCount || 10} onChange={(e) => updateSessionField('testQuestionCount', parseInt(e.target.value) || 10)} className="w-14 p-1.5 border rounded text-xs text-center" min="1" max="50" />
-                              <button onClick={() => initTestAnswers(currentSession.testQuestionCount || 10)} className="px-2 py-1.5 bg-blue-500 text-white rounded text-xs">채점판</button>
+                              <input type="number" value={currentSession.testQuestionCount ?? 10} onChange={(e) => updateSessionField('testQuestionCount', Math.max(0, parseInt(e.target.value) || 0))} className="w-14 p-1.5 border rounded text-xs text-center" min="0" max="50" />
+                              <button onClick={() => initTestAnswers(currentSession.testQuestionCount ?? 10)} className="px-2 py-1.5 bg-blue-500 text-white rounded text-xs">채점판</button>
                             </div>
                             {currentSession.testAnswers?.length > 0 && (
                               <div className="flex gap-1">
@@ -21265,7 +21265,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                   <span style={{fontSize:'13px', color:'#1d4ed8', fontWeight:600, flexShrink:0, width:'44px'}}>객관식</span>
                                   <input
                                     type="number"
-                                    value={test.testQuestionCount || 10}
+                                    value={test.testQuestionCount ?? 10}
                                     onChange={(e) => updateTestField(testIndex, 'testQuestionCount', Math.max(0, parseInt(e.target.value) || 0))}
                                     style={{flex:1, minWidth:0, padding:'7px', border:'1px solid #93c5fd', borderRadius:'6px', fontSize:'18px', textAlign:'center', background:'white', fontWeight:700}}
                                     min="0" max="100"
@@ -21286,7 +21286,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                 </div>
                                 {/* 2행: 채점판 생성 버튼 전체 너비 */}
                                 <button
-                                  onClick={() => initTestAnswersForTestFull(testIndex, test.testQuestionCount || 10, test.essayQuestionCount || 0)}
+                                  onClick={() => initTestAnswersForTestFull(testIndex, test.testQuestionCount ?? 10, test.essayQuestionCount || 0)}
                                   style={{width:'100%', padding:'8px', background:'#3b82f6', color:'white', borderRadius:'6px', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer'}}
                                 >
                                   🎯 채점판 생성
