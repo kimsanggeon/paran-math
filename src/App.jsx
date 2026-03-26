@@ -7892,6 +7892,7 @@ function DirectorReportsView({ students, allReports, teachers }) {
     setIsLoading(false);
   };
 
+  const loadedRef = useRef(false);
   useEffect(() => {
     const merged = { ...allReports };
     // localStorage도 병합 (활성 학생만)
@@ -7904,8 +7905,11 @@ function DirectorReportsView({ students, allReports, teachers }) {
       }
     });
     setLoadedReports(merged);
-    loadAllFromStorage();
-  }, [allReports, students]);
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      loadAllFromStorage();
+    }
+  }, [allReports]); // eslint-disable-line
 
   // 모든 세션 수집
   const allSessions = useMemo(() => {
