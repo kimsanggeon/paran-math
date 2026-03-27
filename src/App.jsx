@@ -3946,9 +3946,9 @@ function ParentView({ student, students, onLogout }) {
                     <span className="font-medium">{safeReportStats.accuracy}% · {safeReportStats.goalAccuracy}%</span>
                   </div>
                   <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={`h-full rounded-full ${safeReportStats.accuracy >= safeReportStats.goalAccuracy ? 'bg-green-500' : 'bg-blue-500'}`}
-                      style={{ width: _goalPct + "%" }}
+                      style={{ width: Math.min(100, safeReportStats.goalAccuracy > 0 ? Math.round((safeReportStats.accuracy / safeReportStats.goalAccuracy) * 100) : 0) + "%" }}
                     ></div>
                   </div>
                 </div>
