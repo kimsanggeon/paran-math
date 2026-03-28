@@ -16,6 +16,35 @@ import {
   Cloud, CloudOff, Database, Wifi, WifiOff
 } from 'lucide-react';
 
+// ========== 에러 경계 컴포넌트 ==========
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div style={{padding:'32px', textAlign:'center'}}>
+          <h2 style={{color:'#dc2626', fontWeight:'bold', fontSize:'18px', marginBottom:'16px'}}>오류가 발생했습니다</h2>
+          <p style={{color:'#6b7280', marginBottom:'8px'}}>{this.state.error?.message}</p>
+          <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+            style={{padding:'8px 16px', background:'#2563eb', color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>
+            새로고침
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Firebase 연동
 import {
   initializeFirebase,
@@ -404,11 +433,13 @@ export default function ParanMathSystem() {
   // 학부모 로그인: 자녀 대시보드만 표시
   if (userType === 'parent' && loggedInStudent) {
     return (
-      <ParentView 
-        student={loggedInStudent}
-        students={students}
-        onLogout={handleLogout}
-      />
+      <ErrorBoundary fallback={<div className="p-8 text-center"><h2 className="text-xl font-bold text-red-600 mb-4">오류가 발생했습니다</h2><p className="text-gray-600 mb-4">페이지를 새로고침해주세요.</p><button onClick={handleLogout} className="px-4 py-2 bg-blue-600 text-white rounded-lg">로그아웃</button></div>}>
+        <ParentView
+          student={loggedInStudent}
+          students={students}
+          onLogout={handleLogout}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -2794,8 +2825,8 @@ function ParentView({ student, students, onLogout }) {
       : null;
     
     // 최근 세션 (검색 시에는 필터링된 세션 전체, 아닐 때는 최근 5개)
-    const recentSessions = sessionsToUse 
-      ? sessions.sort((a, b) => b.date.localeCompare(a.date))
+    const recentSessions = sessionsToUse
+      ? sessions.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))
       : sessions.slice(-5).reverse();
     
     return {
