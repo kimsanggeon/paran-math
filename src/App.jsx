@@ -3687,6 +3687,52 @@ function ParentView({ student, students, onLogout }) {
           </div>
         </div>
 
+        {/* ★ 출결/성적/숙제 요약 카드 (학부모 가장 궁금한 정보) */}
+        <div className="grid grid-cols-3 gap-3">
+          {/* 출석 */}
+          <div className={`rounded-xl p-3 text-center border-2 ${isAttendedToday ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'}`}>
+            <div className="text-2xl mb-1">{isAttendedToday ? '✅' : '⬜'}</div>
+            <p className={`text-xs font-bold ${isAttendedToday ? 'text-green-700' : 'text-gray-500'}`}>
+              {isAttendedToday ? '출석 완료' : '미출석'}
+            </p>
+            <p className="text-lg font-bold text-gray-800 mt-1">{safeReportStats.attendanceRate}%</p>
+            <p className="text-[10px] text-gray-400">출석률</p>
+          </div>
+          {/* 성적 */}
+          <div className="rounded-xl p-3 text-center border-2 bg-blue-50 border-blue-200">
+            <div className="text-2xl mb-1">📊</div>
+            <p className="text-xs font-bold text-blue-700">정답률</p>
+            <p className="text-lg font-bold text-blue-800 mt-1">{safeReportStats.accuracy}%</p>
+            <p className="text-[10px] text-gray-400">
+              {safeReportStats.avgTestScore !== null ? `시험 ${safeReportStats.avgTestScore}%` : `${safeReportStats.totalSessions}회 수업`}
+            </p>
+          </div>
+          {/* 숙제 */}
+          {(() => {
+            const hw = student.homework || [];
+            const recentHw = hw.filter(h => {
+              if (!h.dueDate) return true;
+              const due = new Date(h.dueDate);
+              const now = new Date();
+              return due >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            });
+            const completed = recentHw.filter(h => h.completed).length;
+            const total = recentHw.length;
+            const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+            const incomplete = total - completed;
+            return (
+              <div className={`rounded-xl p-3 text-center border-2 ${incomplete > 0 ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-200'}`}>
+                <div className="text-2xl mb-1">{incomplete > 0 ? '📝' : '🎉'}</div>
+                <p className={`text-xs font-bold ${incomplete > 0 ? 'text-red-700' : 'text-purple-700'}`}>
+                  {incomplete > 0 ? `미완료 ${incomplete}개` : '모두 완료!'}
+                </p>
+                <p className="text-lg font-bold text-gray-800 mt-1">{completed}/{total}</p>
+                <p className="text-[10px] text-gray-400">최근 7일 숙제</p>
+              </div>
+            );
+          })()}
+        </div>
+
         {/* 오늘의 출석 현황 — 학습보고서/출결관리 연동 */}
         <div className={`rounded-xl p-4 ${ isAttendedToday ? attendanceInfo.source === 'late' ? 'bg-yellow-50 border-2 border-yellow-200' : 'bg-green-50 border-2 border-green-200' : 'bg-orange-50 border-2 border-orange-200' }`}>
           <div className="flex items-center gap-3">
@@ -19638,6 +19684,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                         displayDate: session.date ? session.date.slice(5) : '',
                         name: session.testType === '기타' ? (session.customTestName || '기타') : session.testType,
                         testType: session.testType,
+                        difficulty: session.difficulty || '',
                         scope: session.testScope || '',
                         correct,
                         wrong,
@@ -19663,6 +19710,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                           displayDate: session.date ? session.date.slice(5) : '',
                           name: test.testType === '기타' ? (test.customTestName || '기타') : test.testType,
                           testType: test.testType,
+                          difficulty: test.difficulty || '',
                           scope: test.testScope || '',
                           correct,
                           wrong,
@@ -19778,7 +19826,89 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   </div>
                 );
               })()}
-              
+
+              {/* 난이도별 시험 성적 분석 그래프 */}
+              {(() => {
+                const diffTests = [];
+                (reportData.sessions || []).forEach(session => {
+                  const extractDiff = (t, d) => {
+                    if (!t.testAnswers || t.testAnswers.length === 0) return;
+                    const diff = t.difficulty || d || '';
+                    if (!diff) return;
+                    const answers = t.testAnswers.filter(a => a !== null && a !== undefined);
+                    const correct = t.testAnswers.filter(a => a === true).length;
+                    if (answers.length > 0) diffTests.push({ difficulty: diff, percent: Math.round((correct / answers.length) * 100) });
+                  };
+                  if (session.testType && session.difficulty) extractDiff(session, session.difficulty);
+                  (session.tests || []).forEach(test => { if (test.testType) extractDiff(test, test.difficulty); });
+                });
+                if (diffTests.length === 0) return null;
+
+                const diffLabelsMap = { highest: '🔴 최상', high: '🟠 상', medium: '🟡 중', 'medium-low': '🟢 중하', low: '🔵 하' };
+                const diffColors = { highest: '#ef4444', high: '#f97316', medium: '#eab308', 'medium-low': '#22c55e', low: '#3b82f6' };
+                const diffOrder = ['highest', 'high', 'medium', 'medium-low', 'low'];
+                const grouped = {};
+                diffTests.forEach(t => {
+                  if (!grouped[t.difficulty]) grouped[t.difficulty] = [];
+                  grouped[t.difficulty].push(t.percent);
+                });
+                const chartData = diffOrder.filter(d => grouped[d]).map(d => ({
+                  level: diffLabelsMap[d] || d,
+                  avgPct: Math.round(grouped[d].reduce((a, b) => a + b, 0) / grouped[d].length),
+                  count: grouped[d].length,
+                  fill: diffColors[d] || '#6b7280'
+                }));
+
+                return (
+                  <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-medium text-amber-700 flex items-center gap-2">
+                        <BarChart3 size={14} />
+                        난이도별 시험 성적
+                      </label>
+                      <span className="text-xs text-gray-500">{diffTests.length}회 시험 분석</span>
+                    </div>
+                    <div className="h-40 bg-white rounded-lg p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="level" tick={{ fontSize: 11 }} />
+                          <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={36} />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const d = payload[0].payload;
+                                return (
+                                  <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
+                                    <p className="font-bold">{d.level}</p>
+                                    <p>평균 정답률: <strong>{d.avgPct}%</strong></p>
+                                    <p>시험 횟수: {d.count}회</p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Bar dataKey="avgPct" name="평균 정답률" radius={[6, 6, 0, 0]}>
+                            {chartData.map((entry, index) => (
+                              <rect key={index} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {chartData.map((d, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-xs">
+                          <div className="w-3 h-3 rounded" style={{ background: d.fill }}></div>
+                          <span className="text-gray-700">{d.level}: <strong>{d.avgPct}%</strong> ({d.count}회)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 문제 풀이 교재 점수 그래프 */}
               {(() => {
                 // 문제 풀이 데이터 추출
