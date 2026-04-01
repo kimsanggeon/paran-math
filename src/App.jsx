@@ -3813,6 +3813,16 @@ function ParentView({ student, students, onLogout }) {
                   </div>
                 </div>
               </div>
+              <details className="mt-2 bg-white/10 rounded-lg overflow-hidden">
+                <summary className="px-3 py-1.5 text-[11px] text-indigo-200 cursor-pointer hover:bg-white/5">
+                  💡 몰입의 탑이란? ▼
+                </summary>
+                <div className="px-3 pb-2 text-[10px] text-indigo-200 space-y-1">
+                  <p>시험 통과, 숙제 완료, 우수한 학습 태도, 자습 시간에 따라 층수가 올라갑니다.</p>
+                  <p>주간테스트 미통과 또는 숙제 미완료 시 층수가 내려갈 수 있습니다.</p>
+                  <p className="text-yellow-200">높은 층에 올라갈수록 학습 습관이 잘 잡혀있다는 뜻입니다!</p>
+                </div>
+              </details>
             </div>
           );
         })()}
@@ -5478,6 +5488,29 @@ function StudentView({ student, students, saveStudents, onLogout }) {
                       <p className="text-indigo-300">방어</p>
                     </div>
                   </div>
+
+                  {/* 안내 토글 */}
+                  <details className="mt-3 bg-white/10 rounded-lg overflow-hidden">
+                    <summary className="px-3 py-2 text-xs text-indigo-200 cursor-pointer hover:bg-white/5 flex items-center gap-1">
+                      <span>💡</span> <span>몰입의 탑이 뭐예요?</span> <span className="ml-auto text-indigo-400">▼</span>
+                    </summary>
+                    <div className="px-3 pb-3 text-[11px] text-indigo-200 space-y-2">
+                      <p className="font-bold text-yellow-300">시험, 숙제, 학습 태도, 자습으로 탑을 올라가세요!</p>
+                      <div className="space-y-1">
+                        <p>📝 <strong>시험 통과</strong> → 일일 +0.5층, 주간 +1층, 심화 +2층</p>
+                        <p>📚 <strong>숙제 완료</strong> → 1건당 +0.3층, 주간 전부 완료 시 +1층 보너스</p>
+                        <p>💪 <strong>학습 태도 우수</strong> → 평균 4점 이상 +0.5층, 4.5점 이상 +1층</p>
+                        <p>⏱ <strong>자습</strong> → 30분 +0.3층, 60분 이상 +0.5층</p>
+                        <p>🔥 <strong>콤보</strong> → 연속 5문제 정답 +0.5층</p>
+                      </div>
+                      <div className="pt-1 border-t border-indigo-600">
+                        <p className="text-red-300">⚠️ <strong>방어 주의!</strong></p>
+                        <p>🛡️ 주간테스트 미통과 → <strong>-1층</strong></p>
+                        <p>📝 미완료 숙제 3개 이상 → <strong>-0.5층</strong></p>
+                      </div>
+                      <p className="text-yellow-200 font-medium pt-1">🏆 랭킹 탭에서 친구들과 순위를 비교해보세요!</p>
+                    </div>
+                  </details>
                 </div>
               );
             })()}
