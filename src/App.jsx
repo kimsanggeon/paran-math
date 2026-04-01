@@ -133,6 +133,98 @@ function MiddleGradeBadge() {
 // 전체 교재 flat 배열 (검색·매핑용)
 const ALL_TEXTBOOKS = TEXTBOOK_GROUPS.flatMap(g => g.books);
 
+// ========== 🏰 몰입의 탑 — 층수 계산 함수 ==========
+function calculateTowerFloor(reportData, student = {}) {
+  const result = { floor: 0, breakdown: { test: 0, homework: 0, attitude: 0, studyTime: 0, combo: 0, defense: 0 }, defenseStatus: 'safe', lastDefenseDate: null, defenseStreak: 0 };
+  if (!reportData?.sessions || reportData.sessions.length === 0) return result;
+
+  const passThreshold = reportData.passThreshold ?? 5;
+  const sessions = [...reportData.sessions].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  let consecutiveCorrect = 0;
+
+  sessions.forEach(session => {
+    // ── 시험 점수 ──
+    const tests = [
+      ...(session.testType ? [{ testType: session.testType, testAnswers: session.testAnswers, difficulty: session.difficulty }] : []),
+      ...(session.tests || [])
+    ];
+    tests.forEach(test => {
+      if (!test.testAnswers || test.testAnswers.length === 0 || test.testType === '기타') return;
+      const wrong = test.testAnswers.filter(a => a === false).length;
+      const passed = wrong <= passThreshold;
+      if (passed) {
+        if (test.difficulty === 'highest' || test.difficulty === 'high') { result.floor += 2; result.breakdown.test += 2; }
+        else if (test.testType === '주간테스트') { result.floor += 1; result.breakdown.test += 1; }
+        else { result.floor += 0.5; result.breakdown.test += 0.5; }
+      }
+      // 연속 정답 보너스
+      (test.testAnswers || []).forEach(a => {
+        if (a === true) { consecutiveCorrect++; if (consecutiveCorrect >= 5) { result.floor += 0.5; result.breakdown.combo += 0.5; consecutiveCorrect = 0; } }
+        else if (a === false) { consecutiveCorrect = 0; }
+      });
+    });
+
+    // ── 학습 태도 ──
+    const attScores = [session.understanding, session.participation, session.concentration, session.attitude, session.persistence].filter(v => v && v > 0);
+    if (attScores.length >= 3) {
+      const avg = attScores.reduce((s, v) => s + v, 0) / attScores.length;
+      if (avg >= 4.5) { result.floor += 1; result.breakdown.attitude += 1; }
+      else if (avg >= 4) { result.floor += 0.5; result.breakdown.attitude += 0.5; }
+    }
+
+    // ── 자습 시간 ──
+    const studyMin = parseInt(session.studyTime) || 0;
+    if (studyMin >= 60) { result.floor += 0.5; result.breakdown.studyTime += 0.5; }
+    else if (studyMin >= 30) { result.floor += 0.3; result.breakdown.studyTime += 0.3; }
+  });
+
+  // ── 숙제 ──
+  const hw = student.homework || [];
+  const completedHw = hw.filter(h => h.completed);
+  completedHw.forEach(() => { result.floor += 0.3; result.breakdown.homework += 0.3; });
+  // 주간 숙제 전부 완료 보너스
+  const recentHw = hw.filter(h => {
+    if (!h.dueDate) return false;
+    const d = new Date(h.dueDate);
+    return d >= new Date(Date.now() - 7 * 86400000);
+  });
+  if (recentHw.length >= 2 && recentHw.every(h => h.completed)) { result.floor += 1; result.breakdown.homework += 1; }
+
+  // ── 방어 체크 (최근 7일 주간테스트) ──
+  const today = new Date();
+  const weekAgo = new Date(today.getTime() - 7 * 86400000).toISOString().split('T')[0];
+  const recentWeeklyTests = [];
+  sessions.filter(s => s.date >= weekAgo).forEach(s => {
+    const tt = [...(s.testType === '주간테스트' ? [s] : []), ...(s.tests || []).filter(t => t.testType === '주간테스트')];
+    tt.forEach(t => {
+      if (t.testAnswers?.length > 0) {
+        const wrong = t.testAnswers.filter(a => a === false).length;
+        recentWeeklyTests.push({ passed: wrong <= passThreshold, date: s.date });
+      }
+    });
+  });
+  // 미완료 숙제 패널티
+  const incompleteHw = hw.filter(h => !h.completed && h.dueDate && h.dueDate < today.toISOString().split('T')[0]);
+  if (incompleteHw.length >= 3) { result.floor -= 0.5; result.breakdown.defense -= 0.5; }
+
+  if (recentWeeklyTests.length > 0) {
+    const anyPassed = recentWeeklyTests.some(t => t.passed);
+    if (anyPassed) {
+      result.defenseStatus = 'safe';
+      result.lastDefenseDate = recentWeeklyTests.filter(t => t.passed).pop()?.date;
+      result.defenseStreak = (student.tower?.defenseStreak || 0) + 1;
+    } else {
+      result.floor -= 1; result.breakdown.defense -= 1;
+      result.defenseStatus = 'failed';
+    }
+  } else {
+    result.defenseStatus = 'pending';
+  }
+
+  result.floor = Math.max(0, Math.round(result.floor * 2) / 2); // 0.5 단위로 반올림, 최소 0
+  return result;
+}
+
 // ========== 🔙 뒤로가기 전역 관리자 ==========
 // 단 하나의 popstate 리스너로 모든 컴포넌트의 뒤로가기를 관리 (충돌 방지)
 const BackButtonManager = (() => {
@@ -3687,6 +3779,44 @@ function ParentView({ student, students, onLogout }) {
           </div>
         </div>
 
+        {/* 🏰 몰입의 탑 (학부모용) */}
+        {(() => {
+          const tower = calculateTowerFloor(reportData, student);
+          const highestFloor = Math.max(tower.floor, student.tower?.highestFloor || 0);
+          const milestone = Math.ceil(tower.floor / 10) * 10 || 10;
+          return (
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-xl p-4 text-white">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold flex items-center gap-2">🏰 몰입의 탑</h3>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${tower.defenseStatus === 'safe' ? 'bg-green-400/30' : tower.defenseStatus === 'failed' ? 'bg-red-400/30' : 'bg-yellow-400/30'}`}>
+                  {tower.defenseStatus === 'safe' ? '🛡️ 방어 성공' : tower.defenseStatus === 'failed' ? '⚠️ 방어 실패' : '🔔 대기'}
+                </span>
+              </div>
+              <div className="flex items-end gap-4">
+                <div>
+                  <p className="text-4xl font-black text-yellow-300">{tower.floor}<span className="text-lg">층</span></p>
+                  <p className="text-xs text-indigo-200">최고: {highestFloor}층</p>
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between text-[10px] text-indigo-200 mb-1">
+                    <span>{milestone}층 목표</span>
+                    <span>{Math.round((tower.floor / milestone) * 100)}%</span>
+                  </div>
+                  <div className="h-2.5 bg-indigo-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full" style={{ width: `${Math.min(100, (tower.floor / milestone) * 100)}%` }} />
+                  </div>
+                  <div className="flex gap-2 mt-2 text-[10px]">
+                    <span>📝{tower.breakdown.test}</span>
+                    <span>📚{tower.breakdown.homework.toFixed(1)}</span>
+                    <span>💪{tower.breakdown.attitude.toFixed(1)}</span>
+                    <span>⏱{tower.breakdown.studyTime.toFixed(1)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ★ 출결/성적/숙제 요약 카드 (학부모 가장 궁금한 정보) */}
         <div className="grid grid-cols-3 gap-3">
           {/* 출석 */}
@@ -5277,6 +5407,81 @@ function StudentView({ student, students, saveStudents, onLogout }) {
               </p>
             </div>
 
+            {/* 🏰 몰입의 탑 */}
+            {(() => {
+              const tower = calculateTowerFloor(reportData, student);
+              const highestFloor = Math.max(tower.floor, student.tower?.highestFloor || 0);
+              const floorInt = Math.floor(tower.floor);
+              const isHalf = tower.floor % 1 !== 0;
+              const defenseColor = tower.defenseStatus === 'safe' ? 'text-green-400' : tower.defenseStatus === 'failed' ? 'text-red-400' : 'text-yellow-400';
+              const defenseText = tower.defenseStatus === 'safe' ? '🛡️ 방어 성공' : tower.defenseStatus === 'failed' ? '⚠️ 방어 실패' : '🔔 방어전 대기 중';
+              const milestone = Math.ceil(tower.floor / 10) * 10 || 10;
+              const progressToMilestone = (tower.floor / milestone) * 100;
+
+              return (
+                <div className="bg-gradient-to-b from-indigo-900 via-indigo-800 to-purple-900 rounded-xl p-4 text-white relative overflow-hidden">
+                  {/* 배경 장식 */}
+                  <div className="absolute top-2 right-3 text-6xl opacity-10">🏰</div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-lg flex items-center gap-2">🏰 몰입의 탑</h3>
+                    <span className={`text-xs px-2 py-1 rounded-full ${tower.defenseStatus === 'safe' ? 'bg-green-500/30' : tower.defenseStatus === 'failed' ? 'bg-red-500/30' : 'bg-yellow-500/30'}`}>
+                      {defenseText}
+                    </span>
+                  </div>
+
+                  {/* 층수 표시 */}
+                  <div className="text-center my-3">
+                    <p className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-amber-400">
+                      {tower.floor}<span className="text-2xl">층</span>
+                    </p>
+                    <p className="text-xs text-indigo-300 mt-1">최고 기록: {highestFloor}층</p>
+                  </div>
+
+                  {/* 마일스톤 진행바 */}
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs text-indigo-300 mb-1">
+                      <span>0층</span>
+                      <span>{milestone}층 돌파까지</span>
+                    </div>
+                    <div className="h-3 bg-indigo-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full transition-all duration-700"
+                        style={{ width: `${Math.min(100, progressToMilestone)}%` }} />
+                    </div>
+                  </div>
+
+                  {/* 층수 획득 내역 */}
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="bg-white/10 rounded-lg p-2">
+                      <p className="text-yellow-300 font-bold">📝 {tower.breakdown.test}</p>
+                      <p className="text-indigo-300">시험</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg p-2">
+                      <p className="text-green-300 font-bold">📚 {tower.breakdown.homework.toFixed(1)}</p>
+                      <p className="text-indigo-300">숙제</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg p-2">
+                      <p className="text-cyan-300 font-bold">💪 {tower.breakdown.attitude.toFixed(1)}</p>
+                      <p className="text-indigo-300">학습태도</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs mt-2">
+                    <div className="bg-white/10 rounded-lg p-2">
+                      <p className="text-purple-300 font-bold">⏱ {tower.breakdown.studyTime.toFixed(1)}</p>
+                      <p className="text-indigo-300">자습</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg p-2">
+                      <p className="text-orange-300 font-bold">🔥 {tower.breakdown.combo.toFixed(1)}</p>
+                      <p className="text-indigo-300">콤보</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg p-2">
+                      <p className={tower.breakdown.defense < 0 ? 'text-red-400 font-bold' : 'text-green-300 font-bold'}>🛡️ {tower.breakdown.defense}</p>
+                      <p className="text-indigo-300">방어</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* 오늘의 미션 */}
             <div className="bg-white rounded-xl shadow p-4">
               <h3 className="font-bold text-gray-800 mb-4">🎯 오늘의 학습 미션</h3>
@@ -6265,6 +6470,41 @@ function StudentView({ student, students, saveStudents, onLogout }) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* 🏰 몰입의 탑 랭킹 */}
+            <div className="bg-white rounded-xl shadow p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-gray-800">🏰 몰입의 탑 랭킹</h3>
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">
+                  내 층수: {calculateTowerFloor(reportData, student).floor}층
+                </span>
+              </div>
+              <div className="space-y-2">
+                {(() => {
+                  const towerList = students
+                    .map(s => ({ ...s, towerFloor: s.tower?.highestFloor || 0 }))
+                    .sort((a, b) => b.towerFloor - a.towerFloor)
+                    .slice(0, 10);
+                  const myFloor = calculateTowerFloor(reportData, student).floor;
+                  return towerList.map((s, idx) => (
+                    <div key={s.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg ${s.id === student.id ? 'bg-indigo-50 border-2 border-indigo-300' : 'bg-gray-50'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-400' : 'bg-gray-300'}`}>
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">{s.name}</p>
+                        <p className="text-xs text-gray-500">{s.grade}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-indigo-600">{s.id === student.id ? myFloor : s.towerFloor}</p>
+                        <p className="text-xs text-gray-400">층</p>
+                      </div>
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
 
