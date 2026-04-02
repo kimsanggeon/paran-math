@@ -627,12 +627,14 @@ export default function ParanMathSystem() {
   // 학생 로그인: 학생 전용 대시보드 표시
   if (userType === 'student' && loggedInStudent) {
     return (
-      <StudentView 
-        student={loggedInStudent}
-        students={students}
-        saveStudents={saveStudents}
-        onLogout={handleLogout}
-      />
+      <ErrorBoundary fallback={<div className="p-8 text-center"><h2 className="text-xl font-bold text-red-600 mb-4">오류가 발생했습니다</h2><p className="text-gray-600 mb-4">페이지를 새로고침해주세요.</p><button onClick={handleLogout} className="px-4 py-2 bg-blue-600 text-white rounded-lg">로그아웃</button></div>}>
+        <StudentView
+          student={loggedInStudent}
+          students={students || []}
+          saveStudents={saveStudents}
+          onLogout={handleLogout}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -4768,7 +4770,17 @@ function ParentView({ student, students, onLogout }) {
 }
 
 // ========== 학생 전용 뷰 ==========
-function StudentView({ student, students, saveStudents, onLogout }) {
+function StudentView({ student: rawStudent, students = [], saveStudents, onLogout }) {
+  // ★ student 객체 안전 보장 (undefined 속성 방어)
+  const student = rawStudent || {};
+  if (!student.id || !student.name) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-gray-500 mb-4">학생 정보를 불러오는 중...</p>
+        <button onClick={onLogout} className="px-4 py-2 bg-blue-600 text-white rounded-lg">로그아웃</button>
+      </div>
+    );
+  }
   const [reportData, setReportData] = useState(null);
   const [activeTab, setActiveTab] = useState('mission'); // mission, journal, ranking, profile, review, similar
   const [wrongNotes, setWrongNotes] = useState([]);
