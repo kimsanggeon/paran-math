@@ -4780,21 +4780,11 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   const [directorNotices, setDirectorNotices] = useState([]);
   const [stHistMonth, setStHistMonth] = useState(new Date().toISOString().slice(0, 7));
   const [stHistData, setStHistData] = useState(null);
-
-  // ★ student 객체 안전 보장 (Hook 호출 후 early return)
-  const student = rawStudent || {};
-  if (!student.id || !student.name) {
-    return (
-      <div className="p-8 text-center">
-        <p className="text-gray-500 mb-4">학생 정보를 불러오는 중...</p>
-        <button onClick={onLogout} className="px-4 py-2 bg-blue-600 text-white rounded-lg">로그아웃</button>
-      </div>
-    );
-  }
-
-  // 학습 일지 상태 (수업 기록 연동)
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(null);
   const [journalSaveStatus, setJournalSaveStatus] = useState('');
+
+  // ★ student 객체 안전 보장 (early return 제거 — Hook 규칙 준수)
+  const student = rawStudent || {};
   
   // 복습 주기 (에빙하우스 망각곡선 기반)
   const reviewIntervals = [1, 3, 7, 14, 30];
@@ -5451,6 +5441,16 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
     return mvp;
   };
   const weeklyMVP = getWeeklyMVP();
+
+  // ★ student 정보 없으면 안내 화면
+  if (!student.id || !student.name) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-gray-500 mb-4">학생 정보를 불러오는 중...</p>
+        <button onClick={onLogout} className="px-4 py-2 bg-blue-600 text-white rounded-lg">로그아웃</button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gradient-to-br from-cyan-50 via-white to-blue-50 overflow-x-hidden" style={{ minHeight: "100dvh", WebkitOverflowScrolling: "touch", overflowY: "auto" }}>
