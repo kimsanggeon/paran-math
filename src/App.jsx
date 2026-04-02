@@ -274,7 +274,44 @@ function calculateTowerFloor(reportData, student = {}) {
   const milestoneFloors = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
   result.milestones = milestoneFloors.filter(m => result.floor >= m);
 
+  // ── 기존에 수령하지 않은 마일스톤 보상 확인 ──
+  const claimedMilestones = student.tower?.claimedMilestones || [];
+  result.unclaimedMilestones = result.milestones.filter(m => !claimedMilestones.includes(m));
+
+  // ── 점령자 보상 (가장 높은 학생에게만) ──
+  result.isConqueror = false; // 호출하는 쪽에서 전체 학생 비교 후 설정
+
   return result;
+}
+
+// ========== 🏰 몰입의 탑 — 월별 스냅샷 저장/로드 함수 ==========
+async function saveTowerSnapshot(students, month) {
+  // month: "2026-04"
+  const snapshot = students.map(s => ({
+    id: s.id, name: s.name, className: s.className, teacherId: s.teacherId,
+    floor: s.tower?.highestFloor || 0,
+    manualPoints: s.tower?.manualPoints || 0,
+    rewardHistory: s.tower?.rewardHistory || [],
+    claimedMilestones: s.tower?.claimedMilestones || [],
+  }));
+  const key = `paran:tower-snapshot:${month}`;
+  try {
+    if (window.storage) await window.storage.set(key, JSON.stringify(snapshot), true);
+    localStorage.setItem(key, JSON.stringify(snapshot));
+  } catch(e) { console.log('타워 스냅샷 저장 오류:', e); }
+}
+
+async function loadTowerSnapshot(month) {
+  const key = `paran:tower-snapshot:${month}`;
+  try {
+    if (window.storage) {
+      const r = await window.storage.get(key, true);
+      if (r?.value) return JSON.parse(r.value);
+    }
+    const local = localStorage.getItem(key);
+    if (local) return JSON.parse(local);
+  } catch(e) { console.log('타워 스냅샷 로드 오류:', e); }
+  return null;
 }
 
 // ========== 🔙 뒤로가기 전역 관리자 ==========
@@ -3882,6 +3919,44 @@ function ParentView({ student, students, onLogout }) {
           );
         })()}
 
+        {/* 📅 월별 타워 기록 (학부모용) */}
+        {(() => {
+          const [pvHistMonth, setPvHistMonth] = React.useState(new Date().toISOString().slice(0, 7));
+          const [pvHistData, setPvHistData] = React.useState(null);
+          const months = [];
+          const start = new Date(2026, 3, 1);
+          let d = new Date(start);
+          while (d <= new Date()) { months.push(d.toISOString().slice(0, 7)); d.setMonth(d.getMonth() + 1); }
+          if (months.length === 0) months.push(new Date().toISOString().slice(0, 7));
+          return (
+            <details className="bg-white rounded-xl shadow overflow-hidden">
+              <summary className="px-4 py-3 font-bold text-sm text-gray-700 cursor-pointer hover:bg-gray-50 flex items-center gap-2">
+                📅 월별 타워 기록 보기 ▼
+              </summary>
+              <div className="px-4 pb-3 space-y-2">
+                <div className="flex gap-2">
+                  <select value={pvHistMonth} onChange={e => setPvHistMonth(e.target.value)} className="flex-1 px-2 py-1.5 border rounded text-sm">
+                    {months.map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}
+                  </select>
+                  <button onClick={async () => { const snap = await loadTowerSnapshot(pvHistMonth); setPvHistData(snap); }}
+                    className="px-3 py-1.5 bg-indigo-500 text-white rounded text-xs font-bold">조회</button>
+                </div>
+                {pvHistData ? (
+                  <div className="space-y-1 max-h-36 overflow-y-auto">
+                    {pvHistData.slice().sort((a, b) => (b.floor || 0) - (a.floor || 0)).map((s, idx) => (
+                      <div key={s.id} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${s.id === student.id ? 'bg-indigo-100 border border-indigo-300 font-bold' : 'bg-gray-50'}`}>
+                        <span className="w-5 text-center">{idx === 0 ? '👑' : idx + 1}</span>
+                        <span className="flex-1 truncate">{s.name}</span>
+                        <span className="text-indigo-600 font-bold">{s.floor || 0}층</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-xs text-gray-400 text-center py-2">조회 버튼을 누르세요</p>}
+              </div>
+            </details>
+          );
+        })()}
+
         {/* ★ 출결/성적/숙제 요약 카드 (학부모 가장 궁금한 정보) */}
         <div className="grid grid-cols-3 gap-3">
           {/* 출석 */}
@@ -5476,9 +5551,7 @@ function StudentView({ student, students, saveStudents, onLogout }) {
             {(() => {
               const tower = calculateTowerFloor(reportData, student);
               const highestFloor = Math.max(tower.floor, student.tower?.highestFloor || 0);
-              const floorInt = Math.floor(tower.floor);
-              const isHalf = tower.floor % 1 !== 0;
-              const defenseColor = tower.defenseStatus === 'safe' ? 'text-green-400' : tower.defenseStatus === 'failed' ? 'text-red-400' : 'text-yellow-400';
+              const isConqueror = students.every(s => s.id === student.id || (s.tower?.highestFloor || 0) <= highestFloor) && highestFloor > 0;
               const defenseText = tower.defenseStatus === 'safe' ? '🛡️ 방어 성공' : tower.defenseStatus === 'failed' ? '⚠️ 방어 실패' : '🔔 방어전 대기 중';
               const milestone = Math.ceil(tower.floor / 10) * 10 || 10;
               const progressToMilestone = (tower.floor / milestone) * 100;
@@ -5551,15 +5624,48 @@ function StudentView({ student, students, saveStudents, onLogout }) {
                       <p className="text-indigo-300">방어</p>
                     </div>
                   </div>
-                  {/* 수동 포인트 + 마일스톤 */}
-                  {(tower.breakdown.manualPoints > 0 || tower.milestones.length > 0) && (
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {tower.breakdown.manualPoints > 0 && (
-                        <span className="text-[10px] bg-yellow-500/30 text-yellow-200 px-2 py-0.5 rounded-full">⭐ 선생님 포인트 +{tower.breakdown.manualPoints}</span>
-                      )}
-                      {tower.milestones.length > 0 && (
-                        <span className="text-[10px] bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded-full">🏆 {tower.milestones[tower.milestones.length - 1]}층 달성!</span>
-                      )}
+                  {/* 점령자 칭호 */}
+                  {isConqueror && (
+                    <div className="mt-2 text-center py-2 bg-gradient-to-r from-yellow-500/30 to-amber-500/30 rounded-lg border border-yellow-400/50">
+                      <p className="text-yellow-200 font-bold text-sm">👑 몰입영주</p>
+                      <p className="text-[10px] text-yellow-300">탑 최고층 점령! 재시험+숙제 면제권 획득!</p>
+                    </div>
+                  )}
+
+                  {/* 수동 포인트 + 마일스톤 + 10층 보상 */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {tower.breakdown.manualPoints > 0 && (
+                      <span className="text-[10px] bg-yellow-500/30 text-yellow-200 px-2 py-0.5 rounded-full">⭐ 포인트 +{tower.breakdown.manualPoints}</span>
+                    )}
+                    {tower.milestones.length > 0 && (
+                      <span className="text-[10px] bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded-full">🏆 {tower.milestones[tower.milestones.length - 1]}층 달성!</span>
+                    )}
+                  </div>
+
+                  {/* 10층 단위 보상 수령 */}
+                  {tower.unclaimedMilestones.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {tower.unclaimedMilestones.map(m => (
+                        <div key={m} className="flex items-center justify-between bg-gradient-to-r from-amber-400/20 to-yellow-400/20 rounded-lg px-3 py-2 border border-yellow-400/40">
+                          <span className="text-yellow-200 text-xs font-bold">🎉 {m}층 달성 보상!</span>
+                          <div className="flex gap-1">
+                            <button onClick={() => {
+                              const claimed = [...(student.tower?.claimedMilestones || []), m];
+                              const newHistory = [...(student.tower?.rewardHistory || []), { reward: '🎯 숙제 면제권 (' + m + '층)', cost: 0, date: new Date().toISOString() }];
+                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory } } : s);
+                              saveStudents(updated);
+                              alert('🎯 숙제 1회 면제권을 받았습니다! 선생님께 확인해주세요.');
+                            }} className="px-2 py-1 bg-blue-500 text-white rounded text-[10px] font-bold">🎯 숙제면제</button>
+                            <button onClick={() => {
+                              const claimed = [...(student.tower?.claimedMilestones || []), m];
+                              const newHistory = [...(student.tower?.rewardHistory || []), { reward: '🛡️ 재시험 면제권 (' + m + '층)', cost: 0, date: new Date().toISOString() }];
+                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory } } : s);
+                              saveStudents(updated);
+                              alert('🛡️ 재시험 1회 면제권을 받았습니다! 선생님께 확인해주세요.');
+                            }} className="px-2 py-1 bg-purple-500 text-white rounded text-[10px] font-bold">🛡️ 재시험면제</button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -5599,6 +5705,45 @@ function StudentView({ student, students, saveStudents, onLogout }) {
                 </div>
               );
             })()}
+
+            {/* 📅 월별 타워 기록 (학생용) */}
+            <div className="bg-white rounded-xl shadow p-4">
+              <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">📅 월별 타워 기록</h3>
+              {(() => {
+                const [stHistMonth, setStHistMonth] = React.useState(new Date().toISOString().slice(0, 7));
+                const [stHistData, setStHistData] = React.useState(null);
+                const months = [];
+                const start = new Date(2026, 3, 1);
+                let d = new Date(start);
+                while (d <= new Date()) { months.push(d.toISOString().slice(0, 7)); d.setMonth(d.getMonth() + 1); }
+                if (months.length === 0) months.push(new Date().toISOString().slice(0, 7));
+
+                return (
+                  <>
+                    <div className="flex gap-2 mb-2">
+                      <select value={stHistMonth} onChange={e => setStHistMonth(e.target.value)} className="flex-1 px-2 py-1.5 border rounded text-sm">
+                        {months.map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}
+                      </select>
+                      <button onClick={async () => { const snap = await loadTowerSnapshot(stHistMonth); setStHistData(snap); }}
+                        className="px-3 py-1.5 bg-indigo-500 text-white rounded text-xs font-bold">조회</button>
+                    </div>
+                    {stHistData ? (
+                      <div className="space-y-1 max-h-36 overflow-y-auto">
+                        {stHistData.slice().sort((a, b) => (b.floor || 0) - (a.floor || 0)).map((s, idx) => (
+                          <div key={s.id} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${s.id === student.id ? 'bg-indigo-100 border border-indigo-300 font-bold' : 'bg-gray-50'}`}>
+                            <span className="w-5 text-center">{idx === 0 ? '👑' : idx + 1}</span>
+                            <span className="flex-1 truncate">{s.name}</span>
+                            <span className="text-indigo-600 font-bold">{s.floor || 0}층</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 text-center py-2">조회 버튼을 누르세요</p>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
 
             {/* 🎁 보상 상점 */}
             {(() => {
@@ -27243,6 +27388,82 @@ function GamificationTab({ students, saveStudents }) {
               })()}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* 📅 월별 타워 히스토리 */}
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-600 to-slate-800 p-4 text-white">
+          <h3 className="font-bold flex items-center gap-2">📅 월별 타워 진행 히스토리</h3>
+          <p className="text-slate-300 text-xs mt-1">4월부터 월간 스냅샷을 저장하고 조회합니다</p>
+        </div>
+        <div className="p-4 space-y-3">
+          {(() => {
+            const [historyMonth, setHistoryMonth] = React.useState(new Date().toISOString().slice(0, 7));
+            const [historyData, setHistoryData] = React.useState(null);
+            const [historyLoading, setHistoryLoading] = React.useState(false);
+
+            const months = [];
+            const start = new Date(2026, 3, 1); // 2026년 4월
+            const now = new Date();
+            let d = new Date(start);
+            while (d <= now) {
+              months.push(d.toISOString().slice(0, 7));
+              d.setMonth(d.getMonth() + 1);
+            }
+            if (months.length === 0) months.push(now.toISOString().slice(0, 7));
+
+            const loadHistory = async (m) => {
+              setHistoryMonth(m);
+              setHistoryLoading(true);
+              const snap = await loadTowerSnapshot(m);
+              setHistoryData(snap);
+              setHistoryLoading(false);
+            };
+
+            const saveCurrentSnapshot = async () => {
+              const m = new Date().toISOString().slice(0, 7);
+              await saveTowerSnapshot(students, m);
+              alert(`✅ ${m} 스냅샷 저장 완료!`);
+              loadHistory(m);
+            };
+
+            return (
+              <>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select value={historyMonth} onChange={e => loadHistory(e.target.value)}
+                    className="px-3 py-2 border rounded-lg text-sm">
+                    {months.map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}
+                  </select>
+                  <button onClick={() => loadHistory(historyMonth)}
+                    className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs hover:bg-blue-600">📊 조회</button>
+                  <button onClick={saveCurrentSnapshot}
+                    className="px-3 py-2 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600">💾 현재 스냅샷 저장</button>
+                </div>
+
+                {historyLoading && <p className="text-sm text-gray-400 animate-pulse">⏳ 로딩 중...</p>}
+
+                {historyData ? (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-2">{historyMonth} 기준 ({historyData.length}명)</p>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {historyData.slice().sort((a, b) => (b.floor || 0) - (a.floor || 0)).map((s, idx) => (
+                        <div key={s.id} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${idx === 0 ? 'bg-yellow-50 border border-yellow-200' : idx < 3 ? 'bg-indigo-50' : 'bg-gray-50'}`}>
+                          <span className="w-5 text-center text-xs font-bold">{idx === 0 ? '👑' : idx + 1}</span>
+                          <span className="flex-1 text-gray-800 font-medium truncate">{s.name}</span>
+                          <span className="text-xs text-gray-500">{s.className || ''}</span>
+                          <span className="text-indigo-600 font-bold text-xs">{s.floor || 0}층</span>
+                          <span className="text-yellow-600 text-xs">⭐{s.manualPoints || 0}P</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : !historyLoading && (
+                  <p className="text-sm text-gray-400 text-center py-4">해당 월의 스냅샷이 없습니다. '현재 스냅샷 저장'을 눌러주세요.</p>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 
