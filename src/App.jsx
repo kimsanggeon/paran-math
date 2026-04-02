@@ -28640,11 +28640,18 @@ function SelfStudyTab({ student }) {
     setQuizAnswerDraft(p => ({ ...p, [logId]: '' }));
   };
 
-  // 타이머 tick
+  // 타이머 tick + 악용 방지
+  const pausedRef = React.useRef(false);
+  const pauseStartRef = React.useRef(null);
+  const totalPausedRef = React.useRef(0);
+
   useEffect(() => {
     if (activeTimer) {
       timerRef.current = setInterval(() => {
-        setTimerElapsed(Math.floor((Date.now() - timerStart) / 1000));
+        if (!pausedRef.current) {
+          const realElapsed = Math.floor((Date.now() - timerStart - totalPausedRef.current) / 1000);
+          setTimerElapsed(realElapsed);
+        }
       }, 1000);
     } else {
       clearInterval(timerRef.current);
@@ -28652,17 +28659,44 @@ function SelfStudyTab({ student }) {
     return () => clearInterval(timerRef.current);
   }, [activeTimer, timerStart]);
 
+  // ★ 악용 방지: 탭 숨김/비활성 감지 → 타이머 일시정지
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!activeTimer) return;
+      if (document.hidden) {
+        // 탭이 숨겨짐 → 일시정지
+        pausedRef.current = true;
+        pauseStartRef.current = Date.now();
+      } else {
+        // 탭이 다시 보임 → 정지 시간 누적
+        if (pausedRef.current && pauseStartRef.current) {
+          totalPausedRef.current += (Date.now() - pauseStartRef.current);
+        }
+        pausedRef.current = false;
+        pauseStartRef.current = null;
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [activeTimer]);
+
   const startTimer = (type) => {
     setActiveTimer(type);
     setTimerStart(Date.now());
     setTimerElapsed(0);
+    totalPausedRef.current = 0;
+    pausedRef.current = false;
+    pauseStartRef.current = null;
   };
   const stopTimer = () => {
     const mins = String(Math.round(timerElapsed / 60));
-    if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: mins }));
-    else if (activeTimer === 'extra') setForm(p => ({ ...p, extraMinutes: mins }));
+    // ★ 악용 방지: 최대 4시간(240분) 제한
+    const safeMins = String(Math.min(240, parseInt(mins) || 0));
+    if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
+    else if (activeTimer === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
     setActiveTimer(null);
     setTimerElapsed(0);
+    totalPausedRef.current = 0;
   };
 
   const fmtTime = (sec) =>
@@ -28675,6 +28709,12 @@ function SelfStudyTab({ student }) {
     const ex = Number(form.extraMinutes) || 0;
     if (hw + ex <= 0) { alert('숙제 시간 또는 자습 시간 중 하나 이상 입력하세요.'); return; }
     setSaving(true);
+    // ★ 악용 방지: 하루 최대 6시간(360분), 단일 세션 최대 4시간(240분)
+    if (hw > 240 || ex > 240) { alert('단일 세션 최대 4시간까지만 기록할 수 있습니다.'); setSaving(false); return; }
+    const todayLogs = logs.filter(l => l.date === form.date);
+    const todayTotalMin = todayLogs.reduce((s, l) => s + (l.hwMinutes || 0) + (l.extraMinutes || 0), 0);
+    if (todayTotalMin + hw + ex > 360) { alert('하루 최대 6시간까지만 기록할 수 있습니다.\n오늘 이미 ' + todayTotalMin + '분 기록됨'); setSaving(false); return; }
+
     const newLog = {
       id: Date.now(),
       date: form.date,
@@ -28682,9 +28722,11 @@ function SelfStudyTab({ student }) {
       hwWhat: form.hwWhat || '',
       extraMinutes: ex,
       extraWhat: form.extraWhat || '',
-      duration: hw + ex, // 호환성
+      duration: hw + ex,
       mood: form.mood,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      recordedBy: 'student-timer', // ★ 기록 출처 표시
+      pausedSeconds: totalPausedRef.current ? Math.round(totalPausedRef.current / 1000) : 0
     };
     const updated = [newLog, ...logs];
     try {
@@ -28755,11 +28797,11 @@ function SelfStudyTab({ student }) {
         </div>
         <div className="space-y-1.5">
           <div>
-            <label className="text-xs text-gray-400 block mb-0.5">시간 (분)</label>
+            <label className="text-xs text-gray-400 block mb-0.5">시간 (분) — 타이머로만 기록됩니다</label>
             <input type="number" value={form[field]} min="0" max="480"
-              onChange={e => setForm(p => ({ ...p, [field]: e.target.value }))}
-              className={`w-full p-2 border-2 rounded-lg text-sm font-bold ${isActive || form[field] ? colors.border + ' ' + colors.bg : 'border-gray-200 bg-white'}`}
-              placeholder="0" />
+              readOnly
+              className={`w-full p-2 border-2 rounded-lg text-sm font-bold bg-gray-100 cursor-not-allowed ${isActive || form[field] ? colors.border + ' ' + colors.bg : 'border-gray-200'}`}
+              placeholder="타이머를 사용하세요" />
           </div>
           <div>
             <input type="text" value={form[whatField] || ''}
@@ -28825,7 +28867,7 @@ function SelfStudyTab({ student }) {
         {/* 날짜 */}
         <div>
           <label className="text-xs text-gray-500 block mb-1">날짜</label>
-          <input type="date" value={form.date} onChange={e => setForm(p => ({...p, date: e.target.value}))}
+          <input type="date" value={form.date} readOnly title="학생은 오늘 날짜만 기록할 수 있습니다"
             className="w-full p-2 border rounded-xl text-sm" />
         </div>
 
@@ -28932,7 +28974,7 @@ function SelfStudyTab({ student }) {
                       </div>
                     )}
                   </div>
-                  <button onClick={() => deleteLog(log.id)} className="text-gray-300 hover:text-red-400 text-sm flex-shrink-0 mt-1">✕</button>
+                  {/* 학생은 삭제 불가 — 선생님만 삭제 가능 */}
                 </div>
               </div>
             );
