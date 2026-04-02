@@ -204,21 +204,18 @@ function PWAInstallBanner() {
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(reg => {
-        // 즉시 업데이트 체크
+        // 즉시 업데이트 체크 (백그라운드)
         reg.update().catch(() => {});
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;
           nw?.addEventListener('statechange', () => {
             if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              // 자동 새로고침 (사용자 클릭 없이)
-              window.location.reload();
+              // ★ 자동 새로고침 제거 — SKIP_WAITING만 보내고 다음 방문 시 자연스럽게 적용
+              nw.postMessage({ type: 'SKIP_WAITING' });
+              setUpdateReady(true);
             }
           });
         });
-      });
-      // controllerchange 이벤트로도 새로고침
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
       });
     }
   }, []);

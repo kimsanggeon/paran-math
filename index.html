@@ -42,20 +42,16 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // ★ 서비스워커 자동 업데이트 — 새 버전이 있으면 즉시 적용
+      // ★ 서비스워커 자동 업데이트 — 새 버전이 있으면 즉시 활성화 (새로고침 없음)
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(regs => {
           regs.forEach(reg => {
             reg.update().then(() => {
               if (reg.waiting) {
                 reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                setTimeout(() => window.location.reload(), 500);
               }
             });
           });
-        });
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          window.location.reload();
         });
       }
     </script>
