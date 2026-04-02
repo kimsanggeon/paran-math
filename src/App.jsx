@@ -133,68 +133,117 @@ function MiddleGradeBadge() {
 // 전체 교재 flat 배열 (검색·매핑용)
 const ALL_TEXTBOOKS = TEXTBOOK_GROUPS.flatMap(g => g.books);
 
-// ========== 🏰 몰입의 탑 — 층수 계산 함수 ==========
+// ========== 🏰 몰입의 탑 — 층수 계산 함수 (v2) ==========
 function calculateTowerFloor(reportData, student = {}) {
-  const result = { floor: 0, breakdown: { test: 0, homework: 0, attitude: 0, studyTime: 0, combo: 0, defense: 0 }, defenseStatus: 'safe', lastDefenseDate: null, defenseStreak: 0 };
-  if (!reportData?.sessions || reportData.sessions.length === 0) return result;
+  const bd = { test: 0, checking: 0, exam: 0, homework: 0, attitude: 0, studyTime: 0, combo: 0, defense: 0, manualPoints: 0 };
+  const result = { floor: 0, breakdown: bd, defenseStatus: 'safe', lastDefenseDate: null, defenseStreak: 0, milestones: [] };
+  if (!reportData?.sessions || reportData.sessions.length === 0) {
+    // 숙제+수동 포인트는 세션 없어도 계산
+    const hw = student.homework || [];
+    hw.filter(h => h.completed).forEach(() => { bd.homework += 0.3; });
+    const recentHw = hw.filter(h => h.dueDate && new Date(h.dueDate) >= new Date(Date.now() - 7*86400000));
+    if (recentHw.length >= 2 && recentHw.every(h => h.completed)) bd.homework += 1;
+    bd.manualPoints = student.tower?.manualPoints || 0;
+    result.floor = Math.max(0, Math.round((bd.homework + bd.manualPoints) * 2) / 2);
+    return result;
+  }
 
   const passThreshold = reportData.passThreshold ?? 5;
   const sessions = [...reportData.sessions].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   let consecutiveCorrect = 0;
+  let consecutiveHwMiss = 0;
 
   sessions.forEach(session => {
-    // ── 시험 점수 ──
     const tests = [
-      ...(session.testType ? [{ testType: session.testType, testAnswers: session.testAnswers, difficulty: session.difficulty }] : []),
+      ...(session.testType ? [{ testType: session.testType, testAnswers: session.testAnswers, difficulty: session.difficulty, checkingLevel: session.checkingLevel, testScore: session.testScore, testTotal: session.testTotal, testRank: session.testRank, testRankTotal: session.testRankTotal }] : []),
       ...(session.tests || [])
     ];
     tests.forEach(test => {
-      if (!test.testAnswers || test.testAnswers.length === 0 || test.testType === '기타') return;
-      const wrong = test.testAnswers.filter(a => a === false).length;
-      const passed = wrong <= passThreshold;
-      if (passed) {
-        if (test.difficulty === 'highest' || test.difficulty === 'high') { result.floor += 2; result.breakdown.test += 2; }
-        else if (test.testType === '주간테스트') { result.floor += 1; result.breakdown.test += 1; }
-        else { result.floor += 0.5; result.breakdown.test += 0.5; }
+      if (!test.testType || test.testType === '기타') return;
+      const answers = test.testAnswers || [];
+      const wrong = answers.filter(a => a === false).length;
+      const correct = answers.filter(a => a === true).length;
+      const total = answers.filter(a => a !== null && a !== undefined).length;
+      const passed = total > 0 ? wrong <= passThreshold : false;
+
+      // ── 체킹누적테스트 (단계별) ──
+      if (test.testType === '체킹누적테스트' && passed) {
+        const lv = test.checkingLevel || '';
+        if (lv === 'C') { bd.checking += 1; }
+        else if (lv === 'B') { bd.checking += 0.5; }
+        else if (lv === 'A') { bd.checking += 0.2; }
+        else { bd.checking += 0.2; }
       }
-      // 연속 정답 보너스
-      (test.testAnswers || []).forEach(a => {
-        if (a === true) { consecutiveCorrect++; if (consecutiveCorrect >= 5) { result.floor += 0.5; result.breakdown.combo += 0.5; consecutiveCorrect = 0; } }
+      // ── 정기고사 (등수 기반) ──
+      else if (test.testType === '정기고사') {
+        const rank = parseInt(test.testRank) || 999;
+        if (rank <= 10) bd.exam += 10;
+        else if (rank <= 20) bd.exam += 7;
+        else if (rank <= 30) bd.exam += 5;
+        else if (rank <= 50) bd.exam += 3;
+      }
+      // ── 성취도평가 (70점 이상) ──
+      else if (test.testType === '성취도평가') {
+        const score = parseFloat(test.testScore) || 0;
+        const testTotal = parseFloat(test.testTotal) || 100;
+        const pct = (score / testTotal) * 100;
+        if (pct >= 70) bd.exam += 2;
+      }
+      // ── 일반 시험 (일일/주간/심화) ──
+      else if (total > 0) {
+        if (passed) {
+          if (test.difficulty === 'highest' || test.difficulty === 'high') { bd.test += 2; }
+          else if (test.testType === '주간테스트') { bd.test += 1; }
+          else { bd.test += 0.5; } // 일일테스트 등
+        } else {
+          // ── 패널티: 일일테스트 미통과 ──
+          if (test.testType === '일일테스트') { bd.defense -= 0.5; }
+        }
+      }
+
+      // ── 연속 정답 콤보 보너스 ──
+      answers.forEach(a => {
+        if (a === true) { consecutiveCorrect++; if (consecutiveCorrect >= 5) { bd.combo += 0.5; consecutiveCorrect = 0; } }
         else if (a === false) { consecutiveCorrect = 0; }
       });
     });
 
-    // ── 학습 태도 ──
+    // ── 학습 태도 (보상 + 패널티) ──
     const attScores = [session.understanding, session.participation, session.concentration, session.attitude, session.persistence].filter(v => v && v > 0);
     if (attScores.length >= 3) {
       const avg = attScores.reduce((s, v) => s + v, 0) / attScores.length;
-      if (avg >= 4.5) { result.floor += 1; result.breakdown.attitude += 1; }
-      else if (avg >= 4) { result.floor += 0.5; result.breakdown.attitude += 0.5; }
+      if (avg >= 4.5) bd.attitude += 1;
+      else if (avg >= 4) bd.attitude += 0.5;
+      else if (avg <= 3) bd.defense -= 1; // 패널티: 태도 평균 3 이하
     }
 
-    // ── 자습 시간 ──
+    // ── 자습 시간 (인증 기반) ──
     const studyMin = parseInt(session.studyTime) || 0;
-    if (studyMin >= 60) { result.floor += 0.5; result.breakdown.studyTime += 0.5; }
-    else if (studyMin >= 30) { result.floor += 0.3; result.breakdown.studyTime += 0.3; }
+    if (studyMin >= 60) bd.studyTime += 0.5;
+    else if (studyMin >= 30) bd.studyTime += 0.3;
   });
 
-  // ── 숙제 ──
+  // ── 숙제 (보상 + 패널티) ──
   const hw = student.homework || [];
-  const completedHw = hw.filter(h => h.completed);
-  completedHw.forEach(() => { result.floor += 0.3; result.breakdown.homework += 0.3; });
-  // 주간 숙제 전부 완료 보너스
-  const recentHw = hw.filter(h => {
-    if (!h.dueDate) return false;
-    const d = new Date(h.dueDate);
-    return d >= new Date(Date.now() - 7 * 86400000);
+  hw.forEach(h => {
+    if (h.completed) {
+      bd.homework += 0.3;
+      consecutiveHwMiss = 0;
+    } else {
+      bd.defense -= 0.3; // 숙제 1회 미완료 -0.3
+      consecutiveHwMiss++;
+      if (consecutiveHwMiss >= 2) { bd.defense -= 0.7; } // 연속 미완료 시 추가 -0.7 (합계 -1)
+    }
   });
-  if (recentHw.length >= 2 && recentHw.every(h => h.completed)) { result.floor += 1; result.breakdown.homework += 1; }
+  // 주간 숙제 전부 완료 보너스
+  const recentHw = hw.filter(h => h.dueDate && new Date(h.dueDate) >= new Date(Date.now() - 7*86400000));
+  if (recentHw.length >= 2 && recentHw.every(h => h.completed)) bd.homework += 1;
 
   // ── 방어 체크 (최근 7일 주간테스트) ──
   const today = new Date();
-  const weekAgo = new Date(today.getTime() - 7 * 86400000).toISOString().split('T')[0];
+  const weekAgo = new Date(today.getTime() - 7*86400000).toISOString().split('T')[0];
   const recentWeeklyTests = [];
-  sessions.filter(s => s.date >= weekAgo).forEach(s => {
+  sessions.filter(s => (s.date || '') >= weekAgo).forEach(s => {
     const tt = [...(s.testType === '주간테스트' ? [s] : []), ...(s.tests || []).filter(t => t.testType === '주간테스트')];
     tt.forEach(t => {
       if (t.testAnswers?.length > 0) {
@@ -203,10 +252,6 @@ function calculateTowerFloor(reportData, student = {}) {
       }
     });
   });
-  // 미완료 숙제 패널티
-  const incompleteHw = hw.filter(h => !h.completed && h.dueDate && h.dueDate < today.toISOString().split('T')[0]);
-  if (incompleteHw.length >= 3) { result.floor -= 0.5; result.breakdown.defense -= 0.5; }
-
   if (recentWeeklyTests.length > 0) {
     const anyPassed = recentWeeklyTests.some(t => t.passed);
     if (anyPassed) {
@@ -214,14 +259,21 @@ function calculateTowerFloor(reportData, student = {}) {
       result.lastDefenseDate = recentWeeklyTests.filter(t => t.passed).pop()?.date;
       result.defenseStreak = (student.tower?.defenseStreak || 0) + 1;
     } else {
-      result.floor -= 1; result.breakdown.defense -= 1;
+      bd.defense -= 1; // 주간테스트 미통과 -1
       result.defenseStatus = 'failed';
     }
-  } else {
-    result.defenseStatus = 'pending';
-  }
+  } else { result.defenseStatus = 'pending'; }
 
-  result.floor = Math.max(0, Math.round(result.floor * 2) / 2); // 0.5 단위로 반올림, 최소 0
+  // ── 선생님 수동 몰입 포인트 ──
+  bd.manualPoints = student.tower?.manualPoints || 0;
+
+  // ── 최종 층수 계산 ──
+  result.floor = Math.max(0, Math.round((bd.test + bd.checking + bd.exam + bd.homework + bd.attitude + bd.studyTime + bd.combo + bd.defense + bd.manualPoints) * 2) / 2);
+
+  // ── 마일스톤 달성 체크 (10층 단위) ──
+  const milestoneFloors = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  result.milestones = milestoneFloors.filter(m => result.floor >= m);
+
   return result;
 }
 
@@ -3805,11 +3857,14 @@ function ParentView({ student, students, onLogout }) {
                   <div className="h-2.5 bg-indigo-800 rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full" style={{ width: `${Math.min(100, (tower.floor / milestone) * 100)}%` }} />
                   </div>
-                  <div className="flex gap-2 mt-2 text-[10px]">
+                  <div className="flex gap-1.5 mt-2 text-[10px] flex-wrap">
                     <span>📝{tower.breakdown.test}</span>
+                    <span>🔄{tower.breakdown.checking.toFixed(1)}</span>
+                    <span>🏫{tower.breakdown.exam}</span>
                     <span>📚{tower.breakdown.homework.toFixed(1)}</span>
                     <span>💪{tower.breakdown.attitude.toFixed(1)}</span>
                     <span>⏱{tower.breakdown.studyTime.toFixed(1)}</span>
+                    {tower.breakdown.defense < 0 && <span className="text-red-300">🛡️{tower.breakdown.defense.toFixed(1)}</span>}
                   </div>
                 </div>
               </div>
@@ -5460,34 +5515,53 @@ function StudentView({ student, students, saveStudents, onLogout }) {
                   </div>
 
                   {/* 층수 획득 내역 */}
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="bg-white/10 rounded-lg p-2">
-                      <p className="text-yellow-300 font-bold">📝 {tower.breakdown.test}</p>
+                  <div className="grid grid-cols-4 gap-1.5 text-center text-[10px]">
+                    <div className="bg-white/10 rounded-lg p-1.5">
+                      <p className="text-yellow-300 font-bold text-xs">📝 {tower.breakdown.test}</p>
                       <p className="text-indigo-300">시험</p>
                     </div>
-                    <div className="bg-white/10 rounded-lg p-2">
-                      <p className="text-green-300 font-bold">📚 {tower.breakdown.homework.toFixed(1)}</p>
+                    <div className="bg-white/10 rounded-lg p-1.5">
+                      <p className="text-blue-300 font-bold text-xs">🔄 {tower.breakdown.checking.toFixed(1)}</p>
+                      <p className="text-indigo-300">체킹</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg p-1.5">
+                      <p className="text-pink-300 font-bold text-xs">🏫 {tower.breakdown.exam}</p>
+                      <p className="text-indigo-300">정기/성취</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg p-1.5">
+                      <p className="text-green-300 font-bold text-xs">📚 {tower.breakdown.homework.toFixed(1)}</p>
                       <p className="text-indigo-300">숙제</p>
                     </div>
-                    <div className="bg-white/10 rounded-lg p-2">
-                      <p className="text-cyan-300 font-bold">💪 {tower.breakdown.attitude.toFixed(1)}</p>
-                      <p className="text-indigo-300">학습태도</p>
-                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs mt-2">
-                    <div className="bg-white/10 rounded-lg p-2">
-                      <p className="text-purple-300 font-bold">⏱ {tower.breakdown.studyTime.toFixed(1)}</p>
+                  <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] mt-1.5">
+                    <div className="bg-white/10 rounded-lg p-1.5">
+                      <p className="text-cyan-300 font-bold text-xs">💪 {tower.breakdown.attitude.toFixed(1)}</p>
+                      <p className="text-indigo-300">태도</p>
+                    </div>
+                    <div className="bg-white/10 rounded-lg p-1.5">
+                      <p className="text-purple-300 font-bold text-xs">⏱ {tower.breakdown.studyTime.toFixed(1)}</p>
                       <p className="text-indigo-300">자습</p>
                     </div>
-                    <div className="bg-white/10 rounded-lg p-2">
-                      <p className="text-orange-300 font-bold">🔥 {tower.breakdown.combo.toFixed(1)}</p>
+                    <div className="bg-white/10 rounded-lg p-1.5">
+                      <p className="text-orange-300 font-bold text-xs">🔥 {tower.breakdown.combo.toFixed(1)}</p>
                       <p className="text-indigo-300">콤보</p>
                     </div>
-                    <div className="bg-white/10 rounded-lg p-2">
-                      <p className={tower.breakdown.defense < 0 ? 'text-red-400 font-bold' : 'text-green-300 font-bold'}>🛡️ {tower.breakdown.defense}</p>
+                    <div className="bg-white/10 rounded-lg p-1.5">
+                      <p className={`font-bold text-xs ${tower.breakdown.defense < 0 ? 'text-red-400' : 'text-green-300'}`}>🛡️ {tower.breakdown.defense.toFixed(1)}</p>
                       <p className="text-indigo-300">방어</p>
                     </div>
                   </div>
+                  {/* 수동 포인트 + 마일스톤 */}
+                  {(tower.breakdown.manualPoints > 0 || tower.milestones.length > 0) && (
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {tower.breakdown.manualPoints > 0 && (
+                        <span className="text-[10px] bg-yellow-500/30 text-yellow-200 px-2 py-0.5 rounded-full">⭐ 선생님 포인트 +{tower.breakdown.manualPoints}</span>
+                      )}
+                      {tower.milestones.length > 0 && (
+                        <span className="text-[10px] bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded-full">🏆 {tower.milestones[tower.milestones.length - 1]}층 달성!</span>
+                      )}
+                    </div>
+                  )}
 
                   {/* 안내 토글 */}
                   <details className="mt-3 bg-white/10 rounded-lg overflow-hidden">
@@ -5497,18 +5571,29 @@ function StudentView({ student, students, saveStudents, onLogout }) {
                     <div className="px-3 pb-3 text-[11px] text-indigo-200 space-y-2">
                       <p className="font-bold text-yellow-300">시험, 숙제, 학습 태도, 자습으로 탑을 올라가세요!</p>
                       <div className="space-y-1">
-                        <p>📝 <strong>시험 통과</strong> → 일일 +0.5층, 주간 +1층, 심화 +2층</p>
-                        <p>📚 <strong>숙제 완료</strong> → 1건당 +0.3층, 주간 전부 완료 시 +1층 보너스</p>
-                        <p>💪 <strong>학습 태도 우수</strong> → 평균 4점 이상 +0.5층, 4.5점 이상 +1층</p>
-                        <p>⏱ <strong>자습</strong> → 30분 +0.3층, 60분 이상 +0.5층</p>
-                        <p>🔥 <strong>콤보</strong> → 연속 5문제 정답 +0.5층</p>
+                        <p>📝 <strong>시험 통과</strong> → 일일 +0.5, 주간 +1, 심화 +2</p>
+                        <p>🔄 <strong>체킹테스트</strong> → A +0.2, B +0.5, C +1</p>
+                        <p>🏫 <strong>정기고사</strong> → 10등↑ +10, 20등↑ +7, 30등↑ +5, 50등↑ +3</p>
+                        <p>📊 <strong>성취도평가</strong> → 70점 이상 +2</p>
+                        <p>📚 <strong>숙제 완료</strong> → 1건 +0.3, 주간 전부 완료 +1 보너스</p>
+                        <p>💪 <strong>학습 태도</strong> → 평균 4점↑ +0.5, 4.5점↑ +1</p>
+                        <p>⏱ <strong>자습 인증</strong> → 30분 +0.3, 60분↑ +0.5</p>
+                        <p>🔥 <strong>콤보</strong> → 연속 5문제 정답 +0.5</p>
+                        <p>⭐ <strong>선생님 포인트</strong> → 오답노트/태도 우수 시 지급</p>
                       </div>
                       <div className="pt-1 border-t border-indigo-600">
                         <p className="text-red-300">⚠️ <strong>방어 주의!</strong></p>
                         <p>🛡️ 주간테스트 미통과 → <strong>-1층</strong></p>
-                        <p>📝 미완료 숙제 3개 이상 → <strong>-0.5층</strong></p>
+                        <p>📝 일일테스트 미통과 → <strong>-0.5층</strong></p>
+                        <p>📚 숙제 미완료 → <strong>-0.3층</strong>, 연속 미완료 → <strong>-1층</strong></p>
+                        <p>💪 학습 태도 평균 3 이하 → <strong>-1층</strong></p>
                       </div>
-                      <p className="text-yellow-200 font-medium pt-1">🏆 랭킹 탭에서 친구들과 순위를 비교해보세요!</p>
+                      <div className="pt-1 border-t border-indigo-600">
+                        <p className="text-amber-300">🏆 <strong>보상!</strong></p>
+                        <p>👑 탑 최고층 점령 → <strong>몰입영주</strong> 칭호 + 면제권</p>
+                        <p>🔟 10층 달성마다 → 재시험 or 숙제 면제권 택1</p>
+                        <p>📊 주간/월간 1위 → 명예의 전당 등극!</p>
+                      </div>
                     </div>
                   </details>
                 </div>
