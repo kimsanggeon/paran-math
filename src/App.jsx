@@ -33,11 +33,18 @@ class ErrorBoundary extends React.Component {
       return this.props.fallback || (
         <div style={{padding:'32px', textAlign:'center'}}>
           <h2 style={{color:'#dc2626', fontWeight:'bold', fontSize:'18px', marginBottom:'16px'}}>오류가 발생했습니다</h2>
-          <p style={{color:'#6b7280', marginBottom:'8px'}}>{this.state.error?.message}</p>
-          <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
-            style={{padding:'8px 16px', background:'#2563eb', color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>
-            새로고침
-          </button>
+          <p style={{color:'#dc2626', marginBottom:'8px', fontSize:'13px', background:'#fef2f2', padding:'12px', borderRadius:'8px', textAlign:'left', wordBreak:'break-all'}}>{this.state.error?.message || '알 수 없는 오류'}</p>
+          <p style={{color:'#9ca3af', marginBottom:'16px', fontSize:'11px'}}>이 메시지를 선생님께 보여주세요</p>
+          <div style={{display:'flex', gap:'8px', justifyContent:'center'}}>
+            <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+              style={{padding:'10px 20px', background:'#2563eb', color:'white', borderRadius:'8px', border:'none', cursor:'pointer', fontWeight:'bold'}}>
+              새로고침
+            </button>
+            <button onClick={() => { localStorage.clear(); window.location.href = '/'; }}
+              style={{padding:'10px 20px', background:'#6b7280', color:'white', borderRadius:'8px', border:'none', cursor:'pointer'}}>
+              캐시 초기화
+            </button>
+          </div>
         </div>
       );
     }
@@ -627,7 +634,7 @@ export default function ParanMathSystem() {
   // 학생 로그인: 학생 전용 대시보드 표시
   if (userType === 'student' && loggedInStudent) {
     return (
-      <ErrorBoundary fallback={<div className="p-8 text-center"><h2 className="text-xl font-bold text-red-600 mb-4">오류가 발생했습니다</h2><p className="text-gray-600 mb-4">페이지를 새로고침해주세요.</p><button onClick={handleLogout} className="px-4 py-2 bg-blue-600 text-white rounded-lg">로그아웃</button></div>}>
+      <ErrorBoundary>
         <StudentView
           student={loggedInStudent}
           students={students || []}
