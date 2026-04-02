@@ -27,6 +27,7 @@ class ErrorBoundary extends React.Component {
   }
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary caught:', error, errorInfo);
+    this.setState({ errorStack: errorInfo?.componentStack || '' });
   }
   render() {
     if (this.state.hasError) {
@@ -34,6 +35,7 @@ class ErrorBoundary extends React.Component {
         <div style={{padding:'32px', textAlign:'center'}}>
           <h2 style={{color:'#dc2626', fontWeight:'bold', fontSize:'18px', marginBottom:'16px'}}>오류가 발생했습니다</h2>
           <p style={{color:'#dc2626', marginBottom:'8px', fontSize:'13px', background:'#fef2f2', padding:'12px', borderRadius:'8px', textAlign:'left', wordBreak:'break-all'}}>{this.state.error?.message || '알 수 없는 오류'}</p>
+          {this.state.errorStack && <p style={{color:'#9ca3af', marginBottom:'8px', fontSize:'10px', background:'#f9fafb', padding:'8px', borderRadius:'6px', textAlign:'left', wordBreak:'break-all', maxHeight:'120px', overflow:'auto', whiteSpace:'pre-wrap'}}>{this.state.errorStack.slice(0, 500)}</p>}
           <p style={{color:'#9ca3af', marginBottom:'16px', fontSize:'11px'}}>이 메시지를 선생님께 보여주세요</p>
           <div style={{display:'flex', gap:'8px', justifyContent:'center'}}>
             <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
@@ -143,7 +145,7 @@ const ALL_TEXTBOOKS = TEXTBOOK_GROUPS.flatMap(g => g.books);
 // ========== 🏰 몰입의 탑 — 층수 계산 함수 (v2) ==========
 function calculateTowerFloor(reportData, student = {}) {
   const bd = { test: 0, checking: 0, exam: 0, homework: 0, attitude: 0, studyTime: 0, combo: 0, defense: 0, manualPoints: 0 };
-  const result = { floor: 0, breakdown: bd, defenseStatus: 'safe', lastDefenseDate: null, defenseStreak: 0, milestones: [] };
+  const result = { floor: 0, breakdown: bd, defenseStatus: 'safe', lastDefenseDate: null, defenseStreak: 0, milestones: [], unclaimedMilestones: [] };
   if (!reportData?.sessions || reportData.sessions.length === 0) {
     // 숙제+수동 포인트는 세션 없어도 계산
     const hw = student.homework || [];
