@@ -2672,6 +2672,8 @@ function ParentView({ student, students, onLogout }) {
   const [dataSource, setDataSource] = useState(''); // 데이터 소스 표시용
   const [reviewProblems, setReviewProblems] = useState([]); // 반복 학습 문제
   const [directorNotices, setDirectorNotices] = useState([]); // 원장 공지사항
+  const [pvHistMonth, setPvHistMonth] = useState(new Date().toISOString().slice(0, 7)); // 타워 히스토리
+  const [pvHistData, setPvHistData] = useState(null);
 
   // 새로운 기능 상태들
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -3921,8 +3923,7 @@ function ParentView({ student, students, onLogout }) {
 
         {/* 📅 월별 타워 기록 (학부모용) */}
         {(() => {
-          const [pvHistMonth, setPvHistMonth] = React.useState(new Date().toISOString().slice(0, 7));
-          const [pvHistData, setPvHistData] = React.useState(null);
+          // pvHistMonth, pvHistData는 컴포넌트 최상위에서 관리
           const months = [];
           const start = new Date(2026, 3, 1);
           let d = new Date(start);
@@ -4774,7 +4775,9 @@ function StudentView({ student, students, saveStudents, onLogout }) {
   const [reviewProblems, setReviewProblems] = useState([]); // 반복 학습 문제
   const [similarProblems, setSimilarProblems] = useState([]); // 선생님이 보낸 유사 문제
   const [directorNotices, setDirectorNotices] = useState([]); // 원장 공지사항
-  
+  const [stHistMonth, setStHistMonth] = useState(new Date().toISOString().slice(0, 7)); // 타워 히스토리
+  const [stHistData, setStHistData] = useState(null);
+
   // 학습 일지 상태 (수업 기록 연동)
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(null);
   const [journalSaveStatus, setJournalSaveStatus] = useState('');
@@ -5710,8 +5713,7 @@ function StudentView({ student, students, saveStudents, onLogout }) {
             <div className="bg-white rounded-xl shadow p-4">
               <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">📅 월별 타워 기록</h3>
               {(() => {
-                const [stHistMonth, setStHistMonth] = React.useState(new Date().toISOString().slice(0, 7));
-                const [stHistData, setStHistData] = React.useState(null);
+                // stHistMonth, stHistData는 컴포넌트 최상위에서 관리
                 const months = [];
                 const start = new Date(2026, 3, 1);
                 let d = new Date(start);
@@ -26787,6 +26789,9 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
 function GamificationTab({ students, saveStudents }) {
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [showRewardModal, setShowRewardModal] = useState(false);
+  const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [historyData, setHistoryData] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // ★ 뒤로가기: 학생 선택 → 목록
   useBackButton('gamif-student', () => {
@@ -27399,9 +27404,7 @@ function GamificationTab({ students, saveStudents }) {
         </div>
         <div className="p-4 space-y-3">
           {(() => {
-            const [historyMonth, setHistoryMonth] = React.useState(new Date().toISOString().slice(0, 7));
-            const [historyData, setHistoryData] = React.useState(null);
-            const [historyLoading, setHistoryLoading] = React.useState(false);
+            // historyMonth, historyData, historyLoading는 컴포넌트 최상위에서 관리
 
             const months = [];
             const start = new Date(2026, 3, 1); // 2026년 4월
