@@ -1299,23 +1299,23 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
 
             {mode === 'select' && (
               <div>
-                <div className="mb-6">
-                  <button onClick={() => goMode('landing')} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 mb-4">
+                <div className="mb-4">
+                  <button onClick={() => goMode('landing')} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 mb-3">
                     ← 홈으로
                   </button>
                   <h2 className="text-2xl font-black text-slate-800">로그인</h2>
                   <p className="text-sm text-gray-500 mt-1">역할을 선택해 주세요</p>
                 </div>
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {loginOptions.map(opt => (
                     <button key={opt.type} onClick={() => goMode(opt.type)}
-                      className={`w-full flex items-center gap-4 p-4 rounded-2xl text-white transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 ${opt.bg}`}>
-                      <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <opt.icon size={22} />
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl text-white transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 ${opt.bg}`}>
+                      <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <opt.icon size={18} />
                       </div>
                       <div className="text-left">
-                        <p className="font-bold">{opt.label}</p>
-                        <p className="text-xs text-white/75">{opt.desc}</p>
+                        <p className="font-bold text-sm">{opt.label}</p>
+                        <p className="text-[10px] text-white/75">{opt.desc}</p>
                       </div>
                       <span className="ml-auto text-white/60">›</span>
                     </button>
@@ -1396,21 +1396,27 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
             {/* 학부모 로그인 */}
             {mode==='parent' && (
               <div>
-                <button onClick={resetForm} className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1 mb-6">← 뒤로</button>
-                <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center mb-4">
-                  <User size={28} className="text-emerald-600" />
+                <button onClick={resetForm} className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1 mb-3">← 뒤로</button>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <User size={20} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-800">학부모 로그인</h2>
+                    <p className="text-xs text-gray-400">자녀 이름과 비밀번호를 입력하세요</p>
+                  </div>
                 </div>
-                <h2 className="text-2xl font-black text-slate-800 mb-1">학부모 로그인</h2>
-                <p className="text-sm text-gray-400 mb-6">자녀 이름과 비밀번호로 로그인하세요</p>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">자녀 이름</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">자녀 이름</label>
                 <input type="text" value={studentName} onChange={e => setStudentName(e.target.value)}
                   placeholder="자녀 이름 입력" autoFocus
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 text-sm mb-4" />
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">비밀번호</label>
-                <div className="relative mb-4">
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 text-sm mb-3" />
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">비밀번호</label>
+                <div className="relative mb-3">
                   <input type={showPassword ? 'text' : 'password'} value={password}
                     onChange={e => setPassword(e.target.value)}
                     onKeyDown={e => e.key==='Enter' && handleParentLogin()}
+                    onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
                     placeholder="비밀번호 입력 (기본: 0000)"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 pr-12 text-sm" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
@@ -1429,21 +1435,27 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
             {/* 학생 로그인 */}
             {mode==='student' && (
               <div>
-                <button onClick={resetForm} className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1 mb-6">← 뒤로</button>
-                <div className="w-14 h-14 rounded-2xl bg-cyan-100 flex items-center justify-center mb-4">
-                  <Star size={28} className="text-cyan-600" />
+                <button onClick={resetForm} className="text-sm text-gray-400 hover:text-gray-700 flex items-center gap-1 mb-3">← 뒤로</button>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-100 flex items-center justify-center flex-shrink-0">
+                    <Star size={20} className="text-cyan-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-800">학생 로그인</h2>
+                    <p className="text-xs text-gray-400">이름과 비밀번호를 입력하세요</p>
+                  </div>
                 </div>
-                <h2 className="text-2xl font-black text-slate-800 mb-1">학생 로그인</h2>
-                <p className="text-sm text-gray-400 mb-6">이름과 비밀번호로 로그인하세요</p>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">이름</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">이름</label>
                 <input type="text" value={studentName} onChange={e => setStudentName(e.target.value)}
                   placeholder="이름 입력" autoFocus
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-cyan-500 text-sm mb-4" />
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">비밀번호</label>
-                <div className="relative mb-4">
+                  onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-cyan-500 text-sm mb-3" />
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">비밀번호</label>
+                <div className="relative mb-3">
                   <input type={showPassword ? 'text' : 'password'} value={password}
                     onChange={e => setPassword(e.target.value)}
                     onKeyDown={e => e.key==='Enter' && handleStudentLogin()}
+                    onFocus={e => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)}
                     placeholder="비밀번호 입력"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-cyan-500 pr-12 text-sm" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
