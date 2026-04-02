@@ -4771,7 +4771,17 @@ function ParentView({ student, students, onLogout }) {
 
 // ========== 학생 전용 뷰 ==========
 function StudentView({ student: rawStudent, students = [], saveStudents, onLogout }) {
-  // ★ student 객체 안전 보장 (undefined 속성 방어)
+  // ★ Hook은 반드시 조건문/return 전에 모두 호출 (React Rules of Hooks)
+  const [reportData, setReportData] = useState(null);
+  const [activeTab, setActiveTab] = useState('mission');
+  const [wrongNotes, setWrongNotes] = useState([]);
+  const [reviewProblems, setReviewProblems] = useState([]);
+  const [similarProblems, setSimilarProblems] = useState([]);
+  const [directorNotices, setDirectorNotices] = useState([]);
+  const [stHistMonth, setStHistMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [stHistData, setStHistData] = useState(null);
+
+  // ★ student 객체 안전 보장 (Hook 호출 후 early return)
   const student = rawStudent || {};
   if (!student.id || !student.name) {
     return (
@@ -4781,14 +4791,6 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
       </div>
     );
   }
-  const [reportData, setReportData] = useState(null);
-  const [activeTab, setActiveTab] = useState('mission'); // mission, journal, ranking, profile, review, similar
-  const [wrongNotes, setWrongNotes] = useState([]);
-  const [reviewProblems, setReviewProblems] = useState([]); // 반복 학습 문제
-  const [similarProblems, setSimilarProblems] = useState([]); // 선생님이 보낸 유사 문제
-  const [directorNotices, setDirectorNotices] = useState([]); // 원장 공지사항
-  const [stHistMonth, setStHistMonth] = useState(new Date().toISOString().slice(0, 7)); // 타워 히스토리
-  const [stHistData, setStHistData] = useState(null);
 
   // 학습 일지 상태 (수업 기록 연동)
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(null);
