@@ -4058,7 +4058,7 @@ function ParentView({ student, students, onLogout }) {
           <div className="bg-white rounded-xl shadow p-4">
             <h3 className="font-bold text-gray-800 mb-3">🏅 획득한 뱃지</h3>
             <div className="flex flex-wrap gap-2">
-              {student.badges.map((badge, idx) => (
+              {(student.badges || []).map((badge, idx) => (
                 <div key={idx} className={`${badge.color || 'bg-gray-100'} px-3 py-2 rounded-lg`}>
                   <span className="text-lg mr-1">{badge.icon}</span>
                   <span className="text-sm font-medium">{badge.name}</span>
@@ -4790,8 +4790,17 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(null);
   const [journalSaveStatus, setJournalSaveStatus] = useState('');
 
-  // ★ student 객체 안전 보장 (early return 제거 — Hook 규칙 준수)
-  const student = rawStudent || {};
+  // ★ student 객체 안전 보장 — 모든 배열 속성에 기본값 적용
+  const student = {
+    ...(rawStudent || {}),
+    badges: rawStudent?.badges || [],
+    homework: rawStudent?.homework || [],
+    wrongNotes: rawStudent?.wrongNotes || [],
+    tests: rawStudent?.tests || [],
+    exp: rawStudent?.exp || 0,
+    streak: rawStudent?.streak || 0,
+    tower: rawStudent?.tower || {},
+  };
   
   // 복습 주기 (에빙하우스 망각곡선 기반)
   const reviewIntervals = [1, 3, 7, 14, 30];
@@ -5925,7 +5934,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
               <div className="bg-white rounded-xl shadow p-4">
                 <h3 className="font-bold text-gray-800 mb-3">🏅 최근 획득 뱃지</h3>
                 <div className="flex flex-wrap gap-2">
-                  {student.badges.slice(-5).map((badge, idx) => (
+                  {(student.badges || []).slice(-5).map((badge, idx) => (
                     <span 
                       key={idx}
                       className="px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-sm"
@@ -7484,7 +7493,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
               <h3 className="font-bold text-gray-800 mb-4">🏅 보유 뱃지</h3>
               {(student.badges?.length || 0) > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {student.badges.map((badge, idx) => (
+                  {(student.badges || []).map((badge, idx) => (
                     <span 
                       key={idx}
                       className="px-4 py-2 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg text-sm font-medium"
