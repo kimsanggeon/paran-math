@@ -293,25 +293,46 @@ function calculateTowerFloor(reportData, student = {}) {
   return result;
 }
 
-// ========== 🏰 몰입의 탑 — 월별 스냅샷 저장/로드 함수 ==========
-async function saveTowerSnapshot(students, month) {
-  // month: "2026-04"
+// ========== 🏰 몰입의 탑 — 스냅샷 저장/로드 (날짜별·주간·월간) ==========
+async function saveTowerSnapshot(students, dateKey) {
+  // dateKey: "2026-04-03" (날짜) 또는 "2026-04" (월간)
   const snapshot = students.map(s => ({
     id: s.id, name: s.name, className: s.className, teacherId: s.teacherId,
     floor: s.tower?.highestFloor || 0,
     manualPoints: s.tower?.manualPoints || 0,
     rewardHistory: s.tower?.rewardHistory || [],
     claimedMilestones: s.tower?.claimedMilestones || [],
+    savedAt: new Date().toISOString()
   }));
-  const key = `paran:tower-snapshot:${month}`;
+  const key = `paran:tower-snapshot:${dateKey}`;
   try {
-    if (window.storage) await window.storage.set(key, JSON.stringify(snapshot), true);
-    localStorage.setItem(key, JSON.stringify(snapshot));
+    const str = JSON.stringify(snapshot);
+    if (window.storage) await window.storage.set(key, str, true);
+    localStorage.setItem(key, str);
   } catch(e) { console.log('타워 스냅샷 저장 오류:', e); }
 }
 
-async function loadTowerSnapshot(month) {
-  const key = `paran:tower-snapshot:${month}`;
+// 자동 일일 스냅샷 저장 (하루 1회)
+async function autoSaveDailyTowerSnapshot(students) {
+  const today = new Date().toISOString().split('T')[0];
+  const lastSaveKey = 'paran:tower-last-daily-save';
+  const lastSave = localStorage.getItem(lastSaveKey);
+  if (lastSave === today) return; // 오늘 이미 저장됨
+  await saveTowerSnapshot(students, today);
+  // 월간도 함께 저장
+  await saveTowerSnapshot(students, today.slice(0, 7));
+  // 주간 (이번 주 월요일 기준)
+  const d = new Date();
+  const day = d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  const weekKey = 'W' + monday.toISOString().split('T')[0];
+  await saveTowerSnapshot(students, weekKey);
+  localStorage.setItem(lastSaveKey, today);
+}
+
+async function loadTowerSnapshot(dateKey) {
+  const key = `paran:tower-snapshot:${dateKey}`;
   try {
     if (window.storage) {
       const r = await window.storage.get(key, true);
@@ -469,6 +490,13 @@ export default function ParanMathSystem() {
     loadSettings();
     loadTeachers();
   }, [firebaseConnected]);
+
+  // ★ 몰입의 탑 일일 자동 스냅샷 (학생 데이터 로드 후 1회)
+  useEffect(() => {
+    if (students.length > 0) {
+      autoSaveDailyTowerSnapshot(students).catch(() => {});
+    }
+  }, [students.length > 0]); // eslint-disable-line
 
   const loadStudents = async () => {
     try {
@@ -27402,35 +27430,102 @@ function GamificationTab({ students, saveStudents }) {
           })()}
         </div>
 
-        {/* 월별 히스토리 */}
+        {/* 📅 타워 기록 (날짜별 · 주간 · 월간) */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-slate-600 to-slate-800 px-4 py-3">
-            <h3 className="text-white font-bold flex items-center gap-2">📅 월별 타워 기록</h3>
+          <div className="bg-gradient-to-r from-slate-600 to-slate-800 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-white font-bold flex items-center gap-2">📅 타워 기록</h3>
+            <button onClick={async () => {
+              const today = new Date().toISOString().split('T')[0];
+              await autoSaveDailyTowerSnapshot(students);
+              alert('✅ 오늘(' + today + ') 스냅샷 저장!');
+            }} className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-[10px] font-bold hover:bg-green-600">💾 지금 저장</button>
           </div>
           <div className="p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <select value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} className="flex-1 px-3 py-2 border rounded-lg text-sm">
-                {(() => { const months = []; const start = new Date(2026, 3, 1); let d = new Date(start); while (d <= new Date()) { months.push(d.toISOString().slice(0, 7)); d.setMonth(d.getMonth() + 1); } if (months.length === 0) months.push(new Date().toISOString().slice(0, 7)); return months; })().map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}
-              </select>
-              <button onClick={async () => { setHistoryLoading(true); const snap = await loadTowerSnapshot(historyMonth); setHistoryData(snap); setHistoryLoading(false); }}
-                className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs hover:bg-blue-600">📊 조회</button>
-              <button onClick={async () => { await saveTowerSnapshot(students, new Date().toISOString().slice(0, 7)); alert('✅ 스냅샷 저장!'); }}
-                className="px-3 py-2 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600">💾 저장</button>
-            </div>
-            {historyLoading && <p className="text-sm text-gray-400 animate-pulse text-center">⏳ 로딩...</p>}
-            {historyData && (
-              <div className="max-h-48 overflow-y-auto space-y-1">
-                {historyData.slice().sort((a, b) => (b.floor || 0) - (a.floor || 0)).map((s, idx) => (
-                  <div key={s.id} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${idx === 0 ? 'bg-yellow-50 border border-yellow-200' : idx < 3 ? 'bg-indigo-50' : 'bg-gray-50'}`}>
-                    <span className="w-5 text-center text-xs font-bold">{idx === 0 ? '👑' : idx + 1}</span>
-                    <span className="flex-1 text-gray-800 font-medium truncate">{s.name}</span>
-                    <span className="text-indigo-600 font-bold text-xs">{s.floor || 0}층</span>
-                    <span className="text-yellow-600 text-xs">⭐{s.manualPoints || 0}P</span>
+            {/* 기간 선택 탭 */}
+            {(() => {
+              const [histTab, setHistTab] = [historyMonth.startsWith('W') ? 'week' : historyMonth.length === 10 ? 'daily' : 'month', (v) => {
+                if (v === 'daily') setHistoryMonth(new Date().toISOString().split('T')[0]);
+                else if (v === 'week') { const d = new Date(); const day = d.getDay(); const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); setHistoryMonth('W' + mon.toISOString().split('T')[0]); }
+                else setHistoryMonth(new Date().toISOString().slice(0, 7));
+              }];
+              const currentTab = historyMonth.startsWith('W') ? 'week' : historyMonth.length === 10 ? 'daily' : 'month';
+
+              // 날짜 목록 생성
+              const genDates = () => {
+                const dates = [];
+                const d = new Date(2026, 3, 1);
+                while (d <= new Date()) { dates.push(d.toISOString().split('T')[0]); d.setDate(d.getDate() + 1); }
+                return dates.reverse().slice(0, 30); // 최근 30일
+              };
+              const genWeeks = () => {
+                const weeks = [];
+                const d = new Date(2026, 3, 1);
+                const day = d.getDay();
+                d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); // 첫 월요일로
+                while (d <= new Date()) { weeks.push('W' + d.toISOString().split('T')[0]); d.setDate(d.getDate() + 7); }
+                return weeks.reverse();
+              };
+              const genMonths = () => {
+                const months = [];
+                const d = new Date(2026, 3, 1);
+                while (d <= new Date()) { months.push(d.toISOString().slice(0, 7)); d.setMonth(d.getMonth() + 1); }
+                return months.reverse();
+              };
+
+              return (
+                <>
+                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                    {[{ id: 'daily', label: '📅 날짜별' }, { id: 'week', label: '📊 주간' }, { id: 'month', label: '🗓 월간' }].map(t => (
+                      <button key={t.id} onClick={() => setHistTab(t.id)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${currentTab === t.id ? 'bg-white text-indigo-700 shadow' : 'text-gray-500'}`}>
+                        {t.label}
+                      </button>
+                    ))}
                   </div>
-                ))}
+                  <div className="flex items-center gap-2">
+                    <select value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} className="flex-1 px-3 py-2 border rounded-lg text-sm">
+                      {(currentTab === 'daily' ? genDates() : currentTab === 'week' ? genWeeks() : genMonths()).map(k => (
+                        <option key={k} value={k}>
+                          {k.startsWith('W') ? k.slice(1) + ' 주' : k.length === 10 ? k : k.replace('-', '년 ') + '월'}
+                        </option>
+                      ))}
+                    </select>
+                    <button onClick={async () => { setHistoryLoading(true); const snap = await loadTowerSnapshot(historyMonth); setHistoryData(snap); setHistoryLoading(false); }}
+                      className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs hover:bg-blue-600 flex-shrink-0">📊 조회</button>
+                  </div>
+                </>
+              );
+            })()}
+
+            {historyLoading && <p className="text-sm text-gray-400 animate-pulse text-center">⏳ 로딩...</p>}
+            {historyData ? (
+              <div>
+                <p className="text-xs text-gray-500 mb-2 flex items-center justify-between">
+                  <span>{historyMonth.startsWith('W') ? historyMonth.slice(1) + ' 주간' : historyMonth} 기준</span>
+                  <span className="text-indigo-600 font-bold">{historyData.length}명</span>
+                </p>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {historyData.slice().sort((a, b) => (b.floor || 0) - (a.floor || 0)).map((s, idx) => {
+                    const maxF = Math.max(...historyData.map(x => x.floor || 0), 1);
+                    return (
+                      <div key={s.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${idx === 0 ? 'bg-yellow-50 border border-yellow-200' : idx < 3 ? 'bg-indigo-50' : 'bg-gray-50'}`}>
+                        <span className="w-6 text-center text-xs font-bold">{idx === 0 && (s.floor || 0) > 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-gray-800 text-sm truncate block">{s.name}</span>
+                          <div className="h-1.5 bg-gray-200 rounded-full mt-1 overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-indigo-400 to-purple-500 rounded-full" style={{ width: `${Math.round(((s.floor || 0) / maxF) * 100)}%` }} />
+                          </div>
+                        </div>
+                        <span className="text-indigo-700 font-black text-base flex-shrink-0">{s.floor || 0}층</span>
+                        <span className="text-yellow-600 text-[10px] flex-shrink-0">⭐{s.manualPoints || 0}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+            ) : !historyLoading && (
+              <p className="text-sm text-gray-400 text-center py-4">📊 조회 버튼을 눌러 기록을 확인하세요</p>
             )}
-            {!historyData && !historyLoading && <p className="text-sm text-gray-400 text-center py-3">조회 버튼을 누르세요</p>}
           </div>
         </div>
       </>)}
