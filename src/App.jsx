@@ -26839,6 +26839,7 @@ function GamificationTab({ students, saveStudents }) {
   const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [gamifView, setGamifView] = useState('tower'); // 'tower' | 'exp'
 
   // ★ 뒤로가기: 학생 선택 → 목록
   useBackButton('gamif-student', () => {
@@ -27265,6 +27266,177 @@ function GamificationTab({ students, saveStudents }) {
 
   return (
     <div className="space-y-6">
+      {/* ★ 서브 탭 전환: 몰입의 탑 / EXP 관리 */}
+      <div className="flex gap-2 bg-white rounded-xl shadow p-2">
+        <button onClick={() => setGamifView('tower')}
+          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'tower' ? 'bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+          🏰 몰입의 탑
+        </button>
+        <button onClick={() => setGamifView('exp')}
+          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'exp' ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+          ⭐ EXP · 뱃지
+        </button>
+      </div>
+
+      {/* ========== 🏰 몰입의 탑 뷰 ========== */}
+      {gamifView === 'tower' && (<>
+        {/* 탑 히어로 헤더 */}
+        <div className="bg-gradient-to-b from-indigo-900 via-indigo-800 to-purple-900 rounded-2xl p-6 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 text-[120px] opacity-5 leading-none">🏰</div>
+          <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-indigo-900/80 to-transparent" />
+          <h2 className="text-2xl font-black mb-1 relative z-10">🏰 몰입의 탑</h2>
+          <p className="text-indigo-300 text-sm mb-4 relative z-10">시험 · 숙제 · 태도 · 자습으로 탑을 올라가세요!</p>
+
+          {/* 상위 3명 포디움 */}
+          {(() => {
+            const sorted = students.slice().sort((a, b) => (b.tower?.highestFloor || 0) - (a.tower?.highestFloor || 0));
+            const top3 = sorted.slice(0, 3).filter(s => (s.tower?.highestFloor || 0) > 0);
+            if (top3.length === 0) return <p className="text-indigo-400 text-sm text-center py-4 relative z-10">아직 탑에 오른 학생이 없습니다</p>;
+            const podiumOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3.length === 2 ? [top3[1], top3[0]] : [top3[0]];
+            const podiumHeights = ['h-20', 'h-28', 'h-16'];
+            const podiumColors = ['bg-gray-400', 'bg-yellow-400', 'bg-amber-600'];
+            const medals = ['🥈', '🥇', '🥉'];
+            return (
+              <div className="flex items-end justify-center gap-3 mt-4 relative z-10">
+                {podiumOrder.map((s, i) => {
+                  const actualIdx = top3.length >= 3 ? i : i === 0 && top3.length === 2 ? 0 : i;
+                  const medalIdx = top3.length >= 3 ? [1, 0, 2][i] : top3.length === 2 ? [1, 0][i] : 0;
+                  return (
+                    <div key={s.id} className="flex flex-col items-center" style={{ width: i === 1 || (top3.length < 3 && i === 0) ? '90px' : '72px' }}>
+                      <span className="text-2xl mb-1">{medals[medalIdx]}</span>
+                      <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-xs mb-1 ring-2 ring-yellow-300`}>
+                        {(s.name || '?').slice(0, 1)}
+                      </div>
+                      <p className="text-white font-bold text-xs truncate w-full text-center">{s.name}</p>
+                      <p className="text-yellow-300 font-black text-sm">{s.tower?.highestFloor || 0}층</p>
+                      <div className={`w-full ${podiumHeights[top3.length >= 3 ? i : 1]} ${podiumColors[top3.length >= 3 ? i : medalIdx]} rounded-t-lg mt-1 flex items-center justify-center`}>
+                        <span className="text-white font-bold text-lg">{medalIdx + 1}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* 전체 학생 타워 랭킹 */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-700 px-4 py-3 flex items-center justify-between">
+            <h3 className="text-white font-bold flex items-center gap-2">📊 전체 타워 랭킹</h3>
+            <span className="text-indigo-200 text-xs">{students.length}명</span>
+          </div>
+          <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+            {students.slice().sort((a, b) => (b.tower?.highestFloor || 0) - (a.tower?.highestFloor || 0)).map((s, idx) => {
+              const floor = s.tower?.highestFloor || 0;
+              const maxFloor = Math.max(...students.map(st => st.tower?.highestFloor || 0), 1);
+              const pct = Math.round((floor / maxFloor) * 100);
+              const isConqueror = idx === 0 && floor > 0;
+              return (
+                <div key={s.id} className={`flex items-center gap-3 px-4 py-3 ${isConqueror ? 'bg-yellow-50' : idx < 3 ? 'bg-indigo-50/50' : ''}`}>
+                  <span className="w-7 text-center font-bold text-sm">{idx === 0 && floor > 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-800 text-sm truncate">{s.name}</span>
+                      {isConqueror && <span className="text-[10px] bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded-full font-bold">몰입영주</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{s.className || '미배정'}</span>
+                      <span className="text-[10px] text-gray-400">⭐{s.tower?.manualPoints || 0}P</span>
+                    </div>
+                    {/* 층수 바 */}
+                    <div className="h-1.5 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-indigo-400 to-purple-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-black text-indigo-700 text-lg">{floor}</p>
+                    <p className="text-[10px] text-gray-400">층</p>
+                  </div>
+                  {/* 포인트 지급 버튼 */}
+                  <button onClick={() => {
+                    const pts = parseInt(prompt(`${s.name}에게 지급할 몰입 포인트:`));
+                    if (!pts || isNaN(pts)) return;
+                    const reason = prompt('지급 사유:') || '선생님 지급';
+                    const updated = students.map(st => st.id === s.id ? { ...st, tower: { ...st.tower, manualPoints: (st.tower?.manualPoints || 0) + pts, pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: pts, reason, type: 'manual' }] } } : st);
+                    saveStudents(updated);
+                  }} className="px-2 py-1.5 bg-yellow-500 text-white rounded-lg text-[10px] font-bold hover:bg-yellow-600 flex-shrink-0" title="포인트 지급">
+                    +⭐
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 보상 상점 안내 */}
+        <div className="bg-white rounded-xl shadow-lg p-4">
+          <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2 mb-3">🎁 보상 상점</h3>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {[
+              { name: '🖍️ 색연필', cost: 5 },
+              { name: '✏️ 형광펜', cost: 10 },
+              { name: '📓 노트', cost: 15 },
+              { name: '🎯 숙제면제', cost: 20 },
+              { name: '🛡️ 재시험면제', cost: 25 },
+              { name: '☕ 휴식+5분', cost: 30 },
+            ].map((item, i) => (
+              <div key={i} className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-lg p-2 text-center">
+                <p className="font-bold text-xs">{item.name}</p>
+                <p className="text-amber-600 font-bold text-[10px] mt-0.5">⭐{item.cost}P</p>
+              </div>
+            ))}
+          </div>
+          {/* 최근 교환 내역 */}
+          {(() => {
+            const recentExchanges = students.flatMap(s => (s.tower?.rewardHistory || []).map(r => ({ ...r, name: s.name }))).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+            if (recentExchanges.length === 0) return null;
+            return (
+              <div className="mt-3 pt-3 border-t">
+                <p className="text-xs text-gray-500 mb-1">최근 교환</p>
+                {recentExchanges.map((r, i) => (
+                  <p key={i} className="text-xs text-gray-400">📦 {r.name}: {r.reward} ({new Date(r.date).toLocaleDateString('ko-KR')})</p>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* 월별 히스토리 */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-slate-600 to-slate-800 px-4 py-3">
+            <h3 className="text-white font-bold flex items-center gap-2">📅 월별 타워 기록</h3>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <select value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} className="flex-1 px-3 py-2 border rounded-lg text-sm">
+                {(() => { const months = []; const start = new Date(2026, 3, 1); let d = new Date(start); while (d <= new Date()) { months.push(d.toISOString().slice(0, 7)); d.setMonth(d.getMonth() + 1); } if (months.length === 0) months.push(new Date().toISOString().slice(0, 7)); return months; })().map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}
+              </select>
+              <button onClick={async () => { setHistoryLoading(true); const snap = await loadTowerSnapshot(historyMonth); setHistoryData(snap); setHistoryLoading(false); }}
+                className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs hover:bg-blue-600">📊 조회</button>
+              <button onClick={async () => { await saveTowerSnapshot(students, new Date().toISOString().slice(0, 7)); alert('✅ 스냅샷 저장!'); }}
+                className="px-3 py-2 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600">💾 저장</button>
+            </div>
+            {historyLoading && <p className="text-sm text-gray-400 animate-pulse text-center">⏳ 로딩...</p>}
+            {historyData && (
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {historyData.slice().sort((a, b) => (b.floor || 0) - (a.floor || 0)).map((s, idx) => (
+                  <div key={s.id} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${idx === 0 ? 'bg-yellow-50 border border-yellow-200' : idx < 3 ? 'bg-indigo-50' : 'bg-gray-50'}`}>
+                    <span className="w-5 text-center text-xs font-bold">{idx === 0 ? '👑' : idx + 1}</span>
+                    <span className="flex-1 text-gray-800 font-medium truncate">{s.name}</span>
+                    <span className="text-indigo-600 font-bold text-xs">{s.floor || 0}층</span>
+                    <span className="text-yellow-600 text-xs">⭐{s.manualPoints || 0}P</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!historyData && !historyLoading && <p className="text-sm text-gray-400 text-center py-3">조회 버튼을 누르세요</p>}
+          </div>
+        </div>
+      </>)}
+
+      {/* ========== ⭐ EXP · 뱃지 뷰 ========== */}
+      {gamifView === 'exp' && (<>
       {/* 학습 보고서 자동 동기화 */}
       <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-4 text-white">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -27350,172 +27522,7 @@ function GamificationTab({ students, saveStudents }) {
         </div>
       </div>
 
-      {/* 🏰 몰입의 탑 관리 */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-700 p-4 text-white">
-          <h3 className="font-bold text-lg flex items-center gap-2">🏰 몰입의 탑 관리</h3>
-          <p className="text-indigo-200 text-xs mt-1">수동 포인트 지급 · 보상 교환 · 명예의 전당</p>
-        </div>
-        <div className="p-4 space-y-4">
-          {/* 타워 랭킹 + 수동 포인트 */}
-          <div className="space-y-2">
-            <h4 className="font-bold text-gray-700 text-sm flex items-center gap-2">📊 현재 탑 순위 & 포인트 관리</h4>
-            <div className="max-h-64 overflow-y-auto space-y-1">
-              {students.slice().sort((a, b) => (b.tower?.highestFloor || 0) - (a.tower?.highestFloor || 0)).map((s, idx) => (
-                <div key={s.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${idx === 0 ? 'bg-yellow-50 border border-yellow-200' : idx < 3 ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
-                  <span className="w-6 text-center font-bold text-xs">{idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}</span>
-                  <span className="font-medium text-gray-800 flex-1 min-w-0 truncate">{s.name}</span>
-                  <span className="text-indigo-600 font-bold text-xs">{s.tower?.highestFloor || 0}층</span>
-                  <span className="text-yellow-600 text-xs">⭐{s.tower?.manualPoints || 0}P</span>
-                  <div className="flex gap-1">
-                    <button onClick={() => {
-                      const pts = parseInt(prompt(`${s.name} 학생에게 지급할 몰입 포인트 (숫자):`));
-                      if (!pts || isNaN(pts)) return;
-                      const reason = prompt('지급 사유 (예: 오답노트 우수, 태도 우수):') || '선생님 지급';
-                      const updated = students.map(st => st.id === s.id ? { ...st, tower: { ...st.tower, manualPoints: (st.tower?.manualPoints || 0) + pts, pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: pts, reason, type: 'manual' }] } } : st);
-                      saveStudents(updated);
-                    }} className="px-2 py-1 bg-yellow-500 text-white rounded text-[10px] font-bold hover:bg-yellow-600">+P</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 보상 교환 내역 */}
-          <div>
-            <h4 className="font-bold text-gray-700 text-sm flex items-center gap-2 mb-2">🎁 보상 상점 내역</h4>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-              {[
-                { name: '🖍️ 색연필', cost: 5 },
-                { name: '✏️ 형광펜', cost: 10 },
-                { name: '📓 노트/오답노트', cost: 15 },
-                { name: '🎯 숙제 1회 면제권', cost: 20 },
-                { name: '🛡️ 재시험 1회 면제권', cost: 25 },
-                { name: '☕ 휴식 시간 5분 추가', cost: 30 },
-              ].map((item, i) => (
-                <div key={i} className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-lg p-2.5 text-center">
-                  <p className="font-bold text-gray-800">{item.name}</p>
-                  <p className="text-amber-600 font-bold mt-1">⭐ {item.cost}P</p>
-                </div>
-              ))}
-            </div>
-            {/* 교환 처리 */}
-            <div className="mt-3 max-h-32 overflow-y-auto">
-              {students.filter(s => (s.tower?.rewardHistory || []).length > 0).map(s => (
-                <div key={s.id} className="text-xs text-gray-600">
-                  {(s.tower?.rewardHistory || []).slice(-3).reverse().map((r, ri) => (
-                    <p key={ri} className="py-0.5">📦 {s.name}: <strong>{r.reward}</strong> 교환 ({new Date(r.date).toLocaleDateString('ko-KR')})</p>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 명예의 전당 */}
-          <div>
-            <h4 className="font-bold text-gray-700 text-sm flex items-center gap-2 mb-2">🏆 명예의 전당</h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              {(() => {
-                const sorted = students.slice().sort((a, b) => (b.tower?.highestFloor || 0) - (a.tower?.highestFloor || 0));
-                const topStudent = sorted[0];
-                return topStudent && (topStudent.tower?.highestFloor || 0) > 0 ? (
-                  <>
-                    <div className="bg-gradient-to-br from-yellow-100 to-amber-100 border-2 border-yellow-300 rounded-xl p-3 text-center">
-                      <p className="text-2xl">👑</p>
-                      <p className="font-bold text-yellow-800">{topStudent.name}</p>
-                      <p className="text-xs text-yellow-600">몰입영주 · {topStudent.tower?.highestFloor || 0}층</p>
-                      <p className="text-[10px] text-amber-500 mt-1">탑 최고층 점령자</p>
-                    </div>
-                    {sorted[1] && (sorted[1].tower?.highestFloor || 0) > 0 && (
-                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
-                        <p className="text-2xl">🥈</p>
-                        <p className="font-bold text-gray-700">{sorted[1].name}</p>
-                        <p className="text-xs text-gray-500">{sorted[1].tower?.highestFloor || 0}층</p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-gray-400 text-xs col-span-2 text-center py-4">아직 탑에 오른 학생이 없습니다</p>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 📅 월별 타워 히스토리 */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-slate-600 to-slate-800 p-4 text-white">
-          <h3 className="font-bold flex items-center gap-2">📅 월별 타워 진행 히스토리</h3>
-          <p className="text-slate-300 text-xs mt-1">4월부터 월간 스냅샷을 저장하고 조회합니다</p>
-        </div>
-        <div className="p-4 space-y-3">
-          {(() => {
-            // historyMonth, historyData, historyLoading는 컴포넌트 최상위에서 관리
-
-            const months = [];
-            const start = new Date(2026, 3, 1); // 2026년 4월
-            const now = new Date();
-            let d = new Date(start);
-            while (d <= now) {
-              months.push(d.toISOString().slice(0, 7));
-              d.setMonth(d.getMonth() + 1);
-            }
-            if (months.length === 0) months.push(now.toISOString().slice(0, 7));
-
-            const loadHistory = async (m) => {
-              setHistoryMonth(m);
-              setHistoryLoading(true);
-              const snap = await loadTowerSnapshot(m);
-              setHistoryData(snap);
-              setHistoryLoading(false);
-            };
-
-            const saveCurrentSnapshot = async () => {
-              const m = new Date().toISOString().slice(0, 7);
-              await saveTowerSnapshot(students, m);
-              alert(`✅ ${m} 스냅샷 저장 완료!`);
-              loadHistory(m);
-            };
-
-            return (
-              <>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <select value={historyMonth} onChange={e => loadHistory(e.target.value)}
-                    className="px-3 py-2 border rounded-lg text-sm">
-                    {months.map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}
-                  </select>
-                  <button onClick={() => loadHistory(historyMonth)}
-                    className="px-3 py-2 bg-blue-500 text-white rounded-lg text-xs hover:bg-blue-600">📊 조회</button>
-                  <button onClick={saveCurrentSnapshot}
-                    className="px-3 py-2 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600">💾 현재 스냅샷 저장</button>
-                </div>
-
-                {historyLoading && <p className="text-sm text-gray-400 animate-pulse">⏳ 로딩 중...</p>}
-
-                {historyData ? (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-2">{historyMonth} 기준 ({historyData.length}명)</p>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {historyData.slice().sort((a, b) => (b.floor || 0) - (a.floor || 0)).map((s, idx) => (
-                        <div key={s.id} className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm ${idx === 0 ? 'bg-yellow-50 border border-yellow-200' : idx < 3 ? 'bg-indigo-50' : 'bg-gray-50'}`}>
-                          <span className="w-5 text-center text-xs font-bold">{idx === 0 ? '👑' : idx + 1}</span>
-                          <span className="flex-1 text-gray-800 font-medium truncate">{s.name}</span>
-                          <span className="text-xs text-gray-500">{s.className || ''}</span>
-                          <span className="text-indigo-600 font-bold text-xs">{s.floor || 0}층</span>
-                          <span className="text-yellow-600 text-xs">⭐{s.manualPoints || 0}P</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : !historyLoading && (
-                  <p className="text-sm text-gray-400 text-center py-4">해당 월의 스냅샷이 없습니다. '현재 스냅샷 저장'을 눌러주세요.</p>
-                )}
-              </>
-            );
-          })()}
-        </div>
-      </div>
+      {/* 탑 관리 → tower 뷰로 이동 */}
 
       {/* 상단 통계 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -27814,6 +27821,7 @@ function GamificationTab({ students, saveStudents }) {
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }
