@@ -500,7 +500,7 @@ export default function ParanMathSystem() {
 
   const loadStudents = async () => {
     try {
-      // ★ 1순위: Firebase (모든 기기 공유 - Vercel 환경의 유일한 기기간 공유 수단)
+      // ★ 1순위: Firebase academies/default/students (개별 문서)
       if (isFirebaseConnected()) {
         const firebaseStudents = await loadStudentsFromFirebase();
         if (firebaseStudents && firebaseStudents.length > 0) {
@@ -510,7 +510,22 @@ export default function ParanMathSystem() {
           return;
         }
       }
-      // 2순위: localStorage (같은 기기 캐시)
+      // ★ 2순위: window.storage (Firestore storage/paran__students 문서)
+      if (window.storage) {
+        try {
+          const r = await window.storage.get('paran:students');
+          if (r?.value) {
+            const list = JSON.parse(r.value);
+            if (list.length > 0) {
+              setStudents(list);
+              window.__paranStudents = list;
+              try { localStorage.setItem('paran:students', JSON.stringify(list)); } catch(e) {}
+              return;
+            }
+          }
+        } catch(e) {}
+      }
+      // 3순위: localStorage (같은 기기 캐시)
       const lsData = localStorage.getItem('paran:students');
       if (lsData) {
         const list = JSON.parse(lsData);
@@ -583,7 +598,16 @@ export default function ParanMathSystem() {
       localStorage.setItem('paran:students', JSON.stringify(newStudents));
     } catch (e) {}
 
-    // 3. ★ Firebase 저장 (await - 완료 보장, 모든 기기 즉시 공유)
+    // 3. ★ window.storage (Firestore storage 컬렉션) 저장 — 모든 기기 공유
+    try {
+      if (window.storage) {
+        await window.storage.set('paran:students', JSON.stringify(newStudents));
+      }
+    } catch (e) {
+      console.log('storage 학생 저장 오류:', e);
+    }
+
+    // 4. ★ Firebase academies/default/students 개별 문서 저장
     if (isFirebaseConnected()) {
       try {
         await saveStudentsToFirebase(newStudents);
