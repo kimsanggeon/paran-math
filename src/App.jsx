@@ -37868,12 +37868,16 @@ function AttendanceTab({ students, saveStudents }) {
   };
 
   const saveAttendance = async (newRecords) => {
+    // ★ UI 즉시 업데이트 (저장 실패해도 화면은 바로 반영)
+    setAttendanceRecords(newRecords);
+    const str = JSON.stringify(newRecords);
+    try {
+      localStorage.setItem('paran:attendance', str);
+    } catch (e) {}
     try {
       if (typeof window !== 'undefined' && window.storage) {
-        await window.storage.set('paran:attendance', JSON.stringify(newRecords, true));
+        await window.storage.set('paran:attendance', str);
       }
-      localStorage.setItem('paran:attendance', JSON.stringify(newRecords));
-      setAttendanceRecords(newRecords);
     } catch (e) {
       console.log('출결 저장 오류:', e);
     }
