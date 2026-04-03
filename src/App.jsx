@@ -4967,6 +4967,30 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
     loadData();
   }, [student.name]);
 
+  // ★ 몰입의 탑: reportData 로드 후 자동으로 타워 층수 계산 & 저장
+  useEffect(() => {
+    if (!student.id || !reportData) return;
+    const tower = calculateTowerFloor(reportData, student);
+    const currentHighest = student.tower?.highestFloor || 0;
+    const newHighest = Math.max(tower.floor, currentHighest);
+    // 층수가 변경되었거나 아직 저장된 적 없으면 저장
+    if (newHighest !== currentHighest || !student.tower?.lastUpdated) {
+      const updatedTower = {
+        ...(student.tower || {}),
+        highestFloor: newHighest,
+        currentFloor: tower.floor,
+        lastUpdated: new Date().toISOString(),
+        breakdown: tower.breakdown,
+        defenseStatus: tower.defenseStatus,
+        milestones: tower.milestones,
+      };
+      const updatedStudents = students.map(s =>
+        s.id === student.id ? { ...s, tower: { ...s.tower, ...updatedTower } } : s
+      );
+      saveStudents(updatedStudents);
+    }
+  }, [reportData, student.id]); // eslint-disable-line
+
   // 학생 일지 필드 업데이트 (로컬 상태만)
   const updateStudentJournal = (sessionIdx, field, value) => {
     setReportData(prev => {
@@ -27144,6 +27168,7 @@ function GamificationTab({ students, saveStudents }) {
         expHistory: expHistory.slice(-20),
         badges: earnedBadges,
         streak: maxStreak,
+        reportData, // ★ 타워 계산용
         stats: {
           totalSessions: sessions.length,
           presentSessions: presentSessions.length,
@@ -27178,12 +27203,21 @@ function GamificationTab({ students, saveStudents }) {
     // 새 경험치 계산 (기존 경험치보다 높으면 업데이트)
     const newExp = Math.max(student.exp || 0, result.totalExp);
     
+    // ★ 타워 층수도 동시 업데이트
+    let towerUpdate = student.tower || {};
+    if (result.reportData) {
+      const towerResult = calculateTowerFloor(result.reportData, student);
+      const newHighest = Math.max(towerResult.floor, towerUpdate.highestFloor || 0);
+      towerUpdate = { ...towerUpdate, highestFloor: newHighest, currentFloor: towerResult.floor, lastUpdated: new Date().toISOString(), breakdown: towerResult.breakdown, defenseStatus: towerResult.defenseStatus, milestones: towerResult.milestones };
+    }
+
     return {
       ...student,
       exp: newExp,
       expHistory: [...(student.expHistory || []), ...result.expHistory.map(h => ({ ...h, date: new Date().toISOString(), auto: true }))].slice(-50),
       badges: mergedBadges,
       streak: Math.max(student.streak || 0, result.streak),
+      tower: towerUpdate,
       lastSynced: new Date().toISOString(),
       syncStats: result.stats
     };
