@@ -333,15 +333,18 @@ function calculateTerritoryScores(students, reportCache = {}) {
         ];
         const matched = allUnits.filter(u => scope.includes(u));
 
-        // ★ 정확히 1개 단원만 매칭 = 해당 단원 전용 시험 → 영토 점수 인정
-        // 2개 이상 매칭 = 범위 시험 → 영토 점수 미인정
+        // ★ 단원 수에 따른 감소 적용
+        // 1단원 = 100%, 2단원 = 70%, 3단원+ = 50%
         // 0개 매칭 = 교육과정 외 시험 → 무시
-        if (matched.length === 1) {
-          const unitName = matched[0];
-          if (!unitScores[unitName]) unitScores[unitName] = { scores: [], recent: 0, count: 0 };
-          unitScores[unitName].scores.push(pct);
-          unitScores[unitName].recent = pct;
-          unitScores[unitName].count++;
+        if (matched.length >= 1) {
+          const weight = matched.length === 1 ? 1.0 : matched.length === 2 ? 0.7 : 0.5;
+          const weightedPct = Math.round(pct * weight);
+          matched.forEach(unitName => {
+            if (!unitScores[unitName]) unitScores[unitName] = { scores: [], recent: 0, count: 0 };
+            unitScores[unitName].scores.push(weightedPct);
+            unitScores[unitName].recent = weightedPct;
+            unitScores[unitName].count++;
+          });
         }
       });
     });
