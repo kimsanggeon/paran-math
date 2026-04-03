@@ -28794,6 +28794,27 @@ function SelfStudyTab({ student }) {
   const [saving, setSaving] = useState(false);
   const timerRef = React.useRef(null);
 
+  // ★ 랜덤 확인 퀴즈 상태
+  const [quizPopup, setQuizPopup] = useState(null); // { question, answer, showAt }
+  const [quizInput, setQuizInput] = useState('');
+  const [quizFailed, setQuizFailed] = useState(0);
+  const quizTimeoutRef = React.useRef(null);
+  const lastQuizTimeRef = React.useRef(0);
+  const QUIZ_INTERVAL = 30 * 60; // 30분마다 (초)
+  const QUIZ_TIMEOUT = 60; // 60초 내 응답
+
+  // 수학 퀴즈 생성
+  const generateQuiz = () => {
+    const types = ['add', 'sub', 'mul', 'mixed'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    let q, a;
+    if (type === 'add') { const x = Math.floor(Math.random() * 90) + 10; const y = Math.floor(Math.random() * 90) + 10; q = `${x} + ${y} = ?`; a = x + y; }
+    else if (type === 'sub') { const x = Math.floor(Math.random() * 90) + 50; const y = Math.floor(Math.random() * (x - 10)) + 10; q = `${x} - ${y} = ?`; a = x - y; }
+    else if (type === 'mul') { const x = Math.floor(Math.random() * 9) + 2; const y = Math.floor(Math.random() * 12) + 2; q = `${x} × ${y} = ?`; a = x * y; }
+    else { const x = Math.floor(Math.random() * 9) + 2; const y = Math.floor(Math.random() * 9) + 2; const z = Math.floor(Math.random() * 20) + 1; q = `${x} × ${y} + ${z} = ?`; a = x * y + z; }
+    return { question: q, answer: a, showAt: Date.now() };
+  };
+
   // 로드
   useEffect(() => {
     const load = async () => {
@@ -28844,9 +28865,16 @@ function SelfStudyTab({ student }) {
   useEffect(() => {
     if (activeTimer) {
       timerRef.current = setInterval(() => {
-        if (!pausedRef.current) {
+        if (!pausedRef.current && !quizPopup) {
           const realElapsed = Math.floor((Date.now() - timerStart - totalPausedRef.current) / 1000);
           setTimerElapsed(realElapsed);
+          // ★ 30분마다 확인 퀴즈 팝업
+          if (realElapsed - lastQuizTimeRef.current >= QUIZ_INTERVAL && realElapsed > 60) {
+            lastQuizTimeRef.current = realElapsed;
+            setQuizPopup(generateQuiz());
+            setQuizInput('');
+            setQuizFailed(0);
+          }
         }
       }, 1000);
     } else {
@@ -28899,6 +28927,51 @@ function SelfStudyTab({ student }) {
     return () => document.removeEventListener('visibilitychange', reacquire);
   }, [activeTimer]);
 
+  // ★ 퀴즈 타임아웃 감시
+  useEffect(() => {
+    if (!quizPopup) { clearTimeout(quizTimeoutRef.current); return; }
+    quizTimeoutRef.current = setTimeout(() => {
+      // 60초 내 미응답 → 타이머 자동 종료
+      alert('⏰ 확인 퀴즈에 응답하지 않아 자습 타이머가 종료됩니다.');
+      setQuizPopup(null);
+      stopTimerForced();
+    }, QUIZ_TIMEOUT * 1000);
+    return () => clearTimeout(quizTimeoutRef.current);
+  }, [quizPopup]); // eslint-disable-line
+
+  const handleQuizAnswer = () => {
+    if (!quizPopup) return;
+    const userAnswer = parseInt(quizInput);
+    if (userAnswer === quizPopup.answer) {
+      setQuizPopup(null);
+      setQuizInput('');
+      clearTimeout(quizTimeoutRef.current);
+    } else {
+      setQuizFailed(prev => {
+        if (prev >= 2) {
+          alert('❌ 3회 오답으로 자습 타이머가 종료됩니다.');
+          setQuizPopup(null);
+          stopTimerForced();
+          return 0;
+        }
+        return prev + 1;
+      });
+      setQuizInput('');
+    }
+  };
+
+  // 강제 타이머 종료 (퀴즈 실패/타임아웃)
+  const stopTimerForced = () => {
+    const mins = String(Math.round(timerElapsed / 60));
+    const safeMins = String(Math.min(240, parseInt(mins) || 0));
+    if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
+    else if (activeTimer === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
+    setActiveTimer(null);
+    setTimerElapsed(0);
+    totalPausedRef.current = 0;
+    releaseWakeLock();
+  };
+
   const startTimer = (type) => {
     setActiveTimer(type);
     setTimerStart(Date.now());
@@ -28906,6 +28979,8 @@ function SelfStudyTab({ student }) {
     totalPausedRef.current = 0;
     pausedRef.current = false;
     pauseStartRef.current = null;
+    lastQuizTimeRef.current = 0; // ★ 퀴즈 타이머 초기화
+    setQuizPopup(null);
     requestWakeLock(); // ★ 화면 켜짐 유지
   };
   const stopTimer = () => {
@@ -28945,7 +29020,8 @@ function SelfStudyTab({ student }) {
       duration: hw + ex,
       mood: form.mood,
       createdAt: new Date().toISOString(),
-      recordedBy: 'student-timer', // ★ 기록 출처 표시
+      recordedBy: 'student-timer',
+      trustLevel: 1, // ★ 신뢰도: 1=미인증, 2=학부모확인, 3=학원자습(선생님확인)
       pausedSeconds: totalPausedRef.current ? Math.round(totalPausedRef.current / 1000) : 0
     };
     const updated = [newLog, ...logs];
@@ -29036,6 +29112,52 @@ function SelfStudyTab({ student }) {
 
   return (
     <div className="space-y-4">
+      {/* ★ 랜덤 확인 퀴즈 팝업 */}
+      {quizPopup && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl animate-bounce-in">
+            <div className="text-center mb-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-3xl">🧮</span>
+              </div>
+              <h3 className="text-lg font-black text-gray-800">자습 확인 퀴즈!</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                {QUIZ_TIMEOUT}초 안에 정답을 입력하세요 (오답 3회 시 타이머 종료)
+              </p>
+            </div>
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 text-center mb-4 border-2 border-blue-200">
+              <p className="text-3xl font-black text-blue-800">{quizPopup.question}</p>
+            </div>
+            {quizFailed > 0 && (
+              <p className="text-red-500 text-sm text-center mb-2 font-bold">
+                ❌ 오답! 남은 기회: {3 - quizFailed}회
+              </p>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={quizInput}
+                onChange={e => setQuizInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleQuizAnswer()}
+                autoFocus
+                placeholder="정답 입력"
+                className="flex-1 px-4 py-3 border-2 border-blue-300 rounded-xl text-center text-xl font-bold focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={handleQuizAnswer}
+                className="px-5 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all"
+              >
+                확인
+              </button>
+            </div>
+            <div className="mt-3 bg-gray-100 rounded-lg h-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-green-400 to-red-500 rounded-lg transition-all"
+                style={{ width: `${Math.max(0, 100 - ((Date.now() - quizPopup.showAt) / (QUIZ_TIMEOUT * 1000)) * 100)}%`, transition: 'width 1s linear' }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 헤더 */}
       <div className="bg-gradient-to-r from-teal-500 to-emerald-600 rounded-2xl p-4 text-white">
         <h2 className="font-bold text-lg mb-1">⏱ 자습 시간 기록</h2>
@@ -30489,6 +30611,13 @@ function StudyTimeViewer({ studentName, studentGrade, userType = 'parent' }) {
     if (!confirm('이 기록을 삭제하시겠습니까?')) return;
     await saveLogs(logs.filter(l => l.id !== id));
   };
+
+  // ★ 신뢰도 등급 변경
+  const trustLabels = { 1: { label: '⭐ 미인증', color: 'bg-gray-200 text-gray-600' }, 2: { label: '⭐⭐ 학부모확인', color: 'bg-yellow-200 text-yellow-700' }, 3: { label: '⭐⭐⭐ 학원인증', color: 'bg-green-200 text-green-700' } };
+  const updateTrustLevel = async (logId, level) => {
+    const updated = logs.map(l => l.id === logId ? { ...l, trustLevel: level } : l);
+    await saveLogs(updated);
+  };
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState('');
   const quizFileRef = React.useRef(null);
@@ -30884,13 +31013,24 @@ function StudyTimeViewer({ studentName, studentGrade, userType = 'parent' }) {
                   {sc && <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${sc.bg} ${sc.text}`}>{sc.icon} {sc.label}</span>}
                   {e.addedByTeacher && <span className="px-1.5 py-0.5 bg-teal-100 text-teal-600 rounded-full text-xs">선생님 입력</span>}
                   {e.editedByTeacher && !e.addedByTeacher && <span className="px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded-full text-xs">선생님 수정</span>}
-                  {/* ★ 선생님 수정/삭제 버튼 */}
+                  {/* ★ 신뢰도 뱃지 */}
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${(trustLabels[e.trustLevel || 1] || trustLabels[1]).color}`}>
+                    {(trustLabels[e.trustLevel || 1] || trustLabels[1]).label}
+                  </span>
+                  {/* ★ 선생님 수정/삭제/신뢰도 버튼 */}
                   {userType === 'teacher' && (
-                    <div className="flex gap-1 ml-auto">
+                    <div className="flex gap-1 ml-auto flex-wrap">
+                      {[1, 2, 3].map(lv => (
+                        <button key={lv} onClick={() => updateTrustLevel(e.id, lv)}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${e.trustLevel === lv ? 'ring-2 ring-blue-400 ' + trustLabels[lv].color : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                          title={trustLabels[lv].label}>
+                          {'⭐'.repeat(lv)}
+                        </button>
+                      ))}
                       <button onClick={() => { setTeacherEditId(e.id); setShowTeacherAdd(false); setTeacherForm({ date: e.date, hwMinutes: String(e.hwMinutes||''), hwWhat: e.hwWhat||'', extraMinutes: String(e.extraMinutes||''), extraWhat: e.extraWhat||'', mood: e.mood||'📚' }); }}
-                        className="px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded text-xs font-bold hover:bg-orange-200">✏️ 수정</button>
+                        className="px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded text-xs font-bold hover:bg-orange-200">✏️</button>
                       <button onClick={() => teacherDeleteLog(e.id)}
-                        className="px-1.5 py-0.5 bg-red-100 text-red-500 rounded text-xs font-bold hover:bg-red-200">🗑️ 삭제</button>
+                        className="px-1.5 py-0.5 bg-red-100 text-red-500 rounded text-xs font-bold hover:bg-red-200">🗑️</button>
                     </div>
                   )}
                 </div>
