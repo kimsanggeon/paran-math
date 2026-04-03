@@ -322,6 +322,9 @@ function calculateTerritoryScores(students, reportCache = {}) {
         if (pct <= 0) return;
 
         // ★ testScope에서 교육과정 단원명을 정확히 매칭하여 개별 영토로 분리
+        // ★ 영토 점수는 해당 단원 단독 시험만 인정
+        // testScope에서 교육과정 단원명과 정확히 1개만 매칭되는 경우만 인정
+        // "소인수분해~문자와 식" 같은 범위 시험은 제외 (여러 단원 포함)
         const allUnits = [
           '소인수분해','정수와 유리수','유리수 사칙연산','문자와 식','일차방정식',
           '좌표평면과 그래프','정비례·반비례','기본 도형','작도와 합동','평면도형','입체도형','자료 정리',
@@ -329,16 +332,17 @@ function calculateTerritoryScores(students, reportCache = {}) {
           '제곱근과 실수','다항식','인수분해','이차방정식','이차함수','피타고라스 정리','원의 성질','삼각비','대푯값과 산포도'
         ];
         const matched = allUnits.filter(u => scope.includes(u));
-        // 매칭 단원이 없으면 testScope 전체를 영토로 사용
-        const unitNames = matched.length > 0 ? matched : [scope.trim()];
 
-        unitNames.forEach(unitName => {
-          if (!unitName) return;
+        // ★ 정확히 1개 단원만 매칭 = 해당 단원 전용 시험 → 영토 점수 인정
+        // 2개 이상 매칭 = 범위 시험 → 영토 점수 미인정
+        // 0개 매칭 = 교육과정 외 시험 → 무시
+        if (matched.length === 1) {
+          const unitName = matched[0];
           if (!unitScores[unitName]) unitScores[unitName] = { scores: [], recent: 0, count: 0 };
           unitScores[unitName].scores.push(pct);
           unitScores[unitName].recent = pct;
           unitScores[unitName].count++;
-        });
+        }
       });
     });
 
