@@ -312,9 +312,6 @@ function calculateTerritoryScores(students, reportCache = {}) {
       tests.forEach(test => {
         const scope = test.testScope || '';
         if (!scope) return;
-        // 단원명 추출: "1-1 소인수분해 ~ 정수" → 전체 scope 사용
-        const unitName = scope.trim();
-        if (!unitName) return;
 
         let pct = 0;
         const answers = test.testAnswers || [];
@@ -324,10 +321,24 @@ function calculateTerritoryScores(students, reportCache = {}) {
         else if (test.testScore && test.testTotal) pct = Math.round((parseFloat(test.testScore) / parseFloat(test.testTotal)) * 100);
         if (pct <= 0) return;
 
-        if (!unitScores[unitName]) unitScores[unitName] = { scores: [], recent: 0, count: 0 };
-        unitScores[unitName].scores.push(pct);
-        unitScores[unitName].recent = pct;
-        unitScores[unitName].count++;
+        // ★ testScope에서 교육과정 단원명을 정확히 매칭하여 개별 영토로 분리
+        const allUnits = [
+          '소인수분해','정수와 유리수','유리수 사칙연산','문자와 식','일차방정식',
+          '좌표평면과 그래프','정비례·반비례','기본 도형','작도와 합동','평면도형','입체도형','자료 정리',
+          '순환소수','일차부등식','연립방정식','일차함수','삼각형','사각형','닮음','확률',
+          '제곱근과 실수','다항식','인수분해','이차방정식','이차함수','피타고라스 정리','원의 성질','삼각비','대푯값과 산포도'
+        ];
+        const matched = allUnits.filter(u => scope.includes(u));
+        // 매칭 단원이 없으면 testScope 전체를 영토로 사용
+        const unitNames = matched.length > 0 ? matched : [scope.trim()];
+
+        unitNames.forEach(unitName => {
+          if (!unitName) return;
+          if (!unitScores[unitName]) unitScores[unitName] = { scores: [], recent: 0, count: 0 };
+          unitScores[unitName].scores.push(pct);
+          unitScores[unitName].recent = pct;
+          unitScores[unitName].count++;
+        });
       });
     });
 
@@ -7047,8 +7058,9 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                     <div className="flex flex-wrap gap-2 justify-center">
                       {grade.units.map((unit, ui) => {
                         // testScope에서 해당 단원을 포함하는 영토 찾기
-                        const matchKey = Object.keys(territories).find(k => k.includes(unit) || unit.includes(k.split(' ').pop()));
-                        const t = matchKey ? territories[matchKey] : null;
+                        // ★ 영토 키는 이제 정확한 단원명 (calculateTerritoryScores에서 분리됨)
+                        const t_data = territories[unit] || null;
+                        const t = t_data;
                         const isMine = t?.lordId === student.id;
                         const isLord = !!t?.lordId;
                         const myChallenge = t?.challengers?.find(c => c.id === student.id);
