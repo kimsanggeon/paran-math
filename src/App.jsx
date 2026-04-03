@@ -293,6 +293,98 @@ function calculateTowerFloor(reportData, student = {}) {
   return result;
 }
 
+// ========== 🗺️ 영토 점령 배틀 — 영토 점수 계산 ==========
+function calculateTerritoryScores(students, reportCache = {}) {
+  // reportCache: { studentName: reportData, ... } 또는 { studentId: reportData, ... }
+  const territories = {}; // { unitName: { lordId, lordName, lordScore, challengers: [{id, name, score}], history: [] } }
+
+  students.forEach(student => {
+    const rd = reportCache[student.name] || reportCache[student.id];
+    if (!rd?.sessions) return;
+
+    const unitScores = {}; // { unitName: { scores: [], recent: number, count: number } }
+
+    rd.sessions.forEach(session => {
+      const tests = [
+        ...(session.testType ? [{ testType: session.testType, testAnswers: session.testAnswers, testScope: session.testScope, testScore: session.testScore, testTotal: session.testTotal }] : []),
+        ...(session.tests || [])
+      ];
+      tests.forEach(test => {
+        const scope = test.testScope || '';
+        if (!scope) return;
+        // 단원명 추출: "1-1 소인수분해 ~ 정수" → 전체 scope 사용
+        const unitName = scope.trim();
+        if (!unitName) return;
+
+        let pct = 0;
+        const answers = test.testAnswers || [];
+        const answered = answers.filter(a => a !== null && a !== undefined).length;
+        const correct = answers.filter(a => a === true).length;
+        if (answered > 0) pct = Math.round((correct / answered) * 100);
+        else if (test.testScore && test.testTotal) pct = Math.round((parseFloat(test.testScore) / parseFloat(test.testTotal)) * 100);
+        if (pct <= 0) return;
+
+        if (!unitScores[unitName]) unitScores[unitName] = { scores: [], recent: 0, count: 0 };
+        unitScores[unitName].scores.push(pct);
+        unitScores[unitName].recent = pct;
+        unitScores[unitName].count++;
+      });
+    });
+
+    // 각 단원별 종합 점수 계산
+    Object.entries(unitScores).forEach(([unitName, data]) => {
+      const best = Math.max(...data.scores);
+      const recent = data.recent;
+      const countBonus = Math.min(10, data.count); // 최대 10점
+      const totalScore = Math.round(best * 0.6 + recent * 0.3 + countBonus);
+
+      if (!territories[unitName]) {
+        territories[unitName] = { lordId: null, lordName: null, lordScore: 0, challengers: [], history: [] };
+      }
+      const t = territories[unitName];
+
+      if (totalScore > t.lordScore) {
+        // 영주 교체
+        if (t.lordId && t.lordId !== student.id) {
+          t.challengers.push({ id: t.lordId, name: t.lordName, score: t.lordScore });
+          t.history.push({ date: new Date().toISOString(), fromId: t.lordId, fromName: t.lordName, toId: student.id, toName: student.name, score: totalScore });
+        }
+        t.lordId = student.id;
+        t.lordName = student.name;
+        t.lordScore = totalScore;
+      } else if (student.id !== t.lordId) {
+        // 도전자 목록에 추가/업데이트
+        const existing = t.challengers.find(c => c.id === student.id);
+        if (existing) { existing.score = Math.max(existing.score, totalScore); existing.name = student.name; }
+        else t.challengers.push({ id: student.id, name: student.name, score: totalScore });
+      }
+    });
+  });
+
+  // 도전자 정렬
+  Object.values(territories).forEach(t => {
+    t.challengers.sort((a, b) => b.score - a.score);
+    t.challengers = t.challengers.slice(0, 10);
+  });
+
+  return territories;
+}
+
+// 영토 데이터 저장/로드
+async function saveTerritories(territories) {
+  const str = JSON.stringify(territories);
+  try { if (window.storage) await window.storage.set('paran:territories', str); } catch(e) {}
+  try { localStorage.setItem('paran:territories', str); } catch(e) {}
+}
+async function loadTerritories() {
+  try {
+    if (window.storage) { const r = await window.storage.get('paran:territories'); if (r?.value) return JSON.parse(r.value); }
+    const local = localStorage.getItem('paran:territories');
+    if (local) return JSON.parse(local);
+  } catch(e) {}
+  return {};
+}
+
 // ========== 🏰 몰입의 탑 — 스냅샷 저장/로드 (날짜별·주간·월간) ==========
 async function saveTowerSnapshot(students, dateKey) {
   // dateKey: "2026-04-03" (날짜) 또는 "2026-04" (월간)
@@ -2752,6 +2844,7 @@ function ParentView({ student, students, onLogout }) {
   const [directorNotices, setDirectorNotices] = useState([]); // 원장 공지사항
   const [pvHistMonth, setPvHistMonth] = useState(new Date().toISOString().slice(0, 7)); // 타워 히스토리
   const [pvHistData, setPvHistData] = useState(null);
+  const [pvTerritories, setPvTerritories] = useState(null); // 영토 점령
 
   // 새로운 기능 상태들
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -2778,8 +2871,10 @@ function ParentView({ student, students, onLogout }) {
       } catch(e) {}
     };
     loadDirectorNotices();
+    // 영토 데이터 로드
+    loadTerritories().then(t => { if (t) setPvTerritories(t); });
   }, []);
-  
+
   // 반복 학습 데이터 로드
   useEffect(() => {
     const loadReviewData = () => {
@@ -3999,6 +4094,33 @@ function ParentView({ student, students, onLogout }) {
           );
         })()}
 
+        {/* 🗺️ 영토 점령 현황 (학부모용) */}
+        {(() => {
+          if (!pvTerritories || Object.keys(pvTerritories).length === 0) return null;
+          const myCount = Object.values(pvTerritories).filter(t => t.lordId === student.id).length;
+          const totalCount = Object.keys(pvTerritories).length;
+          const title = myCount >= 5 ? '👑 수학 제왕' : myCount >= 3 ? '🏰 수학 영주' : myCount >= 1 ? '🏴 정복자' : '⚔️ 도전자';
+          return (
+            <div className="bg-gradient-to-r from-slate-700 to-indigo-800 rounded-xl p-4 text-white">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-bold flex items-center gap-2">⚔️ 영토 점령</h3>
+                <span className="text-xs text-indigo-200">{title}</span>
+              </div>
+              <div className="flex items-end gap-4">
+                <div>
+                  <p className="text-3xl font-black text-yellow-300">{myCount}<span className="text-lg">/{totalCount}</span></p>
+                  <p className="text-xs text-indigo-200">점령 영토</p>
+                </div>
+                <div className="flex-1">
+                  <div className="h-2.5 bg-indigo-900 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full" style={{ width: `${totalCount > 0 ? Math.round((myCount / totalCount) * 100) : 0}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* 📅 월별 타워 기록 (학부모용) */}
         {(() => {
           // pvHistMonth, pvHistData는 컴포넌트 최상위에서 관리
@@ -4856,6 +4978,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   const [directorNotices, setDirectorNotices] = useState([]);
   const [stHistMonth, setStHistMonth] = useState(new Date().toISOString().slice(0, 7));
   const [stHistData, setStHistData] = useState(null);
+  const [territories, setTerritories] = useState({}); // 영토 점령 배틀
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(null);
   const [journalSaveStatus, setJournalSaveStatus] = useState('');
 
@@ -4990,6 +5113,11 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
       saveStudents(updatedStudents);
     }
   }, [reportData, student.id]); // eslint-disable-line
+
+  // ★ 영토 점령 배틀: 데이터 로드
+  useEffect(() => {
+    loadTerritories().then(t => { if (t && Object.keys(t).length > 0) setTerritories(t); });
+  }, []);
 
   // 학생 일지 필드 업데이트 (로컬 상태만)
   const updateStudentJournal = (sessionIdx, field, value) => {
@@ -5595,6 +5723,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
             { id: 'homework', label: '📚 숙제' },
             { id: 'my-grades', label: '📈 성적추이' },
             { id: 'my-weakness', label: '🔬 취약유형' },
+            { id: 'territory', label: '🗺️ 영토' },
             { id: 'challenge', label: '🎲 챌린지' },
             { id: 'mindset', label: '🧠 마인드셋' },
             { id: 'ranking', label: '🏆 랭킹' },
@@ -6856,6 +6985,151 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                 </div>
               );
             })()}
+          </>
+        )}
+
+        {/* ========== 🗺️ 영토 점령 배틀 탭 ========== */}
+        {activeTab === 'territory' && (
+          <>
+            {/* CSS for hexagon animation */}
+            <style>{`
+              @keyframes hexPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+              @keyframes hexGlow { 0%,100%{box-shadow:0 0 8px rgba(234,179,8,0.3)} 50%{box-shadow:0 0 20px rgba(234,179,8,0.7)} }
+              @keyframes fogFade { 0%,100%{opacity:0.4} 50%{opacity:0.55} }
+              .hex-tile { clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%); transition:all 0.3s; cursor:pointer; }
+              .hex-tile:hover { transform:scale(1.08); z-index:10; }
+              .hex-mine { animation:hexGlow 2s ease-in-out infinite; }
+              .hex-lord { animation:hexPulse 3s ease-in-out infinite; }
+              .hex-fog { animation:fogFade 4s ease-in-out infinite; }
+            `}</style>
+
+            {/* 히어로 헤더 */}
+            <div className="bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 rounded-2xl p-5 text-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 text-[100px] opacity-5">🗺️</div>
+              <h2 className="text-xl font-black mb-1 flex items-center gap-2">⚔️ 영토 점령 배틀</h2>
+              <p className="text-indigo-300 text-xs">수학 단원을 점령하고 영주가 되세요!</p>
+              {(() => {
+                const myTerritories = Object.entries(territories).filter(([, t]) => t.lordId === student.id);
+                const title = myTerritories.length >= 5 ? '👑 수학 제왕' : myTerritories.length >= 3 ? '🏰 수학 영주' : myTerritories.length >= 1 ? '🏴 정복자' : '⚔️ 도전자';
+                return (
+                  <div className="flex items-center gap-4 mt-3">
+                    <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
+                      <p className="text-2xl font-black text-yellow-300">{myTerritories.length}</p>
+                      <p className="text-[10px] text-indigo-300">내 영토</p>
+                    </div>
+                    <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
+                      <p className="text-lg font-bold text-amber-300">{title}</p>
+                      <p className="text-[10px] text-indigo-300">칭호</p>
+                    </div>
+                    <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
+                      <p className="text-2xl font-black text-cyan-300">{Object.keys(territories).length}</p>
+                      <p className="text-[10px] text-indigo-300">전체 영토</p>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* 헥사곤 영토 지도 */}
+            <div className="bg-white rounded-xl shadow-lg p-4">
+              <h3 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2">🗺️ 영토 지도</h3>
+              {(() => {
+                const gradeGroups = [
+                  { label: '중1', color: 'from-blue-500 to-cyan-500', bgLight: 'bg-blue-50', units: ['소인수분해','정수와 유리수','유리수 사칙연산','문자와 식','일차방정식','좌표평면과 그래프','정비례·반비례','기본 도형','작도와 합동','평면도형','입체도형','자료 정리'] },
+                  { label: '중2', color: 'from-emerald-500 to-teal-500', bgLight: 'bg-emerald-50', units: ['유리수 사칙연산(2)','순환소수','일차부등식','연립방정식','일차함수','삼각형','사각형','닮음','확률'] },
+                  { label: '중3', color: 'from-violet-500 to-purple-500', bgLight: 'bg-violet-50', units: ['제곱근과 실수','다항식','인수분해','이차방정식','이차함수','피타고라스 정리','원의 성질','삼각비','대푯값과 산포도'] },
+                ];
+                return gradeGroups.map((grade, gi) => (
+                  <div key={gi} className="mb-4">
+                    <div className={`inline-block px-3 py-1 rounded-full text-white text-xs font-bold bg-gradient-to-r ${grade.color} mb-2`}>
+                      {grade.label}
+                    </div>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {grade.units.map((unit, ui) => {
+                        // testScope에서 해당 단원을 포함하는 영토 찾기
+                        const matchKey = Object.keys(territories).find(k => k.includes(unit) || unit.includes(k.split(' ').pop()));
+                        const t = matchKey ? territories[matchKey] : null;
+                        const isMine = t?.lordId === student.id;
+                        const isLord = !!t?.lordId;
+                        const myChallenge = t?.challengers?.find(c => c.id === student.id);
+                        const canAttack = t && !isMine && myChallenge && myChallenge.score > t.lordScore * 0.95;
+
+                        return (
+                          <div key={ui}
+                            onClick={() => {
+                              const detail = t ? `영주: ${t.lordName || '없음'} (${t.lordScore}점)\n내 점수: ${myChallenge?.score || '기록 없음'}\n도전자: ${t.challengers.slice(0, 3).map(c => c.name + '(' + c.score + ')').join(', ')}` : '아직 아무도 점령하지 않았습니다.\n시험을 보면 자동으로 점령됩니다!';
+                              alert(`📐 ${unit}\n\n${detail}`);
+                            }}
+                            className={`hex-tile w-20 h-20 flex flex-col items-center justify-center text-center relative
+                              ${isMine ? 'bg-gradient-to-br from-yellow-400 to-amber-500 hex-mine' :
+                                isLord ? `bg-gradient-to-br ${grade.color} hex-lord` :
+                                'bg-gray-200 hex-fog'}
+                            `}
+                            style={{ margin: ui % 2 === 1 ? '0 0 0 -4px' : '0' }}
+                          >
+                            {/* 깃발 */}
+                            {isLord && <span className="text-lg">{isMine ? '👑' : '🏴'}</span>}
+                            {!isLord && <span className="text-lg opacity-40">⬜</span>}
+                            <p className={`text-[8px] font-bold leading-tight px-1 ${isMine ? 'text-yellow-900' : isLord ? 'text-white' : 'text-gray-400'}`}>
+                              {unit.length > 6 ? unit.slice(0, 6) + '..' : unit}
+                            </p>
+                            {isLord && (
+                              <p className={`text-[7px] ${isMine ? 'text-yellow-800' : 'text-white/80'}`}>
+                                {t.lordName?.slice(0, 3)}
+                              </p>
+                            )}
+                            {canAttack && <span className="absolute top-0 right-0 text-xs animate-pulse">⚔️</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* 영주 랭킹 */}
+            <div className="bg-white rounded-xl shadow-lg p-4">
+              <h3 className="font-bold text-gray-800 text-sm mb-3">🏆 영주 랭킹 TOP 5</h3>
+              {(() => {
+                const lordCount = {};
+                Object.values(territories).forEach(t => {
+                  if (t.lordId) { lordCount[t.lordId] = lordCount[t.lordId] || { name: t.lordName, count: 0 }; lordCount[t.lordId].count++; }
+                });
+                const ranked = Object.entries(lordCount).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+                if (ranked.length === 0) return <p className="text-gray-400 text-sm text-center py-4">아직 영토를 점령한 학생이 없습니다</p>;
+                const medals = ['👑', '🥈', '🥉'];
+                return ranked.map(([id, data], idx) => (
+                  <div key={id} className={`flex items-center gap-3 px-3 py-2 rounded-lg mb-1 ${id === student.id ? 'bg-yellow-50 border border-yellow-200' : idx < 3 ? 'bg-indigo-50' : 'bg-gray-50'}`}>
+                    <span className="w-6 text-center font-bold text-sm">{medals[idx] || idx + 1}</span>
+                    <span className="flex-1 font-medium text-gray-800 text-sm">{data.name}</span>
+                    <span className="text-indigo-700 font-bold">{data.count}개</span>
+                    <span className="text-xs text-gray-400">영토</span>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* 최근 전투 기록 */}
+            <div className="bg-white rounded-xl shadow-lg p-4">
+              <h3 className="font-bold text-gray-800 text-sm mb-3">⚔️ 최근 전투 기록</h3>
+              {(() => {
+                const allHistory = Object.entries(territories).flatMap(([unit, t]) =>
+                  (t.history || []).map(h => ({ ...h, unit }))
+                ).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+                if (allHistory.length === 0) return <p className="text-gray-400 text-sm text-center py-4">아직 전투 기록이 없습니다</p>;
+                return allHistory.map((h, i) => (
+                  <div key={i} className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0 text-xs">
+                    <span>⚔️</span>
+                    <span className="text-gray-500">{new Date(h.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}</span>
+                    <span className="font-bold text-indigo-700">{h.toName}</span>
+                    <span className="text-gray-400">→</span>
+                    <span className="text-gray-600">{h.unit}</span>
+                    <span className="text-green-600 font-bold ml-auto">{h.score}점</span>
+                  </div>
+                ));
+              })()}
+            </div>
           </>
         )}
 
@@ -26915,7 +27189,8 @@ function GamificationTab({ students, saveStudents }) {
   const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [gamifView, setGamifView] = useState('tower'); // 'tower' | 'exp'
+  const [gamifView, setGamifView] = useState('tower'); // 'tower' | 'exp' | 'territory'
+  const [teacherTerritories, setTeacherTerritories] = useState({});
 
   // ★ 뒤로가기: 학생 선택 → 목록
   useBackButton('gamif-student', () => {
@@ -27358,9 +27633,13 @@ function GamificationTab({ students, saveStudents }) {
           className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'tower' ? 'bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
           🏰 몰입의 탑
         </button>
+        <button onClick={() => setGamifView('territory')}
+          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'territory' ? 'bg-gradient-to-r from-slate-700 to-indigo-800 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+          🗺️ 영토
+        </button>
         <button onClick={() => setGamifView('exp')}
           className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'exp' ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-          ⭐ EXP · 뱃지
+          ⭐ EXP
         </button>
       </div>
 
@@ -27585,6 +27864,91 @@ function GamificationTab({ students, saveStudents }) {
               <p className="text-sm text-gray-400 text-center py-4">📊 조회 버튼을 눌러 기록을 확인하세요</p>
             )}
           </div>
+        </div>
+      </>)}
+
+      {/* ========== 🗺️ 영토 점령 배틀 뷰 (선생님) ========== */}
+      {gamifView === 'territory' && (<>
+        <div className="bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 rounded-2xl p-5 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 text-[80px] opacity-5">⚔️</div>
+          <h2 className="text-xl font-black mb-1">🗺️ 영토 점령 배틀</h2>
+          <p className="text-indigo-300 text-xs mb-3">학생들의 단원별 점령 현황을 관리합니다</p>
+          <button onClick={async () => {
+            // 모든 학생의 보고서를 로드하여 영토 재계산
+            const cache = {};
+            for (const s of students) {
+              try {
+                let rd = null;
+                if (window.storage) {
+                  const r = await window.storage.get(`paran:report:${s.name}`);
+                  if (r?.value) rd = JSON.parse(r.value);
+                  if (!rd) { const r2 = await window.storage.get(`report:${s.name}`); if (r2?.value) rd = JSON.parse(r2.value); }
+                }
+                if (!rd) { const l = localStorage.getItem(`paran:report:${s.name}`) || localStorage.getItem(`report:${s.name}`); if (l) rd = JSON.parse(l); }
+                if (rd) cache[s.name] = rd;
+              } catch(e) {}
+            }
+            const result = calculateTerritoryScores(students, cache);
+            setTeacherTerritories(result);
+            await saveTerritories(result);
+            alert('✅ 영토 데이터 동기화 완료! (' + Object.keys(result).length + '개 영토)');
+          }} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-bold transition-all">
+            🔄 영토 동기화 (전체 학생 보고서 분석)
+          </button>
+        </div>
+
+        {/* 영토 현황 */}
+        <div className="bg-white rounded-xl shadow-lg p-4">
+          <h3 className="font-bold text-gray-800 text-sm mb-3">📊 영토 현황 ({Object.keys(teacherTerritories).length}개 영토)</h3>
+          {Object.keys(teacherTerritories).length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-6">위의 '영토 동기화' 버튼을 눌러 데이터를 생성하세요</p>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {Object.entries(teacherTerritories).sort((a, b) => (b[1].lordScore || 0) - (a[1].lordScore || 0)).map(([unit, t]) => (
+                <div key={unit} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${t.lordId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
+                  <span className="text-lg">{t.lordId ? '🏴' : '⬜'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-800 text-sm truncate">{unit}</p>
+                    <p className="text-[10px] text-gray-500">
+                      {t.lordId ? `영주: ${t.lordName} (${t.lordScore}점) · 도전자 ${t.challengers?.length || 0}명` : '미점령'}
+                    </p>
+                  </div>
+                  {t.lordId && <span className="text-indigo-700 font-bold text-sm">{t.lordScore}점</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 학생별 영토 보유 현황 */}
+        <div className="bg-white rounded-xl shadow-lg p-4">
+          <h3 className="font-bold text-gray-800 text-sm mb-3">👑 학생별 영토 보유</h3>
+          {(() => {
+            const lordCount = {};
+            Object.entries(teacherTerritories).forEach(([unit, t]) => {
+              if (t.lordId) {
+                if (!lordCount[t.lordId]) lordCount[t.lordId] = { name: t.lordName, units: [] };
+                lordCount[t.lordId].units.push(unit);
+              }
+            });
+            const ranked = Object.entries(lordCount).sort((a, b) => b[1].units.length - a[1].units.length);
+            if (ranked.length === 0) return <p className="text-gray-400 text-sm text-center py-4">아직 영토를 점령한 학생이 없습니다</p>;
+            return ranked.map(([id, data], idx) => (
+              <div key={id} className={`p-3 rounded-lg mb-2 ${idx === 0 ? 'bg-yellow-50 border border-yellow-200' : 'bg-gray-50'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-sm">{idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`}</span>
+                  <span className="font-bold text-gray-800">{data.name}</span>
+                  <span className="ml-auto text-indigo-700 font-bold">{data.units.length}개 영토</span>
+                  <span className="text-xs text-gray-400">{data.units.length >= 5 ? '수학 제왕' : data.units.length >= 3 ? '수학 영주' : ''}</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {data.units.map(u => (
+                    <span key={u} className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">{u}</span>
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
         </div>
       </>)}
 
