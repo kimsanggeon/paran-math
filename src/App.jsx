@@ -28876,6 +28876,29 @@ function SelfStudyTab({ student }) {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [activeTimer]);
 
+  // ★ Wake Lock: 타이머 중 화면 꺼짐 방지
+  const wakeLockRef = React.useRef(null);
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        wakeLockRef.current.addEventListener('release', () => { wakeLockRef.current = null; });
+      }
+    } catch (e) { console.log('Wake Lock 요청 실패:', e); }
+  };
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
+  };
+  // 탭이 다시 보이면 Wake Lock 재요청 (OS가 해제할 수 있음)
+  useEffect(() => {
+    const reacquire = () => { if (activeTimer && document.visibilityState === 'visible') requestWakeLock(); };
+    document.addEventListener('visibilitychange', reacquire);
+    return () => document.removeEventListener('visibilitychange', reacquire);
+  }, [activeTimer]);
+
   const startTimer = (type) => {
     setActiveTimer(type);
     setTimerStart(Date.now());
@@ -28883,16 +28906,17 @@ function SelfStudyTab({ student }) {
     totalPausedRef.current = 0;
     pausedRef.current = false;
     pauseStartRef.current = null;
+    requestWakeLock(); // ★ 화면 켜짐 유지
   };
   const stopTimer = () => {
     const mins = String(Math.round(timerElapsed / 60));
-    // ★ 악용 방지: 최대 4시간(240분) 제한
     const safeMins = String(Math.min(240, parseInt(mins) || 0));
     if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
     else if (activeTimer === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
     setActiveTimer(null);
     setTimerElapsed(0);
     totalPausedRef.current = 0;
+    releaseWakeLock(); // ★ 화면 꺼짐 허용
   };
 
   const fmtTime = (sec) =>
