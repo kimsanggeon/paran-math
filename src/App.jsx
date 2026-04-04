@@ -158,7 +158,11 @@ function calculateTowerFloor(reportData, student = {}) {
   }
 
   const passThreshold = reportData.passThreshold ?? 5;
-  const sessions = [...reportData.sessions].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  // ★ 4월 1일 이후 세션만 계산 (몰입의 탑은 2026년 4월부터 시작)
+  const TOWER_START_DATE = '2026-04-01';
+  const sessions = [...reportData.sessions]
+    .filter(s => (s.date || '') >= TOWER_START_DATE)
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   let consecutiveCorrect = 0;
   let consecutiveHwMiss = 0;
 
