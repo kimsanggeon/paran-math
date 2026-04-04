@@ -757,10 +757,20 @@ export default function ParanMathSystem() {
       localStorage.setItem('paran:students', JSON.stringify(newStudents));
     } catch (e) {}
 
-    // 3. ★ window.storage (Firestore storage 컬렉션) 저장 — 모든 기기 공유
+    // 3. ★ window.storage (Firestore storage 컬렉션) 저장 — 최소 필드만 (1MB 제한 방지)
     try {
       if (window.storage) {
-        await window.storage.set('paran:students', JSON.stringify(newStudents));
+        const minimal = newStudents.map(s => ({
+          id: s.id, name: s.name, grade: s.grade || '', className: s.className || '',
+          phone: s.phone || '', parentPhone: s.parentPhone || '', parentName: s.parentName || '',
+          parentPassword: s.parentPassword || '0000', studentPassword: s.studentPassword || '',
+          teacherId: s.teacherId || '', schoolName: s.schoolName || '',
+          schoolGrade: s.schoolGrade || '', schoolSemester: s.schoolSemester || '',
+          levelStage: s.levelStage || '', classSchedule: s.classSchedule || '',
+          shortTermGoal: s.shortTermGoal || '', longTermGoal: s.longTermGoal || '',
+          exp: s.exp || 0, streak: s.streak || 0, createdAt: s.createdAt || '',
+        }));
+        await window.storage.set('paran:students', JSON.stringify(minimal));
       }
     } catch (e) {
       console.log('storage 학생 저장 오류:', e);
