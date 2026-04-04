@@ -34534,6 +34534,14 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
       return;
     }
 
+    // ★ 중복 이름 체크 (전체 학생 목록에서)
+    const allStudents = window.__paranStudents || students || [];
+    const duplicate = allStudents.find(s => s.name.trim() === newStudent.name.trim());
+    if (duplicate) {
+      alert(`"${newStudent.name}" 학생이 이미 등록되어 있습니다.`);
+      return;
+    }
+
     try {
       // ★ 선생님이 직접 추가 시 자동으로 본인 담당으로 배정
       const assignedTeacherId = (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : (newStudent.teacherId || '');
