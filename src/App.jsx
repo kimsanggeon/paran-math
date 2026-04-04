@@ -7069,105 +7069,102 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
           </>
         )}
 
-        {/* ========== 🗺️ 영토 점령 배틀 탭 ========== */}
+        {/* ========== 🗺️ 영토 점령 배틀 탭 (게임 스타일) ========== */}
         {activeTab === 'territory' && (
           <>
-            {/* CSS for hexagon animation */}
             <style>{`
-              @keyframes hexPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-              @keyframes hexGlow { 0%,100%{box-shadow:0 0 8px rgba(234,179,8,0.3)} 50%{box-shadow:0 0 20px rgba(234,179,8,0.7)} }
-              @keyframes fogFade { 0%,100%{opacity:0.4} 50%{opacity:0.55} }
-              .hex-tile { clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%); transition:all 0.3s; cursor:pointer; }
-              .hex-tile:hover { transform:scale(1.08); z-index:10; }
-              .hex-mine { animation:hexGlow 2s ease-in-out infinite; }
-              .hex-lord { animation:hexPulse 3s ease-in-out infinite; }
-              .hex-fog { animation:fogFade 4s ease-in-out infinite; }
+              @keyframes gSword { 0%{transform:rotate(0) scale(1)} 25%{transform:rotate(-30deg) scale(1.2)} 50%{transform:rotate(15deg) scale(1)} 100%{transform:rotate(0) scale(1)} }
+              @keyframes gCrown { 0%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} 60%{transform:translateY(-3px)} }
+              @keyframes gFire { 0%,100%{text-shadow:0 0 4px rgba(255,100,0,0.5)} 50%{text-shadow:0 0 12px rgba(255,100,0,1)} }
+              @keyframes gBanner { 0%,100%{transform:rotate(-3deg)} 50%{transform:rotate(3deg)} }
+              @keyframes gFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+              .g-land { border-radius:14px; position:relative; overflow:hidden; transition:all 0.3s; cursor:pointer; }
+              .g-land:active { transform:scale(0.95); }
+              .g-land:hover { transform:translateY(-4px); }
+              .g-mine { border:2px solid #fbbf24; box-shadow:0 0 15px rgba(251,191,36,0.4); }
+              .g-enemy { border:1px solid rgba(99,102,241,0.3); }
+              .g-empty { border:1px dashed rgba(255,255,255,0.1); }
+              .g-crown { animation:gCrown 2s ease-in-out infinite; display:inline-block; }
+              .g-fire { animation:gFire 1.5s ease-in-out infinite; }
+              .g-sword { animation:gSword 2s ease-in-out infinite; display:inline-block; }
+              .g-banner { animation:gBanner 3s ease-in-out infinite; display:inline-block; }
+              .g-float { animation:gFloat 3s ease-in-out infinite; display:inline-block; }
             `}</style>
 
-            {/* 히어로 헤더 */}
-            <div className="bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 rounded-2xl p-5 text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 text-[100px] opacity-5">🗺️</div>
-              <h2 className="text-xl font-black mb-1 flex items-center gap-2">⚔️ 영토 점령 배틀</h2>
-              <p className="text-indigo-300 text-xs">수학 단원을 점령하고 영주가 되세요!</p>
+            {/* 게임 히어로 헤더 */}
+            <div className="rounded-2xl overflow-hidden relative" style={{ background:'linear-gradient(135deg, #0c0c1d 0%, #1a1a3e 40%, #2d1b69 70%, #1a0a2e 100%)', minHeight:'150px' }}>
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage:'radial-gradient(circle at 20% 30%, rgba(255,215,0,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(147,51,234,0.3) 0%, transparent 50%)' }} />
+              <div className="relative p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="g-sword text-3xl">⚔️</span>
+                <div>
+                  <h2 className="text-xl font-black text-white tracking-wide">영토 점령 배틀</h2>
+                  <p className="text-purple-300 text-xs">수학 왕국의 영토를 정복하라!</p>
+                </div>
+              </div>
               {(() => {
                 const myTerritories = Object.entries(territories).filter(([, t]) => t.lordId === student.id);
-                const title = myTerritories.length >= 5 ? '👑 수학 제왕' : myTerritories.length >= 3 ? '🏰 수학 영주' : myTerritories.length >= 1 ? '🏴 정복자' : '⚔️ 도전자';
+                const totalT = Object.keys(territories).length;
+                const title = myTerritories.length >= 5 ? '👑 수학 제왕' : myTerritories.length >= 3 ? '🏰 대영주' : myTerritories.length >= 1 ? '⚔️ 정복자' : '🗡️ 도전자';
                 return (
-                  <div className="flex items-center gap-4 mt-3">
-                    <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
-                      <p className="text-2xl font-black text-yellow-300">{myTerritories.length}</p>
-                      <p className="text-[10px] text-indigo-300">내 영토</p>
+                  <div className="flex gap-3 mt-3">
+                    <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-2 text-center border border-yellow-500/20">
+                      <p className="text-3xl font-black text-yellow-300 g-fire">{myTerritories.length}</p>
+                      <p className="text-[10px] text-purple-300">내 영토</p>
                     </div>
-                    <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
-                      <p className="text-lg font-bold text-amber-300">{title}</p>
-                      <p className="text-[10px] text-indigo-300">칭호</p>
+                    <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-2 text-center border border-purple-500/20 flex-1">
+                      <p className="text-lg font-bold text-amber-200 g-crown">{title}</p>
+                      <p className="text-[10px] text-purple-300">칭호</p>
                     </div>
-                    <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
-                      <p className="text-2xl font-black text-cyan-300">{Object.keys(territories).length}</p>
-                      <p className="text-[10px] text-indigo-300">전체 영토</p>
+                    <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-2 text-center border border-indigo-500/20">
+                      <p className="text-xl font-black text-cyan-300">{totalT}</p>
+                      <p className="text-[10px] text-purple-300">전체</p>
                     </div>
                   </div>
                 );
               })()}
+              </div>
             </div>
 
-            {/* 헥사곤 영토 지도 */}
-            <div className="bg-white rounded-xl shadow-lg p-4">
-              <h3 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2">🗺️ 영토 지도</h3>
-              {(() => {
-                const gradeGroups = [
-                  { label: '중1', color: 'from-blue-500 to-cyan-500', bgLight: 'bg-blue-50', units: ['소인수분해','정수와 유리수','유리수 사칙연산','문자와 식','일차방정식','좌표평면과 그래프','정비례·반비례','기본 도형','작도와 합동','평면도형','입체도형','자료 정리'] },
-                  { label: '중2', color: 'from-emerald-500 to-teal-500', bgLight: 'bg-emerald-50', units: ['유리수 사칙연산(2)','순환소수','일차부등식','연립방정식','일차함수','삼각형','사각형','닮음','확률'] },
-                  { label: '중3', color: 'from-violet-500 to-purple-500', bgLight: 'bg-violet-50', units: ['제곱근과 실수','다항식','인수분해','이차방정식','이차함수','피타고라스 정리','원의 성질','삼각비','대푯값과 산포도'] },
-                ];
-                return gradeGroups.map((grade, gi) => (
-                  <div key={gi} className="mb-4">
-                    <div className={`inline-block px-3 py-1 rounded-full text-white text-xs font-bold bg-gradient-to-r ${grade.color} mb-2`}>
-                      {grade.label}
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {grade.units.map((unit, ui) => {
-                        // testScope에서 해당 단원을 포함하는 영토 찾기
-                        // ★ 영토 키는 이제 정확한 단원명 (calculateTerritoryScores에서 분리됨)
-                        const t_data = territories[unit] || null;
-                        const t = t_data;
+            {/* 🗺️ 세계 지도 — 대륙별 */}
+            <div className="rounded-2xl overflow-hidden" style={{ background:'linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}>
+              <div className="p-4">
+              <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">🗺️ 수학 왕국 지도</h3>
+              {[
+                { label: '🏔️ 중1 대륙 — 수의 세계', gradient: 'from-blue-900/60 to-cyan-900/60', border: 'border-blue-500/20', units: ['소인수분해','정수와 유리수','유리수 사칙연산','문자와 식','일차방정식','좌표평면과 그래프','정비례·반비례','기본 도형','작도와 합동','평면도형','입체도형','자료 정리'] },
+                { label: '🌋 중2 대륙 — 함수의 땅', gradient: 'from-emerald-900/60 to-teal-900/60', border: 'border-emerald-500/20', units: ['순환소수','일차부등식','연립방정식','일차함수','삼각형','사각형','닮음','확률'] },
+                { label: '🌌 중3 대륙 — 심화의 영역', gradient: 'from-violet-900/60 to-purple-900/60', border: 'border-violet-500/20', units: ['제곱근과 실수','다항식','인수분해','이차방정식','이차함수','피타고라스 정리','원의 성질','삼각비','대푯값과 산포도'] },
+              ].map((continent, ci) => (
+                <div key={ci} className="mb-4">
+                  <p className="text-white/60 text-[11px] font-bold mb-1.5">{continent.label}</p>
+                  <div className={`bg-gradient-to-br ${continent.gradient} rounded-xl p-2.5 border ${continent.border}`}>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {continent.units.map((unit, ui) => {
+                        const t = territories[unit];
                         const isMine = t?.lordId === student.id;
                         const isLord = !!t?.lordId;
-                        const myChallenge = t?.challengers?.find(c => c.id === student.id);
-                        const canAttack = t && !isMine && myChallenge && myChallenge.score > t.lordScore * 0.95;
-
+                        const myC = t?.challengers?.find(c => c.id === student.id);
                         return (
                           <div key={ui}
                             onClick={() => {
-                              const detail = t ? `영주: ${t.lordName || '없음'} (${t.lordScore}점)\n내 점수: ${myChallenge?.score || '기록 없음'}\n도전자: ${t.challengers.slice(0, 3).map(c => c.name + '(' + c.score + ')').join(', ')}` : '아직 아무도 점령하지 않았습니다.\n시험을 보면 자동으로 점령됩니다!';
-                              alert(`📐 ${unit}\n\n${detail}`);
+                              const det = t ? `👑 영주: ${t.lordName || '없음'} (${t.lordScore}점)\n📊 내 점수: ${myC?.score || '기록없음'}\n⚔️ 도전자: ${(t.challengers||[]).slice(0,3).map(c=>c.name+'('+c.score+')').join(', ')||'없음'}` : '🌫️ 미점령 영토\n시험을 보면 자동으로 점령됩니다!';
+                              alert(`📐 ${unit}\n\n${det}`);
                             }}
-                            className={`hex-tile w-20 h-20 flex flex-col items-center justify-center text-center relative
-                              ${isMine ? 'bg-gradient-to-br from-yellow-400 to-amber-500 hex-mine' :
-                                isLord ? `bg-gradient-to-br ${grade.color} hex-lord` :
-                                'bg-gray-200 hex-fog'}
-                            `}
-                            style={{ margin: ui % 2 === 1 ? '0 0 0 -4px' : '0' }}
-                          >
-                            {/* 깃발 */}
-                            {isLord && <span className="text-lg">{isMine ? '👑' : '🏴'}</span>}
-                            {!isLord && <span className="text-lg opacity-40">⬜</span>}
-                            <p className={`text-[8px] font-bold leading-tight px-1 ${isMine ? 'text-yellow-900' : isLord ? 'text-white' : 'text-gray-400'}`}>
-                              {unit.length > 6 ? unit.slice(0, 6) + '..' : unit}
+                            className={`g-land p-2 text-center ${isMine ? 'g-mine' : isLord ? 'g-enemy' : 'g-empty'}`}
+                            style={{ background: isMine ? 'linear-gradient(135deg, rgba(251,191,36,0.25), rgba(245,158,11,0.15))' : isLord ? 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.1))' : 'rgba(255,255,255,0.03)' }}>
+                            {isMine ? <span className="g-crown text-lg">👑</span> : isLord ? <span className="g-banner text-lg">🏴</span> : <span className="g-float text-lg opacity-20">🌫️</span>}
+                            <p className={`text-[9px] font-bold leading-tight mt-0.5 ${isMine ? 'text-yellow-200' : isLord ? 'text-indigo-200' : 'text-white/20'}`}>
+                              {unit.length > 6 ? unit.slice(0,6)+'..' : unit}
                             </p>
-                            {isLord && (
-                              <p className={`text-[7px] ${isMine ? 'text-yellow-800' : 'text-white/80'}`}>
-                                {t.lordName?.slice(0, 3)}
-                              </p>
-                            )}
-                            {canAttack && <span className="absolute top-0 right-0 text-xs animate-pulse">⚔️</span>}
+                            {isLord && <p className={`text-[8px] ${isMine ? 'text-amber-300' : 'text-indigo-300'}`}>{t.lordName?.slice(0,3)}</p>}
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                ));
-              })()}
+                </div>
+              ))}
+              </div>
             </div>
 
             {/* 영주 랭킹 */}
@@ -27979,27 +27976,72 @@ function GamificationTab({ students, saveStudents }) {
           </button>
         </div>
 
-        {/* 영토 현황 */}
-        <div className="bg-white rounded-xl shadow-lg p-4">
-          <h3 className="font-bold text-gray-800 text-sm mb-3">📊 영토 현황 ({Object.keys(teacherTerritories).length}개 영토)</h3>
-          {Object.keys(teacherTerritories).length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">위의 '영토 동기화' 버튼을 눌러 데이터를 생성하세요</p>
-          ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {Object.entries(teacherTerritories).sort((a, b) => (b[1].lordScore || 0) - (a[1].lordScore || 0)).map(([unit, t]) => (
-                <div key={unit} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${t.lordId ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
-                  <span className="text-lg">{t.lordId ? '🏴' : '⬜'}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-800 text-sm truncate">{unit}</p>
-                    <p className="text-[10px] text-gray-500">
-                      {t.lordId ? `영주: ${t.lordName} (${t.lordScore}점) · 도전자 ${t.challengers?.length || 0}명` : '미점령'}
-                    </p>
-                  </div>
-                  {t.lordId && <span className="text-indigo-700 font-bold text-sm">{t.lordScore}점</span>}
-                </div>
-              ))}
+        {/* 🗺️ 판타지 세계 지도 */}
+        <div className="rounded-2xl overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 30%, #0f3460 60%, #1a1a2e 100%)' }}>
+          <style>{`
+            @keyframes tConquer { 0%{transform:scale(0.8);opacity:0} 50%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+            @keyframes tFlag { 0%,100%{transform:rotate(-5deg)} 50%{transform:rotate(5deg)} }
+            @keyframes tGlow { 0%,100%{box-shadow:0 0 8px rgba(255,215,0,0.3)} 50%{box-shadow:0 0 20px rgba(255,215,0,0.8)} }
+            @keyframes tFog { 0%,100%{opacity:0.3} 50%{opacity:0.5} }
+            @keyframes tFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+            .t-land { transition:all 0.3s; cursor:pointer; border-radius:12px; position:relative; overflow:hidden; }
+            .t-land:hover { transform:scale(1.05); z-index:10; }
+            .t-land::before { content:''; position:absolute; inset:0; border-radius:12px; opacity:0; transition:opacity 0.3s; }
+            .t-land:hover::before { opacity:1; background:rgba(255,255,255,0.1); }
+            .t-conquered { animation:tConquer 0.5s ease-out; }
+            .t-flag { animation:tFlag 2s ease-in-out infinite; display:inline-block; }
+            .t-lord-glow { animation:tGlow 2s ease-in-out infinite; }
+            .t-fog { animation:tFog 4s ease-in-out infinite; }
+            .t-float { animation:tFloat 3s ease-in-out infinite; }
+          `}</style>
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-black text-base flex items-center gap-2">🗺️ 수학 왕국 세계 지도</h3>
+              <span className="text-indigo-300 text-xs">{Object.keys(teacherTerritories).length}개 영토</span>
             </div>
-          )}
+            {Object.keys(teacherTerritories).length === 0 ? (
+              <p className="text-indigo-400 text-sm text-center py-8">위의 '영토 동기화' 버튼을 눌러 세계를 생성하세요</p>
+            ) : (
+              <>
+                {/* 학년별 대륙 */}
+                {[
+                  { label: '📘 중1 대륙', color: 'from-blue-800/80 to-cyan-900/80', borderColor: 'border-blue-400/30', units: ['소인수분해','정수와 유리수','유리수 사칙연산','문자와 식','일차방정식','좌표평면과 그래프','정비례·반비례','기본 도형','작도와 합동','평면도형','입체도형','자료 정리'] },
+                  { label: '📗 중2 대륙', color: 'from-emerald-800/80 to-teal-900/80', borderColor: 'border-emerald-400/30', units: ['순환소수','일차부등식','연립방정식','일차함수','삼각형','사각형','닮음','확률'] },
+                  { label: '📙 중3 대륙', color: 'from-purple-800/80 to-violet-900/80', borderColor: 'border-purple-400/30', units: ['제곱근과 실수','다항식','인수분해','이차방정식','이차함수','피타고라스 정리','원의 성질','삼각비','대푯값과 산포도'] },
+                ].map((continent, ci) => (
+                  <div key={ci} className="mb-4">
+                    <p className="text-white/70 text-xs font-bold mb-2 flex items-center gap-1">
+                      {continent.label}
+                      <span className="text-white/30">—</span>
+                      <span className="text-white/40">{continent.units.filter(u => teacherTerritories[u]?.lordId).length}/{continent.units.length} 점령</span>
+                    </p>
+                    <div className={`bg-gradient-to-br ${continent.color} rounded-xl p-3 border ${continent.borderColor}`}>
+                      <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                        {continent.units.map((unit, ui) => {
+                          const t = teacherTerritories[unit];
+                          const isConquered = !!t?.lordId;
+                          return (
+                            <div key={ui} className={`t-land p-2 text-center ${isConquered ? 't-lord-glow' : 't-fog'}`}
+                              style={{ background: isConquered ? 'linear-gradient(135deg, rgba(234,179,8,0.3), rgba(245,158,11,0.2))' : 'rgba(255,255,255,0.05)', border: isConquered ? '1px solid rgba(234,179,8,0.4)' : '1px solid rgba(255,255,255,0.08)' }}>
+                              <div className="t-float">
+                                {isConquered ? <span className="t-flag text-lg">🏴</span> : <span className="text-lg opacity-30">🌫️</span>}
+                              </div>
+                              <p className={`text-[10px] font-bold mt-0.5 ${isConquered ? 'text-yellow-200' : 'text-white/30'}`}>
+                                {unit.length > 7 ? unit.slice(0, 7) + '..' : unit}
+                              </p>
+                              {isConquered && (
+                                <p className="text-[9px] text-amber-300 font-medium">👑 {t.lordName?.slice(0, 3)} ({t.lordScore})</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
         </div>
 
         {/* 학생별 영토 보유 현황 */}
