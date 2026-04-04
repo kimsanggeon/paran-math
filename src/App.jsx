@@ -322,30 +322,79 @@ function calculateTerritoryScores(students, reportCache = {}) {
         if (pct <= 0) return;
 
         // ★ testScope에서 교육과정 단원명을 정확히 매칭하여 개별 영토로 분리
-        // ★ 영토 점수는 해당 단원 단독 시험만 인정
-        // testScope에서 교육과정 단원명과 정확히 1개만 매칭되는 경우만 인정
-        // "소인수분해~문자와 식" 같은 범위 시험은 제외 (여러 단원 포함)
-        const allUnits = [
-          '소인수분해','정수와 유리수','유리수 사칙연산','문자와 식','일차방정식',
-          '좌표평면과 그래프','정비례·반비례','기본 도형','작도와 합동','평면도형','입체도형','자료 정리',
-          '순환소수','일차부등식','연립방정식','일차함수','삼각형','사각형','닮음','확률',
-          '제곱근과 실수','다항식','인수분해','이차방정식','이차함수','피타고라스 정리','원의 성질','삼각비','대푯값과 산포도'
-        ];
-        const matched = allUnits.filter(u => scope.includes(u));
+        // ★ 세부 범위 → 상위 단원 매핑 (testScope 키워드 기반)
+        // 학년 접두사(1-1, 2-1 등)로 학년 구분 + 세부 키워드로 단원 식별
+        const scopeLower = scope.replace(/\s/g, '');
+        const gradePrefix = scope.match(/^(\d-\d)/)?.[1] || '';
 
-        // ★ 단원 수에 따른 감소 적용
-        // 1단원 = 100%, 2단원 = 70%, 3단원+ = 50%
-        // 0개 매칭 = 교육과정 외 시험 → 무시
-        if (matched.length >= 1) {
-          const weight = matched.length === 1 ? 1.0 : matched.length === 2 ? 0.7 : 0.5;
-          const weightedPct = Math.round(pct * weight);
-          matched.forEach(unitName => {
-            if (!unitScores[unitName]) unitScores[unitName] = { scores: [], recent: 0, count: 0 };
-            unitScores[unitName].scores.push(weightedPct);
-            unitScores[unitName].recent = weightedPct;
-            unitScores[unitName].count++;
-          });
-        }
+        // 키워드 → 단원 매핑 (우선순위: 긴 키워드 먼저)
+        const keywordMap = [
+          // 중1-1
+          { keywords: ['소수와합성수','소인수분해','약수구하기'], unit: '소인수분해', grades: ['1-1'] },
+          { keywords: ['공약수','최대공약수','최소공배수'], unit: '소인수분해', grades: ['1-1'] },
+          { keywords: ['정수와유리수','부등호','수직선'], unit: '정수와 유리수', grades: ['1-1'] },
+          { keywords: ['유리수의덧셈','유리수의뺄셈','유리수의계산','유리수의곱셈','사칙연산'], unit: '유리수 사칙연산', grades: ['1-1'] },
+          { keywords: ['곱셈과나눗셈기호','식의값','문자의사용','일차식의덧셈','일차식'], unit: '문자와 식', grades: ['1-1'] },
+          { keywords: ['방정식','항등식','일차방정식'], unit: '일차방정식', grades: ['1-1'] },
+          { keywords: ['순서쌍','좌표평면','그래프'], unit: '좌표평면과 그래프', grades: ['1-1'] },
+          { keywords: ['정비례','반비례'], unit: '정비례·반비례', grades: ['1-1'] },
+          // 중1-2
+          { keywords: ['점,선,면','점선면','점,직선','위치관계','평행선'], unit: '기본 도형', grades: ['1-2'] },
+          { keywords: ['삼각형의작도','삼각형의합동','작도'], unit: '작도와 합동', grades: ['1-2'] },
+          { keywords: ['다각형','평면도형','부채꼴'], unit: '평면도형', grades: ['1-2'] },
+          { keywords: ['입체도형','다면체','회전체'], unit: '입체도형', grades: ['1-2'] },
+          { keywords: ['도수분포','상대도수','자료정리'], unit: '자료 정리', grades: ['1-2'] },
+          // 중2-1
+          { keywords: ['유리수의소수','순환소수','소수표현'], unit: '순환소수', grades: ['2-1'] },
+          { keywords: ['지수법칙','단항식','다항식의곱셈'], unit: '순환소수', grades: ['2-1'] },
+          { keywords: ['부등식','일차부등식'], unit: '일차부등식', grades: ['2-1'] },
+          { keywords: ['연립방정식'], unit: '연립방정식', grades: ['2-1'] },
+          { keywords: ['일차함수'], unit: '일차함수', grades: ['2-1'] },
+          // 중2-2
+          { keywords: ['삼각형의성질','이등변삼각형'], unit: '삼각형', grades: ['2-2'] },
+          { keywords: ['사각형의성질','평행사변형'], unit: '사각형', grades: ['2-2'] },
+          { keywords: ['닮음','닮은꼴'], unit: '닮음', grades: ['2-2'] },
+          { keywords: ['확률'], unit: '확률', grades: ['2-2'] },
+          // 중3
+          { keywords: ['제곱근','실수'], unit: '제곱근과 실수', grades: ['3-1'] },
+          { keywords: ['인수분해'], unit: '인수분해', grades: ['3-1'] },
+          { keywords: ['이차방정식'], unit: '이차방정식', grades: ['3-1'] },
+          { keywords: ['이차함수'], unit: '이차함수', grades: ['3-1'] },
+          { keywords: ['피타고라스'], unit: '피타고라스 정리', grades: ['3-2'] },
+          { keywords: ['원의성질'], unit: '원의 성질', grades: ['3-2'] },
+          { keywords: ['삼각비'], unit: '삼각비', grades: ['3-2'] },
+          { keywords: ['대푯값','산포도'], unit: '대푯값과 산포도', grades: ['3-2'] },
+        ];
+
+        // "전범위" 시험은 무시
+        if (scopeLower.includes('전범위')) return;
+
+        // 매칭되는 단원 찾기 (학년 접두사 우선)
+        const matchedUnits = new Set();
+        keywordMap.forEach(({ keywords, unit, grades }) => {
+          const hasKeyword = keywords.some(kw => scopeLower.includes(kw.replace(/\s/g, '')));
+          if (!hasKeyword) return;
+          // 학년 접두사가 있으면 학년도 확인
+          if (gradePrefix) {
+            const gradeMatch = grades.some(g => gradePrefix.startsWith(g.split('-')[0]));
+            if (gradeMatch) matchedUnits.add(unit);
+          } else {
+            matchedUnits.add(unit);
+          }
+        });
+
+        const matched = [...matchedUnits];
+        if (matched.length === 0) return; // 교육과정 외 시험 무시
+
+        // 단원 수에 따른 감소 적용: 1개=100%, 2개=70%, 3개+=50%
+        const weight = matched.length === 1 ? 1.0 : matched.length === 2 ? 0.7 : 0.5;
+        const weightedPct = Math.round(pct * weight);
+        matched.forEach(unitName => {
+          if (!unitScores[unitName]) unitScores[unitName] = { scores: [], recent: 0, count: 0 };
+          unitScores[unitName].scores.push(weightedPct);
+          unitScores[unitName].recent = weightedPct;
+          unitScores[unitName].count++;
+        });
       });
     });
 
