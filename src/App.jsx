@@ -5175,13 +5175,12 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   useEffect(() => {
     if (!student.id || !reportData) return;
     const tower = calculateTowerFloor(reportData, student);
-    const currentHighest = student.tower?.highestFloor || 0;
-    const newHighest = Math.max(tower.floor, currentHighest);
+    const currentSaved = student.tower?.currentFloor;
     // 층수가 변경되었거나 아직 저장된 적 없으면 저장
-    if (newHighest !== currentHighest || !student.tower?.lastUpdated) {
+    if (tower.floor !== currentSaved || !student.tower?.lastUpdated) {
       const updatedTower = {
         ...(student.tower || {}),
-        highestFloor: newHighest,
+        highestFloor: tower.floor, // ★ 항상 현재 계산된 값으로 덮어쓰기 (4월 이전 데이터 방지)
         currentFloor: tower.floor,
         lastUpdated: new Date().toISOString(),
         breakdown: tower.breakdown,
@@ -27561,8 +27560,8 @@ function GamificationTab({ students, saveStudents }) {
     let towerUpdate = student.tower || {};
     if (result.reportData) {
       const towerResult = calculateTowerFloor(result.reportData, student);
-      const newHighest = Math.max(towerResult.floor, towerUpdate.highestFloor || 0);
-      towerUpdate = { ...towerUpdate, highestFloor: newHighest, currentFloor: towerResult.floor, lastUpdated: new Date().toISOString(), breakdown: towerResult.breakdown, defenseStatus: towerResult.defenseStatus, milestones: towerResult.milestones };
+      // ★ 항상 현재 계산된 값으로 (4월 이전 데이터 잔여 방지)
+      towerUpdate = { ...towerUpdate, highestFloor: towerResult.floor, currentFloor: towerResult.floor, lastUpdated: new Date().toISOString(), breakdown: towerResult.breakdown, defenseStatus: towerResult.defenseStatus, milestones: towerResult.milestones };
     }
 
     return {
