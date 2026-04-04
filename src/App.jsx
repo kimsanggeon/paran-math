@@ -4877,7 +4877,7 @@ function ParentView({ student, students, onLogout }) {
             </div>
             {/* 📈 기능2: 자습시간 ↔ 성적 상관관계 */}
             <StudyTimeScoreCorrelation studentName={student.name} reportData={reportData} />
-            <StudyTimeViewer studentName={student.name} studentGrade={student.grade} userType="parent" />
+            <StudyTimeViewer key={'pv-'+student.id} studentName={student.name} studentGrade={student.grade} userType="parent" />
           </div>
         )}
 
@@ -8915,7 +8915,7 @@ function DirectorStudentStudyCard({ student }) {
       {open && (
         <div className="p-4 space-y-4">
           {reportData && <StudyTimeScoreCorrelation studentName={student.name} reportData={reportData} />}
-          <StudyTimeViewer studentName={student.name} studentGrade={student.grade} userType="student" />
+          <StudyTimeViewer key={'sv-'+student.id} studentName={student.name} studentGrade={student.grade} userType="student" />
         </div>
       )}
     </div>
@@ -32721,12 +32721,12 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
               <div style={isReadOnly ? { pointerEvents: 'none' } : {}}>
 
               {/* ⏱ 자습 시간 현황 */}
-              <details className="bg-teal-50 border border-teal-200 rounded-xl">
+              <details key={'study-' + selectedStudent.id} className="bg-teal-50 border border-teal-200 rounded-xl">
                 <summary className="px-4 py-3 cursor-pointer font-bold text-teal-800 flex items-center gap-2 list-none">
                   ⏱ 자습 시간 현황 <span className="text-xs bg-teal-200 text-teal-700 px-2 py-0.5 rounded-full font-normal">클릭해서 열기</span>
                 </summary>
                 <div className="px-4 pb-4">
-                  <StudyTimeViewer studentName={selectedStudent.name} studentGrade={selectedStudent.grade} userType="teacher" />
+                  <StudyTimeViewer key={'st-' + selectedStudent.id + '-' + selectedStudent.name} studentName={selectedStudent.name} studentGrade={selectedStudent.grade} userType="teacher" />
                 </div>
               </details>
               
