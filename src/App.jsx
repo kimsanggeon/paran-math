@@ -8377,6 +8377,7 @@ function StudentErrorChecklist({ student, students, saveStudents, reportData, se
                   <option value="정기고사">정기고사</option>
                   <option value="성취도평가">성취도평가</option>
                   <option value="체킹누적테스트">체킹누적테스트</option>
+                  <option value="일요모의고사">일요모의고사</option>
                   <option value="기타">기타</option>
                 </select>
               </div>
@@ -17914,8 +17915,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
           if (a === false) return s + (Number(scs[i]) || 0);
           return s;
         }, 0);
-        test.testScore = String(earned);
-        test.testTotal = String(totalPts);
+        test.testScore = String(Math.round(earned * 10) / 10); // 소수점 1자리
+        test.testTotal = String(Math.round(totalPts * 10) / 10);
       } else {
         const checkedAnswers = answers.filter(a => a !== null && a !== undefined);
         const correctCount = answers.filter(a => a === true).length;
@@ -17993,15 +17994,25 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
       const ns = [...prev.sessions];
       const sess = { ...ns[prev.currentSessionIndex] };
       const tests = [...(sess.tests || [])];
+      const testType = tests[testIndex]?.testType || '';
+      const testTotal = parseFloat(tests[testIndex]?.testTotal) || 100;
+
+      // ★ 일요모의고사: 균등 배점 자동 계산
+      let defaultPoints = Array(total).fill('');
+      if (testType === '일요모의고사' && total > 0) {
+        const pointPerQ = Math.round((testTotal / total) * 100) / 100;
+        defaultPoints = Array(total).fill(String(pointPerQ));
+      }
+
       tests[testIndex] = {
         ...tests[testIndex],
         testAnswers: Array(total).fill(null),
         testErrorTypes: Array(total).fill(''),
-        problemPoints: Array(total).fill(''),
+        problemPoints: defaultPoints,
         problemScores: Array(total).fill(''),
         testQuestionCount: mcCount,
         essayQuestionCount: essayCount,
-        testScore: '', testTotal: '',
+        testScore: '', testTotal: testType === '일요모의고사' ? String(testTotal) : '',
       };
       sess.tests = tests; ns[prev.currentSessionIndex] = sess;
       return { ...prev, sessions: ns };
@@ -22018,6 +22029,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                             <option value="정기고사">📋 정기고사</option>
                             <option value="성취도평가">📊 성취도평가</option>
                             <option value="체킹누적테스트">📝 체킹누적테스트</option>
+                            <option value="일요모의고사">📋 일요모의고사</option>
                             <option value="기타">✏️ 기타</option>
                           </select>
                           <div className="flex items-center gap-2 w-full min-w-0">
@@ -22180,6 +22192,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                             <option value="정기고사">📋 정기고사</option>
                             <option value="성취도평가">📊 성취도평가</option>
                             <option value="체킹누적테스트">📝 체킹누적테스트</option>
+                            <option value="일요모의고사">📋 일요모의고사</option>
                             <option value="기타">✏️ 기타</option>
                           </select>
                           {/* 체킹누적테스트: A/B/C/D 난이도 (채점판 위에 표시) */}
@@ -22525,8 +22538,84 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                 return (
                                   <div style={{padding:"8px", display:"flex", flexDirection:"column", gap:"12px", width:"100%", boxSizing:"border-box", overflow:"hidden"}}>
 
-                                    {/* ── 객관식 그리드 ── */}
-                                    {mcCount > 0 && (
+                                    {/* ── 일요모의고사 전용 채점판 ── */}
+                                    {test.testType === '일요모의고사' && test.testAnswers?.length > 0 && (
+                                      <div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <span className="text-xs font-bold text-orange-700">📋 일요모의고사 채점 ({test.testAnswers.length}문제)</span>
+                                          <span className="text-xs text-gray-500">균등 배점: {(test.problemPoints || [])[0] || '?'}점/문제</span>
+                                        </div>
+                                        <div className="space-y-1 max-h-60 overflow-y-auto">
+                                          {test.testAnswers.map((ans, qi) => {
+                                            const pointPerQ = Number((test.problemPoints || [])[qi]) || 0;
+                                            const partialScore = Number((test.problemScores || [])[qi]) || 0;
+                                            return (
+                                              <div key={qi} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${ans === true ? 'bg-green-50 border border-green-200' : ans === false ? 'bg-red-50 border border-red-200' : 'bg-gray-50 border border-gray-200'}`}>
+                                                <span className="text-xs font-bold text-gray-600 w-6 text-center">{qi + 1}</span>
+                                                {/* O/X 토글 */}
+                                                <div className="flex gap-1">
+                                                  <button onClick={() => toggleTestAnswerForTest(testIndex, qi)}
+                                                    className={`w-8 h-8 rounded-lg font-bold text-sm transition-all ${ans === true ? 'bg-green-500 text-white' : ans === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                                                    {ans === true ? '○' : ans === false ? '✗' : '—'}
+                                                  </button>
+                                                </div>
+                                                {/* 배점 표시 */}
+                                                <span className="text-[10px] text-gray-400 w-10 text-center">{pointPerQ}점</span>
+                                                {/* ★ 부분 점수 입력 (소수점 1자리) */}
+                                                {ans === false && (
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-[10px] text-orange-600">부분:</span>
+                                                    <input
+                                                      type="number"
+                                                      step="0.1"
+                                                      min="0"
+                                                      max={pointPerQ}
+                                                      value={partialScore || ''}
+                                                      onChange={(e) => {
+                                                        const val = Math.min(pointPerQ, Math.max(0, parseFloat(e.target.value) || 0));
+                                                        const rounded = Math.round(val * 10) / 10;
+                                                        setReportData(prev => {
+                                                          const ns = [...prev.sessions];
+                                                          const sess = { ...ns[prev.currentSessionIndex] };
+                                                          const tests = [...(sess.tests || [])];
+                                                          const scores = [...(tests[testIndex].problemScores || [])];
+                                                          scores[qi] = String(rounded);
+                                                          tests[testIndex] = { ...tests[testIndex], problemScores: scores };
+                                                          // 점수 자동 계산
+                                                          let total = 0;
+                                                          tests[testIndex].testAnswers.forEach((a, i) => {
+                                                            if (a === true) total += Number(tests[testIndex].problemPoints?.[i]) || 0;
+                                                            else if (a === false) total += Number(scores[i]) || 0;
+                                                          });
+                                                          tests[testIndex].testScore = String(Math.round(total * 10) / 10);
+                                                          sess.tests = tests; ns[prev.currentSessionIndex] = sess;
+                                                          return { ...prev, sessions: ns };
+                                                        });
+                                                      }}
+                                                      className="w-14 p-1 border border-orange-300 rounded text-xs text-center bg-white"
+                                                      placeholder="0"
+                                                    />
+                                                    <span className="text-[10px] text-gray-400">/{pointPerQ}</span>
+                                                  </div>
+                                                )}
+                                                {/* 정답이면 만점 표시 */}
+                                                {ans === true && <span className="text-[10px] text-green-600 font-bold">+{pointPerQ}</span>}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                        {/* 합산 점수 */}
+                                        <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-200 flex items-center justify-between">
+                                          <span className="text-xs font-bold text-orange-700">합산 점수</span>
+                                          <span className="text-lg font-black text-orange-700">
+                                            {test.testScore || 0} / {test.testTotal || totalPoints}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* ── 객관식 그리드 (일요모의고사가 아닌 경우) ── */}
+                                    {mcCount > 0 && test.testType !== '일요모의고사' && (
                                       <div>
                                         <div className="flex items-center gap-2 mb-1.5 min-w-0">
                                           <span className="text-xs font-bold text-blue-700 whitespace-nowrap">📝 객관식 ({mcCount}문제)</span>
@@ -23200,6 +23289,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                       <option value="정기고사">정기고사</option>
                       <option value="성취도평가">성취도평가</option>
                       <option value="체킹누적테스트">체킹누적테스트</option>
+                      <option value="일요모의고사">일요모의고사</option>
                       <option value="기타">기타</option>
                     </select>
                     <input type="date" value={test.testDate} onChange={(e) => updateUpcomingTest(index, 'testDate', e.target.value)} className="p-2 border rounded text-sm" />
@@ -32225,7 +32315,7 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
   const textbooks = [...ALL_TEXTBOOKS, '시험'];
 
   // 시험 유형
-  const testTypes = ['일일테스트', '주간테스트', '정기테스트', '성취도테스트', '체킹누적테스트', '기타'];
+  const testTypes = ['일일테스트', '주간테스트', '정기테스트', '성취도테스트', '체킹누적테스트', '일요모의고사', '기타'];
 
   // 학년별 단원 데이터
   const unitsByGrade = {
