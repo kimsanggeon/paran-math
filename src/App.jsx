@@ -22539,7 +22539,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                   <div style={{padding:"8px", display:"flex", flexDirection:"column", gap:"12px", width:"100%", boxSizing:"border-box", overflow:"hidden"}}>
 
                                     {/* ── 일요모의고사 전용 채점판 ── */}
-                                    {test.testType === '일요모의고사' && test.testAnswers?.length > 0 && (
+                                    {test?.testType === '일요모의고사' && test?.testAnswers?.length > 0 && (
                                       <div>
                                         <div className="flex items-center gap-2 mb-2">
                                           <span className="text-xs font-bold text-orange-700">📋 일요모의고사 채점 ({test.testAnswers.length}문제)</span>
@@ -22657,8 +22657,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                       </div>
                                     )}
 
-                                    {/* ── 서술형 목록 ── */}
-                                    {essayCount > 0 && (
+                                    {/* ── 서술형 목록 (일요모의고사 제외) ── */}
+                                    {essayCount > 0 && test?.testType !== '일요모의고사' && (
                                       <div>
                                         <div className="flex items-center gap-2 mb-1.5">
                                           <span className="text-xs font-bold text-purple-700">✍️ 서술형 ({essayCount}문제)</span>
