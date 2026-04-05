@@ -16776,20 +16776,34 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
     
     const growthPerSession = (scores[scores.length - 1] - scores[0]) / (scores.length - 1);
     if (growthPerSession <= 0) return { trend: 'negative', message: '현재 추세로는 목표 달성이 어렵습니다. 학습 방법 점검이 필요합니다.' };
-    
+
     const remaining = goalAccuracy - currentAccuracy;
     const sessionsNeeded = Math.ceil(remaining / growthPerSession);
-    
+
     // 주 3회 수업 기준 예상 날짜 계산
     const weeksNeeded = Math.ceil(sessionsNeeded / 3);
+
+    // ★ 안전 가드: weeksNeeded가 Infinity/NaN/너무 큰 값이면 예상 날짜 계산 생략
+    if (!isFinite(weeksNeeded) || weeksNeeded <= 0 || weeksNeeded > 520) {
+      return { trend: 'slow', message: '목표 달성까지 시간이 오래 걸릴 것으로 예상됩니다.' };
+    }
+
     const estimatedDate = new Date();
     estimatedDate.setDate(estimatedDate.getDate() + weeksNeeded * 7);
-    
+
+    // ★ Invalid Date 방어
+    let dateStr = '';
+    try {
+      dateStr = estimatedDate.toISOString().split('T')[0];
+    } catch(e) {
+      dateStr = '';
+    }
+
     return {
       achieved: false,
       sessionsNeeded,
       weeksNeeded,
-      date: estimatedDate.toISOString().split('T')[0],
+      date: dateStr,
       growthRate: growthPerSession.toFixed(1)
     };
   }, [reportData.sessions, reportData.goalAccuracy]);
