@@ -5078,18 +5078,33 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   // 복습 주기 (에빙하우스 망각곡선 기반)
   const reviewIntervals = [1, 3, 7, 14, 30];
   
-  // 데이터 로드 - localStorage 우선 (Firebase 제거로 안정성 확보)
+  // 데이터 로드 - ★ Firestore 우선, localStorage fallback
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 1. localStorage에서 먼저 로드 (가장 안정적)
-        let saved = localStorage.getItem(`report:${student.name}`);
-        if (!saved) saved = localStorage.getItem(`paran:report:${student.name}`);
-        if (saved) {
+        let loaded = false;
+        // 1. ★ Firestore(window.storage) 우선 로드 — 항상 최신 데이터
+        if (typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function') {
           try {
-            setReportData(JSON.parse(saved));
-          } catch (e) {
-            console.log('JSON 파싱 오류:', e);
+            let reportResult = await window.storage.get(`paran:report:${student.name}`);
+            if (!reportResult?.value) reportResult = await window.storage.get(`report:${student.name}`);
+            if (reportResult?.value) {
+              const parsed = JSON.parse(reportResult.value);
+              if (parsed?.sessions) {
+                setReportData(parsed);
+                loaded = true;
+                // localStorage에도 동기화
+                try { localStorage.setItem(`paran:report:${student.name}`, reportResult.value); } catch(e) {}
+              }
+            }
+          } catch(e) { console.log('Firestore 보고서 로드 오류:', e); }
+        }
+        // 2. Firestore 실패 시 localStorage fallback
+        if (!loaded) {
+          let saved = localStorage.getItem(`paran:report:${student.name}`);
+          if (!saved) saved = localStorage.getItem(`report:${student.name}`);
+          if (saved) {
+            try { setReportData(JSON.parse(saved)); } catch(e) {}
           }
         }
         
@@ -5117,21 +5132,10 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
           }
         }
         
-        // 2. window.storage 시도 (Claude 환경)
+        // 2. window.storage에서 추가 데이터 로드 (보고서는 위에서 이미 로드됨)
         if (typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function') {
           try {
-            let reportResult = await window.storage.get(`report:${student.name}`, true);
-            if (!reportResult?.value) {
-              reportResult = await window.storage.get(`paran:report:${student.name}`, true);
-            }
-            if (reportResult?.value) {
-              const parsed = JSON.parse(reportResult.value);
-              if (parsed && parsed.sessions) {
-                setReportData(parsed);
-              }
-            }
-            
-            // ★ window.storage에서도 reviewProblems 로드
+            // ★ window.storage에서 reviewProblems 로드
             try {
               const wpResult = await window.storage.get('paran:wrongProblems', true);
               if (wpResult?.value) {
