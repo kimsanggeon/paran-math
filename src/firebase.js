@@ -63,30 +63,47 @@ export const saveStudentsToFirebase = async (students, academyId = 'default') =>
   try {
     const studentsCol = collection(db, 'academies', academyId, 'students');
 
-    // 현재 Firebase에 있는 학생 ID 목록 조회
+    // ★ 기존 문서에서 이름→docId 매핑 (중복 방지용)
     const existingSnap = await getDocs(studentsCol);
-    const existingIds = new Set();
-    existingSnap.forEach(d => existingIds.add(d.id));
-
-    // 새 학생 목록의 ID
-    const newIds = new Set(students.map(s => String(s.id)));
-
-    // 삭제된 학생 제거
-    const batch = writeBatch(db);
+    const existingByName = {};
+    const existingById = {};
     existingSnap.forEach(d => {
-      if (!newIds.has(d.id)) {
-        batch.delete(d.ref);
+      const data = d.data();
+      existingById[d.id] = data;
+      if (data.name) {
+        if (!existingByName[data.name]) existingByName[data.name] = [];
+        existingByName[data.name].push(d.id);
       }
     });
-    await batch.commit();
 
-    // 각 학생을 개별 문서로 저장 (병렬 처리)
-    await Promise.all(students.map(student =>
-      setDoc(doc(db, 'academies', academyId, 'students', String(student.id)), {
+    // ★ 이름 중복 정리: 같은 이름의 기존 문서가 여러 개면 첫 번째만 유지
+    const batch = writeBatch(db);
+    let batchCount = 0;
+    Object.entries(existingByName).forEach(([name, docIds]) => {
+      if (docIds.length > 1) {
+        // 첫 번째만 유지, 나머지 삭제
+        for (let i = 1; i < docIds.length; i++) {
+          batch.delete(doc(db, 'academies', academyId, 'students', docIds[i]));
+          batchCount++;
+        }
+      }
+    });
+    if (batchCount > 0) await batch.commit();
+
+    // ★ 각 학생을 개별 문서로 저장 (기존 문서 ID 재사용, 이름 기준)
+    const savedNames = new Set();
+    await Promise.all(students.map(student => {
+      if (savedNames.has(student.name)) return Promise.resolve(); // 같은 이름 스킵
+      savedNames.add(student.name);
+      // 기존에 같은 이름의 문서가 있으면 그 docId 사용, 없으면 student.id
+      const existingDocId = existingByName[student.name]?.[0];
+      const docId = existingDocId || String(student.id);
+      return setDoc(doc(db, 'academies', academyId, 'students', docId), {
         ...student,
+        id: student.id, // 원래 ID 유지
         updatedAt: new Date().toISOString()
-      })
-    ));
+      });
+    }));
 
     return true;
   } catch (e) {
