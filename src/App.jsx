@@ -16276,6 +16276,19 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
       if (!savedStudents.includes(reportData.studentName.trim())) {
         setSavedStudents(prev => [...prev, reportData.studentName.trim()]);
       }
+
+      // ★ 보고서 저장 후 해당 학생의 타워 자동 재계산
+      try {
+        const studentObj = students.find(s => s.name === reportData.studentName.trim());
+        if (studentObj) {
+          const tower = calculateTowerFloor(reportData, studentObj);
+          const updatedTower = { ...(studentObj.tower || {}), highestFloor: tower.floor, currentFloor: tower.floor, lastUpdated: new Date().toISOString(), breakdown: tower.breakdown, defenseStatus: tower.defenseStatus, milestones: tower.milestones };
+          const updatedStudents = students.map(s => s.id === studentObj.id ? { ...s, tower: updatedTower } : s);
+          saveStudents(updatedStudents);
+          console.log('타워 자동 업데이트:', studentObj.name, tower.floor, '층');
+        }
+      } catch(e) { console.log('타워 업데이트 오류:', e); }
+
       setTimeout(() => setSaveStatus(''), 2000);
     } catch (error) {
       console.error('저장 실패:', error);
