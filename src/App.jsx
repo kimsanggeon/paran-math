@@ -29475,6 +29475,24 @@ function SelfStudyTab({ student }) {
       }
     };
     load();
+
+    // ★ localStorage → Firestore 동기화 (보안 규칙 차단 기간 데이터 복구)
+    const syncToFirestore = async () => {
+      try {
+        const localData = localStorage.getItem(STORAGE_KEY);
+        if (localData && window.storage) {
+          const firestoreData = await window.storage.get(STORAGE_KEY);
+          const localLogs = JSON.parse(localData);
+          const firestoreLogs = firestoreData?.value ? JSON.parse(firestoreData.value) : [];
+          // localStorage가 더 많은 데이터를 가지고 있으면 Firestore에 동기화
+          if (localLogs.length > firestoreLogs.length) {
+            await window.storage.set(STORAGE_KEY, localData);
+            console.log('자습 시간 Firestore 동기화:', localLogs.length, '건');
+          }
+        }
+      } catch(e) {}
+    };
+    syncToFirestore();
   }, [STORAGE_KEY, REVIEW_KEY]);
 
   // 확인 문제 답변 제출
@@ -29537,22 +29555,51 @@ function SelfStudyTab({ student }) {
   }, [activeTimer]);
 
   // ★ Wake Lock: 타이머 중 화면 꺼짐 방지
+  // ★ Wake Lock + NoSleep (화면 꺼짐 방지 이중 보장)
   const wakeLockRef = React.useRef(null);
+  const noSleepVideoRef = React.useRef(null);
+
   const requestWakeLock = async () => {
+    // 방법 1: Wake Lock API (최신 브라우저)
     try {
       if ('wakeLock' in navigator) {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
         wakeLockRef.current.addEventListener('release', () => { wakeLockRef.current = null; });
+        console.log('Wake Lock 활성화');
       }
-    } catch (e) { console.log('Wake Lock 요청 실패:', e); }
+    } catch (e) { console.log('Wake Lock 실패, NoSleep 사용:', e); }
+
+    // 방법 2: 무음 비디오 재생 (Wake Lock 미지원/실패 시 fallback)
+    if (!wakeLockRef.current) {
+      try {
+        if (!noSleepVideoRef.current) {
+          const video = document.createElement('video');
+          video.setAttribute('playsinline', '');
+          video.setAttribute('muted', '');
+          video.setAttribute('loop', '');
+          video.style.cssText = 'position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:0.01;';
+          // 최소한의 무음 비디오 (data URI)
+          video.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAu1tZGF0AAACrQYF//+p3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE0OCByMjY0MyA1YzY1NzA0IC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTI1IHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAADaUGaIAAn//61o+BTpB+EfPdm8ALkxMH+iz0N+PCBiABzQAEAAbczgEeJLXmQhfwCFkw==';
+          document.body.appendChild(video);
+          noSleepVideoRef.current = video;
+        }
+        noSleepVideoRef.current.play().catch(() => {});
+        console.log('NoSleep 비디오 활성화');
+      } catch(e) {}
+    }
   };
+
   const releaseWakeLock = () => {
     if (wakeLockRef.current) {
       wakeLockRef.current.release().catch(() => {});
       wakeLockRef.current = null;
     }
+    if (noSleepVideoRef.current) {
+      noSleepVideoRef.current.pause();
+    }
   };
-  // 탭이 다시 보이면 Wake Lock 재요청 (OS가 해제할 수 있음)
+
+  // 탭이 다시 보이면 Wake Lock 재요청
   useEffect(() => {
     const reacquire = () => { if (activeTimer && document.visibilityState === 'visible') requestWakeLock(); };
     document.addEventListener('visibilitychange', reacquire);
