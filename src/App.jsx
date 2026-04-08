@@ -2862,7 +2862,7 @@ function PVReportStats({ reportData, pvPage, setPvPage, showReportDetail, setSho
                                 {(a.completed === true || a.completed === 'completed') && <span className="text-xs text-green-500">✅완료</span>}
                                 {a.completed === 'partial' && <span className="text-xs text-yellow-500">⚠️약간미완</span>}
                                 {a.completed === 'no-textbook' && <span className="text-xs text-orange-500">📕교재미지참</span>}
-                                {a.completed === 'absent' && <span className="text-xs text-red-500">🚫미지참</span>}
+                                {a.completed === 'absent' && <span className="text-xs text-red-500">🚫과제미지참</span>}
                               </div>
                             );
                           })}
@@ -6705,7 +6705,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                                           <option value="partial">⚠️약간미완</option>
                                           <option value="incomplete">❌미완료</option>
                                           <option value="no-textbook">📕교재미지참</option>
-                                          <option value="absent">🚫미지참</option>
+                                          <option value="absent">🚫과제미지참</option>
                                         </select>
                                         <button
                                           onClick={() => removeAssignmentByStudent(actualIdx, assignment.id)}
@@ -9358,7 +9358,7 @@ function DirectorReportsView({ students, allReports, teachers }) {
                     {a.wrongProblems && <span className="text-xs text-red-600">틀린: {a.wrongProblems}</span>}
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded ${a.completed ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {(a.completed === true || a.completed === 'completed') ? '✅완료' : a.completed === 'partial' ? '⚠️약간미완' : a.completed === 'no-textbook' ? '📕교재미지참' : a.completed === 'absent' ? '🚫미지참' : '❌미완료'}
+                    {(a.completed === true || a.completed === 'completed') ? '✅완료' : a.completed === 'partial' ? '⚠️약간미완' : a.completed === 'no-textbook' ? '📕교재미지참' : a.completed === 'absent' ? '🚫과제미지참' : '❌미완료'}
                   </span>
                 </div>
               );
@@ -18842,7 +18842,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
           let assignRows = validAssignments.map(a => {
             const tbName = a.textbook === '기타' ? (a.customTextbook || '기타') : (a.textbook || '기타');
             const wrongText = a.wrongProblems ? `<br><span class="text-red text-small">❌ 틀린 문제: ${a.wrongProblems}</span>` : '';
-            const statusMap = { completed: { tag: 'tag-green', text: '완료' }, partial: { tag: 'tag-yellow', text: '약간미완' }, incomplete: { tag: 'tag-gray', text: '미완료' }, 'no-textbook': { tag: 'tag-red', text: '교재미지참' }, absent: { tag: 'tag-red', text: '미지참' } };
+            const statusMap = { completed: { tag: 'tag-green', text: '완료' }, partial: { tag: 'tag-yellow', text: '약간미완' }, incomplete: { tag: 'tag-gray', text: '미완료' }, 'no-textbook': { tag: 'tag-red', text: '교재미지참' }, absent: { tag: 'tag-red', text: '과제미지참' } };
             const st = a.completed === true ? statusMap.completed : statusMap[a.completed] || statusMap.incomplete;
             return `<tr> <td>${tbName}${wrongText}</td> <td class="center">${a.grade || '-'}</td> <td class="center">${a.semester || '-'}</td> <td>${a.pages || '-'}</td> <td class="center"><span class="tag ${st.tag}">${st.text}</span></td> </tr>`;
           }).join('');
@@ -21929,7 +21929,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                               <option value="partial">⚠️ 약간 미완료</option>
                               <option value="incomplete">❌ 미완료</option>
                               <option value="no-textbook">📕 교재 미지참</option>
-                              <option value="absent">🚫 미지참</option>
+                              <option value="absent">🚫 과제 미지참</option>
                             </select>
                             <button onClick={() => removeAssignment(assignment.id)} className="text-red-400 hover:text-red-600 p-1">
                               <Trash2 size={14} />
