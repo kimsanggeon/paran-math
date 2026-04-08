@@ -2859,7 +2859,10 @@ function PVReportStats({ reportData, pvPage, setPvPage, showReportDetail, setSho
                               <div key={ai} className="flex items-center gap-2 text-sm text-gray-700">
                                 <span className={`w-2 h-2 rounded-full ${a.completed ? 'bg-green-400' : 'bg-gray-300'}`} />
                                 {tb}{a.pages ? ` p.${a.pages}` : ''}
-                                {a.completed && <span className="text-xs text-green-500">완료</span>}
+                                {(a.completed === true || a.completed === 'completed') && <span className="text-xs text-green-500">✅완료</span>}
+                                {a.completed === 'partial' && <span className="text-xs text-yellow-500">⚠️약간미완</span>}
+                                {a.completed === 'no-textbook' && <span className="text-xs text-orange-500">📕교재미지참</span>}
+                                {a.completed === 'absent' && <span className="text-xs text-red-500">🚫미지참</span>}
                               </div>
                             );
                           })}
@@ -6687,15 +6690,23 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                                           className="w-24 p-1.5 border rounded text-xs"
                                           placeholder="범위 (예: p.1~10)"
                                         />
-                                        <label className={`flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer ${assignment.completed ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                                          <input
-                                            type="checkbox"
-                                            checked={assignment.completed || false}
-                                            onChange={(e) => updateAssignmentByStudent(actualIdx, assignment.id, 'completed', e.target.checked)}
-                                            className="rounded"
-                                          />
-                                          완료
-                                        </label>
+                                        <select
+                                          value={assignment.completed === true ? 'completed' : assignment.completed === false ? 'incomplete' : (assignment.completed || 'incomplete')}
+                                          onChange={(e) => updateAssignmentByStudent(actualIdx, assignment.id, 'completed', e.target.value)}
+                                          className={`px-1.5 py-1 rounded text-[10px] font-medium border ${
+                                            (assignment.completed === true || assignment.completed === 'completed') ? 'bg-green-100 text-green-700 border-green-300' :
+                                            assignment.completed === 'partial' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
+                                            assignment.completed === 'no-textbook' ? 'bg-orange-100 text-orange-700 border-orange-300' :
+                                            assignment.completed === 'absent' ? 'bg-red-100 text-red-700 border-red-300' :
+                                            'bg-gray-100 text-gray-500 border-gray-200'
+                                          }`}
+                                        >
+                                          <option value="completed">✅완료</option>
+                                          <option value="partial">⚠️약간미완</option>
+                                          <option value="incomplete">❌미완료</option>
+                                          <option value="no-textbook">📕교재미지참</option>
+                                          <option value="absent">🚫미지참</option>
+                                        </select>
                                         <button
                                           onClick={() => removeAssignmentByStudent(actualIdx, assignment.id)}
                                           className="text-red-400 hover:text-red-600 p-1"
@@ -9347,7 +9358,7 @@ function DirectorReportsView({ students, allReports, teachers }) {
                     {a.wrongProblems && <span className="text-xs text-red-600">틀린: {a.wrongProblems}</span>}
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded ${a.completed ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {a.completed ? '✅ 완료' : '미완'}
+                    {(a.completed === true || a.completed === 'completed') ? '✅완료' : a.completed === 'partial' ? '⚠️약간미완' : a.completed === 'no-textbook' ? '📕교재미지참' : a.completed === 'absent' ? '🚫미지참' : '❌미완료'}
                   </span>
                 </div>
               );
@@ -18831,7 +18842,9 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
           let assignRows = validAssignments.map(a => {
             const tbName = a.textbook === '기타' ? (a.customTextbook || '기타') : (a.textbook || '기타');
             const wrongText = a.wrongProblems ? `<br><span class="text-red text-small">❌ 틀린 문제: ${a.wrongProblems}</span>` : '';
-            return `<tr> <td>${tbName}${wrongText}</td> <td class="center">${a.grade || '-'}</td> <td class="center">${a.semester || '-'}</td> <td>${a.pages || '-'}</td> <td class="center"><span class="tag ${a.completed ? 'tag-green' : 'tag-gray'}">${a.completed ? '완료' : '미완료'}</span></td> </tr>`;
+            const statusMap = { completed: { tag: 'tag-green', text: '완료' }, partial: { tag: 'tag-yellow', text: '약간미완' }, incomplete: { tag: 'tag-gray', text: '미완료' }, 'no-textbook': { tag: 'tag-red', text: '교재미지참' }, absent: { tag: 'tag-red', text: '미지참' } };
+            const st = a.completed === true ? statusMap.completed : statusMap[a.completed] || statusMap.incomplete;
+            return `<tr> <td>${tbName}${wrongText}</td> <td class="center">${a.grade || '-'}</td> <td class="center">${a.semester || '-'}</td> <td>${a.pages || '-'}</td> <td class="center"><span class="tag ${st.tag}">${st.text}</span></td> </tr>`;
           }).join('');
           assignmentsHtml = `<p><strong>📋 과제:</strong></p> <table style="margin-top:4px"> <tr><th>교재</th><th class="center">학년</th><th class="center">학기</th><th>페이지</th><th class="center" style="width:15%">완료</th></tr> ${assignRows} </table>`;
         }
@@ -21901,12 +21914,23 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                               className="p-1.5 border rounded text-xs w-32"
                               title="과제 마감일"
                             />
-                            <button
-                              onClick={() => updateAssignment(assignment.id, 'completed', !assignment.completed)}
-                              className={`px-2 py-1.5 rounded text-xs font-medium whitespace-nowrap ${ assignment.completed ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500' }`}
+                            <select
+                              value={assignment.completed === true ? 'completed' : assignment.completed === false ? 'incomplete' : (assignment.completed || 'incomplete')}
+                              onChange={(e) => updateAssignment(assignment.id, 'completed', e.target.value)}
+                              className={`px-1.5 py-1.5 rounded text-xs font-medium border ${
+                                (assignment.completed === true || assignment.completed === 'completed') ? 'bg-green-100 text-green-700 border-green-300' :
+                                assignment.completed === 'partial' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' :
+                                assignment.completed === 'no-textbook' ? 'bg-orange-100 text-orange-700 border-orange-300' :
+                                assignment.completed === 'absent' ? 'bg-red-100 text-red-700 border-red-300' :
+                                'bg-gray-100 text-gray-500 border-gray-200'
+                              }`}
                             >
-                              {assignment.completed ? '✓완료' : '미완료'}
-                            </button>
+                              <option value="completed">✅ 완료</option>
+                              <option value="partial">⚠️ 약간 미완료</option>
+                              <option value="incomplete">❌ 미완료</option>
+                              <option value="no-textbook">📕 교재 미지참</option>
+                              <option value="absent">🚫 미지참</option>
+                            </select>
                             <button onClick={() => removeAssignment(assignment.id)} className="text-red-400 hover:text-red-600 p-1">
                               <Trash2 size={14} />
                             </button>
