@@ -29507,101 +29507,63 @@ function SelfStudyTab({ student }) {
     setQuizAnswerDraft(p => ({ ...p, [logId]: '' }));
   };
 
-  // 타이머 tick + 악용 방지
-  const pausedRef = React.useRef(false);
-  const pauseStartRef = React.useRef(null);
+  // ★ 타이머 tick (단순화 — 안정성 최우선)
   const totalPausedRef = React.useRef(0);
 
   useEffect(() => {
-    if (activeTimer) {
+    if (activeTimer && timerStart) {
       timerRef.current = setInterval(() => {
-        if (!pausedRef.current && !quizPopup) {
-          const realElapsed = Math.floor((Date.now() - timerStart - totalPausedRef.current) / 1000);
-          setTimerElapsed(realElapsed);
-          // ★ 30분마다 확인 퀴즈 팝업
-          if (realElapsed - lastQuizTimeRef.current >= QUIZ_INTERVAL && realElapsed > 60) {
-            lastQuizTimeRef.current = realElapsed;
-            setQuizPopup(generateQuiz());
-            setQuizInput('');
-            setQuizFailed(0);
-          }
+        // 퀴즈 팝업 중에도 타이머는 계속 동작 (멈추지 않음)
+        const elapsed = Math.floor((Date.now() - timerStart) / 1000);
+        setTimerElapsed(elapsed);
+
+        // 30분마다 확인 퀴즈 팝업 (퀴즈가 없을 때만)
+        if (!quizPopup && elapsed - lastQuizTimeRef.current >= QUIZ_INTERVAL && elapsed > 60) {
+          lastQuizTimeRef.current = elapsed;
+          setQuizPopup(generateQuiz());
+          setQuizInput('');
+          setQuizFailed(0);
         }
       }, 1000);
     } else {
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [activeTimer, timerStart]);
+  }, [activeTimer, timerStart, quizPopup]);
 
-  // ★ 악용 방지: 탭 숨김/비활성 감지 → 타이머 일시정지
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (!activeTimer) return;
-      if (document.hidden) {
-        // 탭이 숨겨짐 → 일시정지
-        pausedRef.current = true;
-        pauseStartRef.current = Date.now();
-      } else {
-        // 탭이 다시 보임 → 정지 시간 누적
-        if (pausedRef.current && pauseStartRef.current) {
-          totalPausedRef.current += (Date.now() - pauseStartRef.current);
-        }
-        pausedRef.current = false;
-        pauseStartRef.current = null;
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [activeTimer]);
-
-  // ★ Wake Lock: 타이머 중 화면 꺼짐 방지
-  // ★ Wake Lock + NoSleep (화면 꺼짐 방지 이중 보장)
+  // ★ 화면 꺼짐 방지 (Wake Lock + Canvas 애니메이션 fallback)
   const wakeLockRef = React.useRef(null);
-  const noSleepVideoRef = React.useRef(null);
+  const keepAliveRef = React.useRef(null);
 
   const requestWakeLock = async () => {
-    // 방법 1: Wake Lock API (최신 브라우저)
+    // 방법 1: Wake Lock API
     try {
       if ('wakeLock' in navigator) {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
         wakeLockRef.current.addEventListener('release', () => { wakeLockRef.current = null; });
-        console.log('Wake Lock 활성화');
+        return; // 성공하면 fallback 불필요
       }
-    } catch (e) { console.log('Wake Lock 실패, NoSleep 사용:', e); }
+    } catch (e) {}
 
-    // 방법 2: 무음 비디오 재생 (Wake Lock 미지원/실패 시 fallback)
-    if (!wakeLockRef.current) {
-      try {
-        if (!noSleepVideoRef.current) {
-          const video = document.createElement('video');
-          video.setAttribute('playsinline', '');
-          video.setAttribute('muted', '');
-          video.setAttribute('loop', '');
-          video.style.cssText = 'position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:0.01;';
-          // 최소한의 무음 비디오 (data URI)
-          video.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAu1tZGF0AAACrQYF//+p3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE0OCByMjY0MyA1YzY1NzA0IC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAxNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTEgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MzoweDExMyBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MSBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTEgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0zIGJfcHlyYW1pZD0yIGJfYWRhcHQ9MSBiX2JpYXM9MCBkaXJlY3Q9MSB3ZWlnaHRiPTEgb3Blbl9nb3A9MCB3ZWlnaHRwPTIga2V5aW50PTI1MCBrZXlpbnRfbWluPTI1IHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAADaUGaIAAn//61o+BTpB+EfPdm8ALkxMH+iz0N+PCBiABzQAEAAbczgEeJLXmQhfwCFkw==';
-          document.body.appendChild(video);
-          noSleepVideoRef.current = video;
-        }
-        noSleepVideoRef.current.play().catch(() => {});
-        console.log('NoSleep 비디오 활성화');
-      } catch(e) {}
+    // 방법 2: 화면 활성 유지 (1분마다 미세한 DOM 업데이트)
+    if (!keepAliveRef.current) {
+      keepAliveRef.current = setInterval(() => {
+        document.title = document.title.endsWith(' ') ? document.title.trimEnd() : document.title + ' ';
+      }, 30000);
     }
   };
 
   const releaseWakeLock = () => {
-    if (wakeLockRef.current) {
-      wakeLockRef.current.release().catch(() => {});
-      wakeLockRef.current = null;
-    }
-    if (noSleepVideoRef.current) {
-      noSleepVideoRef.current.pause();
-    }
+    try { wakeLockRef.current?.release(); } catch(e) {}
+    wakeLockRef.current = null;
+    if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null; }
   };
 
   // 탭이 다시 보이면 Wake Lock 재요청
   useEffect(() => {
-    const reacquire = () => { if (activeTimer && document.visibilityState === 'visible') requestWakeLock(); };
+    const reacquire = () => {
+      if (activeTimer && document.visibilityState === 'visible') requestWakeLock();
+    };
     document.addEventListener('visibilitychange', reacquire);
     return () => document.removeEventListener('visibilitychange', reacquire);
   }, [activeTimer]);
@@ -29641,13 +29603,12 @@ function SelfStudyTab({ student }) {
 
   // 강제 타이머 종료 (퀴즈 실패/타임아웃)
   const stopTimerForced = () => {
-    const mins = String(Math.round(timerElapsed / 60));
-    const safeMins = String(Math.min(240, parseInt(mins) || 0));
+    const mins = Math.round(timerElapsed / 60);
+    const safeMins = String(Math.min(240, mins || 0));
     if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
     else if (activeTimer === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
     setActiveTimer(null);
     setTimerElapsed(0);
-    totalPausedRef.current = 0;
     releaseWakeLock();
   };
 
@@ -29655,22 +29616,18 @@ function SelfStudyTab({ student }) {
     setActiveTimer(type);
     setTimerStart(Date.now());
     setTimerElapsed(0);
-    totalPausedRef.current = 0;
-    pausedRef.current = false;
-    pauseStartRef.current = null;
-    lastQuizTimeRef.current = 0; // ★ 퀴즈 타이머 초기화
+    lastQuizTimeRef.current = 0;
     setQuizPopup(null);
-    requestWakeLock(); // ★ 화면 켜짐 유지
+    requestWakeLock();
   };
   const stopTimer = () => {
-    const mins = String(Math.round(timerElapsed / 60));
-    const safeMins = String(Math.min(240, parseInt(mins) || 0));
+    const mins = Math.round(timerElapsed / 60);
+    const safeMins = String(Math.min(240, mins || 0));
     if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
     else if (activeTimer === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
     setActiveTimer(null);
     setTimerElapsed(0);
-    totalPausedRef.current = 0;
-    releaseWakeLock(); // ★ 화면 꺼짐 허용
+    releaseWakeLock();
   };
 
   const fmtTime = (sec) =>
@@ -29701,16 +29658,20 @@ function SelfStudyTab({ student }) {
       createdAt: new Date().toISOString(),
       recordedBy: 'student-timer',
       trustLevel: 1, // ★ 신뢰도: 1=미인증, 2=학부모확인, 3=학원자습(선생님확인)
-      pausedSeconds: totalPausedRef.current ? Math.round(totalPausedRef.current / 1000) : 0
+      pausedSeconds: 0
     };
     const updated = [newLog, ...logs];
+    const str = JSON.stringify(updated);
+
+    // ★ UI + localStorage 먼저 저장 (실패 없음)
+    setLogs(updated);
+    setForm(p => ({ ...p, hwMinutes: '', hwWhat: '', extraMinutes: '', extraWhat: '' }));
+    try { localStorage.setItem(STORAGE_KEY, str); } catch(e) {}
+
+    // Firestore 저장 (실패해도 localStorage에 이미 저장됨)
     try {
-      const str = JSON.stringify(updated);
-      await window.storage.set(STORAGE_KEY, str);
-      localStorage.setItem(STORAGE_KEY, str);
-      setLogs(updated);
-      setForm(p => ({ ...p, hwMinutes: '', hwWhat: '', extraMinutes: '', extraWhat: '' }));
-    } catch(e) { alert('저장 실패: ' + e.message); }
+      if (window.storage) await window.storage.set(STORAGE_KEY, str);
+    } catch(e) { console.log('Firestore 저장 실패 (localStorage에 보관됨):', e.message); }
     setSaving(false);
   };
 
