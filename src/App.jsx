@@ -5081,6 +5081,36 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   // 복습 주기 (에빙하우스 망각곡선 기반)
   const reviewIntervals = [1, 3, 7, 14, 30];
   
+  // ★ 보고서만 새로고침 (수동 새로고침 + 자동 폴링용)
+  const reloadReport = React.useCallback(async () => {
+    try {
+      if (typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function') {
+        let r = await window.storage.get(`paran:report:${student.name}`);
+        if (!r?.value) r = await window.storage.get(`report:${student.name}`);
+        if (r?.value) {
+          const parsed = JSON.parse(r.value);
+          if (parsed?.sessions) {
+            setReportData(parsed);
+            try { localStorage.setItem(`paran:report:${student.name}`, r.value); } catch(e) {}
+            return true;
+          }
+        }
+      }
+    } catch(e) { console.log('보고서 재로드 오류:', e); }
+    return false;
+  }, [student.name]);
+
+  // ★ 자동 폴링: 30초마다 보고서 재로드 (타워/영토 수시 업데이트)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      reloadReport();
+    }, 30000);
+    // 탭 포커스 시에도 즉시 재로드
+    const onVisible = () => { if (document.visibilityState === 'visible') reloadReport(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+  }, [reloadReport]);
+
   // 데이터 로드 - ★ Firestore 우선, localStorage fallback
   useEffect(() => {
     const loadData = async () => {
@@ -5892,7 +5922,8 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
             {/* 🏰 몰입의 탑 */}
             {(() => {
               const tower = calculateTowerFloor(reportData, student);
-              const highestFloor = Math.max(tower.floor, student.tower?.highestFloor || 0);
+              // ★ 현재 계산값이 저장값보다 크거나, 저장값이 없을 때만 최고 기록 갱신 (실시간 값 우선 표시)
+              const highestFloor = tower.floor;
               const isConqueror = students.every(s => s.id === student.id || (s.tower?.highestFloor || 0) <= highestFloor) && highestFloor > 0;
               const defenseText = tower.defenseStatus === 'safe' ? '🛡️ 방어 성공' : tower.defenseStatus === 'failed' ? '⚠️ 방어 실패' : '🔔 방어전 대기 중';
               const milestone = Math.ceil(tower.floor / 10) * 10 || 10;
@@ -5904,9 +5935,16 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                   <div className="absolute top-2 right-3 text-6xl opacity-10">🏰</div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-lg flex items-center gap-2">🏰 몰입의 탑</h3>
-                    <span className={`text-xs px-2 py-1 rounded-full ${tower.defenseStatus === 'safe' ? 'bg-green-500/30' : tower.defenseStatus === 'failed' ? 'bg-red-500/30' : 'bg-yellow-500/30'}`}>
-                      {defenseText}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={reloadReport}
+                        className="text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded-full border border-white/20 transition-all active:scale-95"
+                        title="최신 데이터로 새로고침">
+                        🔄
+                      </button>
+                      <span className={`text-xs px-2 py-1 rounded-full ${tower.defenseStatus === 'safe' ? 'bg-green-500/30' : tower.defenseStatus === 'failed' ? 'bg-red-500/30' : 'bg-yellow-500/30'}`}>
+                        {defenseText}
+                      </span>
+                    </div>
                   </div>
 
                   {/* 층수 표시 */}
