@@ -3011,88 +3011,67 @@ function ParentView({ student, students, onLogout }) {
     totalReviewCount: allParentReview.reduce((sum, p) => sum + (p.reviewHistory?.length || 0), 0)
   };
   
-  // 학습 보고서 데이터 불러오기 - Firebase 우선
-  useEffect(() => {
-    const loadReport = async () => {
-      setIsLoading(true);
-      let loaded = false;
-      
-      try {
-        // 1. Firebase에서 먼저 시도 (클라우드 데이터)
-        if (isFirebaseConnected()) {
-          try {
-            const firebaseReport = await loadReportFromFirebase(student.name);
-            if (firebaseReport && firebaseReport.sessions) {
-              setReportData(firebaseReport);
-              setDataSource('Firebase 클라우드');
+  // ★ 보고서 로드 함수 (재사용 가능)
+  const loadReport = React.useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
+    let loaded = false;
+
+    try {
+      // 1. window.storage (Firestore) 우선
+      if (typeof window !== 'undefined' && window.storage) {
+        try {
+          let r = await window.storage.get(`paran:report:${student.name}`);
+          if (!r?.value) r = await window.storage.get(`report:${student.name}`);
+          if (r?.value) {
+            const parsed = JSON.parse(r.value);
+            if (parsed?.sessions) {
+              setReportData(parsed);
+              setDataSource('클라우드');
               loaded = true;
-              console.log('Firebase에서 학습 보고서 로드됨');
-              // localStorage에도 동기화
-              localStorage.setItem(`report:${student.name}`, JSON.stringify(firebaseReport));
-              localStorage.setItem(`paran:report:${student.name}`, JSON.stringify(firebaseReport));
-            }
-          } catch (e) {
-            console.log('Firebase 로드 실패:', e);
-          }
-        }
-        
-        // 2. localStorage 시도
-        if (!loaded) {
-          const localKeys = [`report:${student.name}`, `paran:report:${student.name}`];
-          for (const key of localKeys) {
-            try {
-              const saved = localStorage.getItem(key);
-              if (saved) {
-                const parsed = JSON.parse(saved);
-                if (parsed && parsed.sessions) {
-                  setReportData(parsed);
-                  setDataSource('로컬 저장소');
-                  loaded = true;
-                  console.log('localStorage에서 로드됨:', key);
-                  break;
-                }
-              }
-            } catch (e) {
-              console.log('localStorage 로드 실패:', key, e);
+              try { localStorage.setItem(`paran:report:${student.name}`, r.value); } catch(e) {}
             }
           }
-        }
-        
-        // 3. window.storage 시도 (Claude 환경)
-        if (!loaded && typeof window !== 'undefined' && window.storage && typeof window.storage.get === 'function') {
-          const localKeys = [`report:${student.name}`, `paran:report:${student.name}`];
-          for (const key of localKeys) {
-            try {
-              const result = await window.storage.get(key, true);
-              if (result?.value) {
-                const parsed = JSON.parse(result.value);
-                if (parsed && parsed.sessions) {
-                  setReportData(parsed);
-                  setDataSource('window.storage');
-                  loaded = true;
-                  console.log('window.storage에서 로드됨:', key);
-                  break;
-                }
-              }
-            } catch (e) {
-              console.log('window.storage 로드 실패:', key, e);
-            }
-          }
-        }
-        
-        if (!loaded) {
-          setDataSource('');
-        }
-        
-      } catch (e) {
-        console.error('보고서 로드 중 오류:', e);
-      } finally {
-        setIsLoading(false);
+        } catch(e) {}
       }
-    };
-    
-    loadReport();
+
+      // 2. Firebase 직접 시도
+      if (!loaded && isFirebaseConnected()) {
+        try {
+          const fbReport = await loadReportFromFirebase(student.name);
+          if (fbReport?.sessions) {
+            setReportData(fbReport);
+            setDataSource('Firebase');
+            loaded = true;
+            try { localStorage.setItem(`paran:report:${student.name}`, JSON.stringify(fbReport)); } catch(e) {}
+          }
+        } catch(e) {}
+      }
+
+      // 3. localStorage fallback
+      if (!loaded) {
+        const saved = localStorage.getItem(`paran:report:${student.name}`) || localStorage.getItem(`report:${student.name}`);
+        if (saved) { try { setReportData(JSON.parse(saved)); setDataSource('로컬'); loaded = true; } catch(e) {} }
+      }
+
+      if (!loaded) setDataSource('');
+    } catch(e) {
+      console.error('보고서 로드 오류:', e);
+    } finally {
+      if (showLoading) setIsLoading(false);
+    }
+    return loaded;
   }, [student.name]);
+
+  // 최초 로드
+  useEffect(() => { loadReport(); }, [loadReport]);
+
+  // ★ 자동 폴링: 30초마다 보고서 재로드 (몰입의 탑 등 수시 업데이트)
+  useEffect(() => {
+    const interval = setInterval(() => loadReport(false), 30000);
+    const onVisible = () => { if (document.visibilityState === 'visible') loadReport(false); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+  }, [loadReport]);
 
   // 메시지 로드 - Firebase 포함
   useEffect(() => {
@@ -4136,9 +4115,12 @@ function ParentView({ student, students, onLogout }) {
             <div className="bg-gradient-to-r from-indigo-600 to-purple-700 rounded-xl p-4 text-white">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-bold flex items-center gap-2">🏰 몰입의 탑</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${tower.defenseStatus === 'safe' ? 'bg-green-400/30' : tower.defenseStatus === 'failed' ? 'bg-red-400/30' : 'bg-yellow-400/30'}`}>
-                  {tower.defenseStatus === 'safe' ? '🛡️ 방어 성공' : tower.defenseStatus === 'failed' ? '⚠️ 방어 실패' : '🔔 대기'}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => loadReport(false)} className="text-xs bg-white/10 hover:bg-white/20 px-1.5 py-0.5 rounded-full border border-white/20 transition-all">🔄</button>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${tower.defenseStatus === 'safe' ? 'bg-green-400/30' : tower.defenseStatus === 'failed' ? 'bg-red-400/30' : 'bg-yellow-400/30'}`}>
+                    {tower.defenseStatus === 'safe' ? '🛡️ 방어 성공' : tower.defenseStatus === 'failed' ? '⚠️ 방어 실패' : '🔔 대기'}
+                  </span>
+                </div>
               </div>
               <div className="flex items-end gap-4">
                 <div>
