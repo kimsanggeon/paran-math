@@ -2926,7 +2926,7 @@ function ParentView({ student, students, onLogout }) {
   const [dataSource, setDataSource] = useState(''); // 데이터 소스 표시용
   const [reviewProblems, setReviewProblems] = useState([]); // 반복 학습 문제
   const [directorNotices, setDirectorNotices] = useState([]); // 원장 공지사항
-  const [pvHistMonth, setPvHistMonth] = useState(new Date().toISOString().slice(0, 7)); // 타워 히스토리
+  const [pvHistMonth, setPvHistMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }); // 타워 히스토리
   const [pvHistData, setPvHistData] = useState(null);
   const [pvTerritories, setPvTerritories] = useState(null); // 영토 점령
 
@@ -4192,9 +4192,13 @@ function ParentView({ student, students, onLogout }) {
           // pvHistMonth, pvHistData는 컴포넌트 최상위에서 관리
           const months = [];
           const start = new Date(2026, 3, 1);
+          const now = new Date();
           let d = new Date(start);
-          while (d <= new Date()) { months.push(d.toISOString().slice(0, 7)); d.setMonth(d.getMonth() + 1); }
-          if (months.length === 0) months.push(new Date().toISOString().slice(0, 7));
+          while (d.getFullYear() < now.getFullYear() || (d.getFullYear() === now.getFullYear() && d.getMonth() <= now.getMonth())) {
+            months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+            d.setMonth(d.getMonth() + 1);
+          }
+          if (months.length === 0) { months.push(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`); }
           return (
             <details className="bg-white rounded-xl shadow overflow-hidden">
               <summary className="px-4 py-3 font-bold text-sm text-gray-700 cursor-pointer hover:bg-gray-50 flex items-center gap-2">
@@ -5042,7 +5046,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   const [reviewProblems, setReviewProblems] = useState([]);
   const [similarProblems, setSimilarProblems] = useState([]);
   const [directorNotices, setDirectorNotices] = useState([]);
-  const [stHistMonth, setStHistMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [stHistMonth, setStHistMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; });
   const [stHistData, setStHistData] = useState(null);
   const [territories, setTerritories] = useState({}); // 영토 점령 배틀
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(null);
@@ -6074,10 +6078,14 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
               {(() => {
                 // stHistMonth, stHistData는 컴포넌트 최상위에서 관리
                 const months = [];
-                const start = new Date(2026, 3, 1);
+                const start = new Date(2026, 3, 1); // 4월
+                const now = new Date();
                 let d = new Date(start);
-                while (d <= new Date()) { months.push(d.toISOString().slice(0, 7)); d.setMonth(d.getMonth() + 1); }
-                if (months.length === 0) months.push(new Date().toISOString().slice(0, 7));
+                while (d.getFullYear() < now.getFullYear() || (d.getFullYear() === now.getFullYear() && d.getMonth() <= now.getMonth())) {
+                  months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+                  d.setMonth(d.getMonth() + 1);
+                }
+                if (months.length === 0) { const n = new Date(); months.push(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`); }
 
                 return (
                   <>
@@ -27429,7 +27437,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
 function GamificationTab({ students, saveStudents }) {
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [showRewardModal, setShowRewardModal] = useState(false);
-  const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [historyMonth, setHistoryMonth] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; });
   const [historyData, setHistoryData] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [gamifView, setGamifView] = useState('tower'); // 'tower' | 'exp' | 'territory'
