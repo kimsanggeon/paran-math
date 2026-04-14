@@ -37340,6 +37340,12 @@ function ClassDashboardTab({ students, saveStudents, teachers = [] }) {
       setLoading(false);
     };
     loadAll();
+
+    // ★ 30초마다 자동 재로드 (선생님이 보고서 저장 후 반별 대시보드에 바로 반영)
+    const interval = setInterval(() => loadAll(), 30000);
+    const onVisible = () => { if (document.visibilityState === 'visible') loadAll(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, [students]);
 
   // 학생별 통계 계산
