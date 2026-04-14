@@ -6440,7 +6440,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                           {pDate && <span className="text-xs text-gray-400">{pDate.slice(5)}</span>}
                           <span className="text-xs text-gray-400 ml-auto">복습 {problem.reviewHistory?.length || 0}회</span>
                         </div>
-                        <p className="font-medium text-gray-800 text-sm leading-tight">
+                        <p className="font-medium text-gray-800 text-xs leading-tight" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                           {displayName}
                           {problem.page && ` p.${problem.page}`}
                           {problem.problemNumber && ` ${problem.problemNumber}번`}
@@ -6453,15 +6453,15 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                       <div className="flex gap-1.5">
                         <button
                           onClick={() => markReviewComplete(problem.id, true)}
-                          className="flex-1 px-2 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors"
+                          className="flex-1 px-2 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors whitespace-nowrap"
                         >
-                          ✅ 완료
+                          ✅완료
                         </button>
                         <button
                           onClick={() => markReviewComplete(problem.id, false)}
-                          className="flex-1 px-2 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors"
+                          className="flex-1 px-2 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors whitespace-nowrap"
                         >
-                          🔄 다시
+                          🔄다시
                         </button>
                       </div>
                     </div>
@@ -7784,9 +7784,9 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
               {stats.length > 0 && (
                 <div className="bg-white rounded-xl shadow p-4">
                   <h4 className="font-bold text-gray-800 mb-4">📊 오답 유형 분포</h4>
-                  <div className="flex items-center gap-6">
+                  <div className="flex flex-col items-center gap-4">
                     {/* SVG 도넛 */}
-                    <div className="w-32 h-32 flex-shrink-0">
+                    <div className="w-28 h-28 flex-shrink-0">
                       <svg viewBox="0 0 42 42" className="w-full h-full">
                         <circle cx="21" cy="21" r="15.9" fill="none" stroke="#f3f4f6" strokeWidth="5" />
                         {(() => {
@@ -7803,14 +7803,14 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                         <text x="21" y="25" textAnchor="middle" fontSize="3" fill="#9ca3af">오답</text>
                       </svg>
                     </div>
-                    {/* 범례 */}
-                    <div className="flex-1 space-y-1.5">
+                    {/* 범례 — 모바일 가로 레이아웃 */}
+                    <div className="w-full space-y-1">
                       {stats.slice(0, 8).map((s, i) => (
-                        <div key={s.value} className="flex items-center gap-2 text-sm">
-                          <span className="text-lg">{s.icon}</span>
-                          <span className="font-medium text-gray-700 flex-1">{s.label}</span>
-                          <span className="font-bold text-gray-800">{s.count}개</span>
-                          <span className="text-xs text-gray-400 w-10 text-right">{s.percent}%</span>
+                        <div key={s.value} className="flex items-center gap-2 text-xs">
+                          <span className="text-base flex-shrink-0">{s.icon}</span>
+                          <span className="font-medium text-gray-700 whitespace-nowrap">{s.label}</span>
+                          <span className="font-bold text-gray-800 whitespace-nowrap">{s.count}개</span>
+                          <span className="text-gray-400 ml-auto whitespace-nowrap">{s.percent}%</span>
                         </div>
                       ))}
                     </div>
