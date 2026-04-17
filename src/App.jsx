@@ -11334,6 +11334,7 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
     const regularExams = []; // 정기고사
     const achievementExams = []; // 성취도평가
     const checkingTests = []; // 체킹누적테스트
+    const sundayMockExams = []; // 일요모의고사
     sessions.forEach(s => {
       const allT = [];
       if (s.testType) allT.push({ ...s, _date: s.date });
@@ -11360,9 +11361,15 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
         if (t.testType === '정기고사') regularExams.push({ date: t._date, score: t.testScore, total: t.testTotal, rank: t.testRank, rankTotal: t.testRankTotal, pct, name: t.customTestName, scope: t.testScope });
         if (t.testType === '성취도평가') achievementExams.push({ date: t._date, score: t.testScore, total: t.testTotal, grade: t.achievementGrade, pct, name: t.customTestName, scope: t.testScope });
         if (t.testType === '체킹누적테스트') checkingTests.push({ date: t._date, score: t.testScore, total: t.testTotal, level: t.checkingLevel, pct, scope: t.testScope });
+        if (t.testType === '일요모의고사') {
+          // 일요모의고사는 부분점수를 반영한 testScore/testTotal 기반으로 정확한 % 계산
+          const sc = parseFloat(t.testScore), tot = parseFloat(t.testTotal);
+          const mockPct = (!isNaN(sc) && !isNaN(tot) && tot > 0) ? Math.round(sc / tot * 100) : pct;
+          sundayMockExams.push({ date: t._date, score: t.testScore, total: t.testTotal, pct: mockPct, name: t.customTestName, scope: t.testScope });
+        }
       });
     });
-    return { ...st, totalSessions: sessions.length, todayTextbooks, todayTests, cumTextbooks, cumTextPct, cumTests, cumTestPct, hasTodayData: todayTextbooks.length > 0 || todayTests.length > 0, regularExams, achievementExams, checkingTests };
+    return { ...st, totalSessions: sessions.length, todayTextbooks, todayTests, cumTextbooks, cumTextPct, cumTests, cumTestPct, hasTodayData: todayTextbooks.length > 0 || todayTests.length > 0, regularExams, achievementExams, checkingTests, sundayMockExams };
   };
 
   const studentScores = students.map(calcStudentScores);
@@ -11554,7 +11561,18 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
           })
           .sort((a, b) => b.avgPct - a.avgPct);
 
-        if (regularRanking.length === 0 && achievementRanking.length === 0 && checkingRanking.length === 0) return null;
+        // 일요모의고사 순위 (평균 정답률)
+        const sundayMockRanking = studentScores
+          .filter(s => s.sundayMockExams.length > 0)
+          .map(s => {
+            const validPcts = s.sundayMockExams.filter(t => t.pct !== null && t.pct !== undefined).map(t => t.pct);
+            const avgPct = validPcts.length > 0 ? Math.round(validPcts.reduce((sum, p) => sum + p, 0) / validPcts.length) : 0;
+            const latest = s.sundayMockExams[s.sundayMockExams.length - 1];
+            return { studentName: s.name, className: s.className, teacherName: getTeacherName(s.teacherId), latest, count: s.sundayMockExams.length, avgPct };
+          })
+          .sort((a, b) => b.avgPct - a.avgPct);
+
+        if (regularRanking.length === 0 && achievementRanking.length === 0 && checkingRanking.length === 0 && sundayMockRanking.length === 0) return null;
 
         const medalIcon = (idx) => idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`;
 
@@ -11682,6 +11700,44 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
                         )}
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 일요모의고사 순위 */}
+              {sundayMockRanking.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-orange-700 text-sm mb-2 flex items-center gap-2">
+                    📋 일요모의고사 순위 <span className="text-xs text-gray-400 font-normal">({sundayMockRanking.length}명, 평균 정답률 기준)</span>
+                  </h4>
+                  <div className="overflow-hidden rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-orange-50 text-orange-700 text-xs">
+                          <th className="px-2 py-1.5 text-center w-8">#</th>
+                          <th className="px-2 py-1.5 text-left">이름</th>
+                          <th className="px-2 py-1.5 text-left hidden sm:table-cell">반</th>
+                          <th className="px-2 py-1.5 text-right">최근 점수</th>
+                          <th className="px-2 py-1.5 text-center">평균 %</th>
+                          <th className="px-2 py-1.5 text-center">응시</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sundayMockRanking.map((s, idx) => (
+                          <tr key={s.studentName} className={idx < 3 ? 'bg-orange-50/50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-2 py-2 text-center font-bold">{medalIcon(idx)}</td>
+                            <td className="px-2 py-2">
+                              <div className="font-bold text-gray-800">{s.studentName}</div>
+                              <div className="text-[10px] text-gray-400 sm:hidden">{s.className} · {s.teacherName}</div>
+                            </td>
+                            <td className="px-2 py-2 text-xs text-gray-500 hidden sm:table-cell">{s.className}<br/><span className="text-orange-500">{s.teacherName}</span></td>
+                            <td className="px-2 py-2 text-right font-bold text-orange-700">{s.latest.score}/{s.latest.total}</td>
+                            <td className="px-2 py-2 text-center"><span className={`text-xs font-bold px-1.5 py-0.5 rounded ${s.avgPct >= 80 ? 'bg-green-100 text-green-700' : s.avgPct >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{s.avgPct}%</span></td>
+                            <td className="px-2 py-2 text-center text-xs text-gray-600">{s.count}회</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -34592,7 +34648,7 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
             if (local) reportData = JSON.parse(local);
           }
           if (reportData && reportData.sessions) {
-            const tests = { regular: [], achievement: [], checking: [] };
+            const tests = { regular: [], achievement: [], checking: [], sundayMock: [] };
             reportData.sessions.forEach(s => {
               const allTests = [];
               if (s.testType) allTests.push({ ...s, _date: s.date });
@@ -34652,6 +34708,18 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                     level: t.checkingLevel, wrong,
                     percent: answers.length > 0 ? Math.round(correct / answers.length * 100) : (t.testScore && t.testTotal ? Math.round(parseInt(t.testScore) / parseInt(t.testTotal) * 100) : null),
                     scope: t.testScope
+                  });
+                }
+                // 일요모의고사: testType이 일치하면 무조건 수집 (testScore가 0이거나 빈 값이어도 표시)
+                if (t.testType === '일요모의고사') {
+                  const sc = parseFloat(t.testScore);
+                  const tot = parseFloat(t.testTotal);
+                  tests.sundayMock.push({
+                    date: t._date,
+                    score: t.testScore !== undefined && t.testScore !== null && t.testScore !== '' ? t.testScore : '-',
+                    total: t.testTotal !== undefined && t.testTotal !== null && t.testTotal !== '' ? t.testTotal : '-',
+                    percent: (!isNaN(sc) && !isNaN(tot) && tot > 0) ? Math.round(sc / tot * 100) : null,
+                    scope: t.testScope, name: t.customTestName
                   });
                 }
               });
@@ -35055,8 +35123,8 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
           )}
         </div>
       )}
-      {/* 시험 결과 표시 (정기고사, 성취도평가, 체킹누적테스트) */}
-      {testCache[student.id] && (testCache[student.id].regular.length > 0 || testCache[student.id].achievement.length > 0 || testCache[student.id].checking.length > 0) && (
+      {/* 시험 결과 표시 (정기고사, 성취도평가, 체킹누적테스트, 일요모의고사) */}
+      {testCache[student.id] && (testCache[student.id].regular.length > 0 || testCache[student.id].achievement.length > 0 || testCache[student.id].checking.length > 0 || (testCache[student.id].sundayMock && testCache[student.id].sundayMock.length > 0)) && (
         <div className="mt-3 space-y-1.5">
           {/* 정기고사 */}
           {testCache[student.id].regular.length > 0 && (() => {
@@ -35106,6 +35174,26 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                 <div className="flex gap-2 mt-1">
                   {latest.level && <span className={`font-bold px-1.5 py-0.5 rounded ${latest.level === 'A' ? 'bg-red-200 text-red-800' : latest.level === 'B' ? 'bg-orange-200 text-orange-800' : latest.level === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800'}`}>{latest.level}단계</span>}
                   <span className="text-indigo-600">최근: {latest.percent}%</span>
+                  <span className="text-gray-400">{latest.date?.slice(5)}</span>
+                </div>
+              </div>
+            );
+          })()}
+          {/* 일요모의고사 */}
+          {testCache[student.id].sundayMock && testCache[student.id].sundayMock.length > 0 && (() => {
+            const mocks = testCache[student.id].sundayMock;
+            const latest = mocks[mocks.length - 1];
+            const validPcts = mocks.filter(m => m.percent !== null && m.percent !== undefined).map(m => m.percent);
+            const avgPercent = validPcts.length > 0 ? Math.round(validPcts.reduce((s, p) => s + p, 0) / validPcts.length) : null;
+            return (
+              <div className="p-2 bg-orange-50 rounded-lg text-xs border border-orange-200">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-orange-700">📋 일요모의고사{latest.name ? ` (${latest.name})` : ''} ({mocks.length}회)</span>
+                  <span className="font-bold text-orange-800">{latest.score}/{latest.total}점 {latest.percent !== null && <span className="text-orange-600">({latest.percent}%)</span>}</span>
+                </div>
+                <div className="flex gap-2 mt-1">
+                  {avgPercent !== null && <span className="text-orange-600">평균 {avgPercent}%</span>}
+                  {latest.scope && <span className="text-gray-500">범위: {latest.scope}</span>}
                   <span className="text-gray-400">{latest.date?.slice(5)}</span>
                 </div>
               </div>
@@ -37321,8 +37409,8 @@ function ClassDashboardTab({ students, saveStudents, teachers = [] }) {
 
   // 전체 학생 보고서 로드
   useEffect(() => {
-    const loadAll = async () => {
-      setLoading(true);
+    const loadAll = async (showLoading = false) => {
+      if (showLoading) setLoading(true);
       const cache = {};
       for (const st of students) {
         try {
@@ -37336,14 +37424,23 @@ function ClassDashboardTab({ students, saveStudents, teachers = [] }) {
           cache[st.name] = rd;
         } catch (e) { cache[st.name] = null; }
       }
-      setReportCache(cache);
-      setLoading(false);
+      // ★ 자동 재로드 시 깜빡임 방지: 캐시가 실제로 변경된 경우에만 업데이트
+      setReportCache(prev => {
+        const prevKeys = Object.keys(prev);
+        const newKeys = Object.keys(cache);
+        if (prevKeys.length === newKeys.length) {
+          const same = newKeys.every(k => JSON.stringify(prev[k]) === JSON.stringify(cache[k]));
+          if (same) return prev;
+        }
+        return cache;
+      });
+      if (showLoading) setLoading(false);
     };
-    loadAll();
+    loadAll(true); // 최초 로드만 스피너 표시
 
-    // ★ 30초마다 자동 재로드 (선생님이 보고서 저장 후 반별 대시보드에 바로 반영)
-    const interval = setInterval(() => loadAll(), 30000);
-    const onVisible = () => { if (document.visibilityState === 'visible') loadAll(); };
+    // ★ 30초마다 자동 재로드 (선생님이 보고서 저장 후 반별 대시보드에 바로 반영) — 백그라운드 조용히 갱신
+    const interval = setInterval(() => loadAll(false), 30000);
+    const onVisible = () => { if (document.visibilityState === 'visible') loadAll(false); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, [students]);
@@ -37402,16 +37499,36 @@ function ClassDashboardTab({ students, saveStudents, teachers = [] }) {
       // 마지막 수업일
       const lastSession = sessions[sessions.length - 1];
       const lastDate = lastSession?.date || null;
-      
+
+      // 일요모의고사 통계 (최근 점수, 평균) — testType만 일치하면 수집
+      const sundayMockList = [];
+      sessions.forEach(s => {
+        if (s.testType === '일요모의고사') {
+          const sc = parseFloat(s.testScore), tot = parseFloat(s.testTotal);
+          const pctVal = (!isNaN(sc) && !isNaN(tot) && tot > 0) ? Math.round(sc / tot * 100) : null;
+          sundayMockList.push({ date: s.date, score: s.testScore ?? '-', total: s.testTotal ?? '-', pct: pctVal });
+        }
+        (s.tests || []).forEach(t => {
+          if (t.testType === '일요모의고사') {
+            const sc = parseFloat(t.testScore), tot = parseFloat(t.testTotal);
+            const pctVal = (!isNaN(sc) && !isNaN(tot) && tot > 0) ? Math.round(sc / tot * 100) : null;
+            sundayMockList.push({ date: s.date, score: t.testScore ?? '-', total: t.testTotal ?? '-', pct: pctVal });
+          }
+        });
+      });
+      const latestMock = sundayMockList.length > 0 ? sundayMockList[sundayMockList.length - 1] : null;
+      const validMocks = sundayMockList.filter(m => m.pct !== null && m.pct !== undefined);
+      const mockAvg = validMocks.length > 0 ? Math.round(validMocks.reduce((a, b) => a + b.pct, 0) / validMocks.length) : null;
+
       // 신호등 계산
       let signal = 'green';
       if (attendRate !== null && attendRate < 70) signal = 'red';
       else if (recentAccuracy !== null && recentAccuracy < 50) signal = 'red';
       else if (trend < -15) signal = 'red';
       else if ((attendRate !== null && attendRate < 85) || (recentAccuracy !== null && recentAccuracy < 65) || trend < -5) signal = 'yellow';
-      
+
       const schedule = st.classSchedule || '';
-      return { ...st, attendRate, recentAccuracy, avgAccuracy, hwRate, unconquered, avgUnderstanding, lastDate, trend, last5Scores, signal, totalSessions: sessions.length, schedule };
+      return { ...st, attendRate, recentAccuracy, avgAccuracy, hwRate, unconquered, avgUnderstanding, lastDate, trend, last5Scores, signal, totalSessions: sessions.length, schedule, latestMock, mockAvg, mockCount: sundayMockList.length };
     });
   }, [filteredStudents, reportCache]);
 
@@ -37599,6 +37716,7 @@ function ClassDashboardTab({ students, saveStudents, teachers = [] }) {
               <div className="flex gap-2 mt-2 flex-wrap">
                 {st.unconquered > 0 && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">오답 미정복 {st.unconquered}</span>}
                 {st.avgUnderstanding && <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">이해도 {st.avgUnderstanding}</span>}
+                {st.latestMock && <span className={`text-xs px-2 py-0.5 rounded font-bold ${(st.latestMock.pct ?? 0) >= 80 ? 'bg-green-100 text-green-700' : (st.latestMock.pct ?? 0) >= 60 ? 'bg-yellow-100 text-yellow-700' : (st.latestMock.pct !== null && st.latestMock.pct !== undefined) ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>📋 일요모의고사 {st.latestMock.score}/{st.latestMock.total}점{st.latestMock.pct !== null && st.latestMock.pct !== undefined ? ` (${st.latestMock.pct}%)` : ''}{st.mockCount > 1 && st.mockAvg !== null ? ` · 평균 ${st.mockAvg}%` : ''}</span>}
                 {st.lastDate && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">최근 {st.lastDate}</span>}
                 <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">수업 {st.totalSessions}회</span>
               </div>
