@@ -1705,11 +1705,25 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-                {error && <p className="text-red-500 text-sm mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+                {error && (
+                  <div className="mb-3">
+                    <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+                    {error.includes('비밀번호') && (
+                      <p className="text-xs text-gray-500 mt-2 px-1">
+                        💡 비밀번호를 최근 변경하셨다면{' '}
+                        <a href="/clear-cache.html" className="text-emerald-600 underline font-semibold">캐시 초기화</a>
+                        {' '}후 다시 시도해 주세요.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <button onClick={handleParentLogin}
                   className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-all hover:shadow-lg hover:-translate-y-0.5">
                   로그인
                 </button>
+                <div className="text-center mt-2">
+                  <a href="/clear-cache.html" className="text-xs text-gray-400 underline">🔧 로그인이 안 되나요? 캐시 초기화</a>
+                </div>
                 <div className="h-48" />
               </div>
             )}
@@ -1745,11 +1759,25 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-                {error && <p className="text-red-500 text-sm mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+                {error && (
+                  <div className="mb-3">
+                    <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+                    {error.includes('비밀번호') && (
+                      <p className="text-xs text-gray-500 mt-2 px-1">
+                        💡 비밀번호를 최근 변경하셨다면{' '}
+                        <a href="/clear-cache.html" className="text-cyan-600 underline font-semibold">캐시 초기화</a>
+                        {' '}후 다시 시도해 주세요.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <button onClick={handleStudentLogin}
                   className="w-full py-3.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold text-sm transition-all hover:shadow-lg hover:-translate-y-0.5 mb-[env(safe-area-inset-bottom,0px)]">
                   로그인
                 </button>
+                <div className="text-center mt-2">
+                  <a href="/clear-cache.html" className="text-xs text-gray-400 underline">🔧 로그인이 안 되나요? 캐시 초기화</a>
+                </div>
                 {/* 키보드가 올라올 때 로그인 버튼이 보이도록 여백 추가 */}
                 <div className="h-48" />
               </div>
