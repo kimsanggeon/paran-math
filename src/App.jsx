@@ -1390,13 +1390,44 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
   };
 
   // ★ 학생 검색: 모든 가용 소스에서 최신 학생 목록으로 검색
-  const findStudent = async (name) => {
+  // forceFresh=true: 캐시 무시하고 Firebase에서 최신본 강제 조회 (비밀번호 변경 직후 재로그인 대응)
+  const findStudent = async (name, forceFresh = false) => {
     // 이름 정규화: 공백, 특수문자, 대소문자 제거
     const normalize = (s) => s.trim().replace(/[\s\u00A0\u3000]/g, '').toLowerCase();
     const normalized = normalize(name);
 
     const searchIn = (list) => list.find(s => normalize(s.name) === normalized);
     const getNames = (list) => list.map(s => s.name);
+
+    // ★ forceFresh: Firebase → window.storage 최신본으로 덮어쓰기 (모바일 캐시 문제 해결)
+    if (forceFresh) {
+      try {
+        if (typeof loadStudentsFromFirebase === 'function') {
+          const fresh = await loadStudentsFromFirebase();
+          if (fresh && fresh.length > 0) {
+            window.__paranStudents = fresh;
+            try { localStorage.setItem('paran:students', JSON.stringify(fresh)); } catch(e) {}
+            const found = searchIn(fresh);
+            return { student: found || null, totalCount: fresh.length, allNames: getNames(fresh) };
+          }
+        }
+      } catch(e) { console.log('Firebase 학생 재조회 실패:', e); }
+      // Firebase 실패 시 window.storage 재시도
+      if (window.storage && typeof window.storage.get === 'function') {
+        try {
+          const r = await window.storage.get('paran:students', true);
+          if (r?.value) {
+            const fresh = JSON.parse(r.value);
+            if (fresh.length > 0) {
+              window.__paranStudents = fresh;
+              try { localStorage.setItem('paran:students', JSON.stringify(fresh)); } catch(e) {}
+              const found = searchIn(fresh);
+              return { student: found || null, totalCount: fresh.length, allNames: getNames(fresh) };
+            }
+          }
+        } catch(e) {}
+      }
+    }
 
     // getStudents()는 메모리캐시 → propStudents → localStorage 순으로 최신 목록 반환
     const fromState = getStudents();
@@ -1425,23 +1456,41 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
 
   const handleParentLogin = async () => {
     if (!studentName.trim()) { setError('자녀 이름을 입력해주세요.'); setTimeout(() => setError(''), 2000); return; }
-    const { student, totalCount, allNames } = await findStudent(studentName);
+    let { student, totalCount, allNames } = await findStudent(studentName);
+    // ★ 학생을 찾지 못하면 Firebase에서 최신본 강제 조회 후 재시도 (모바일 캐시 이슈 대응)
     if (!student) {
-      // ★ 등록된 이름 목록 표시 (원인 파악용)
+      const fresh = await findStudent(studentName, true);
+      if (fresh.student) { student = fresh.student; totalCount = fresh.totalCount; allNames = fresh.allNames; }
+      else { totalCount = fresh.totalCount; allNames = fresh.allNames; }
+    }
+    if (!student) {
       const nameList = allNames && allNames.length > 0 ? ` 등록 이름: ${allNames.join(', ')}` : '';
       setError(`"${studentName.trim()}" 학생이 없습니다. (${totalCount}명 확인)${nameList}`);
       setTimeout(() => setError(''), 8000); return;
     }
     if (student.status === 'withdrawn') { setError('퇴원 처리된 학생입니다. 로그인이 제한됩니다.'); setTimeout(() => setError(''), 4000); return; }
     if (student.status === 'transferred') { setError('관이동 처리된 학생입니다. 로그인이 제한됩니다.'); setTimeout(() => setError(''), 4000); return; }
-    const pw = student.parentPassword || '0000';
-    if (password === pw) { onLogin('parent', student); }
-    else { setError('비밀번호가 틀렸습니다. (기본값: 0000)'); setTimeout(() => setError(''), 3000); }
+    let pw = student.parentPassword || '0000';
+    if (password === pw) { onLogin('parent', student); return; }
+    // ★ 비밀번호 불일치: Firebase 최신본으로 한 번 더 확인 (다른 기기에서 변경했을 수 있음)
+    setError('비밀번호 확인 중...');
+    const fresh = await findStudent(studentName, true);
+    if (fresh.student) {
+      const freshPw = fresh.student.parentPassword || '0000';
+      if (password === freshPw) { onLogin('parent', fresh.student); return; }
+    }
+    setError('비밀번호가 틀렸습니다. (기본값: 0000)'); setTimeout(() => setError(''), 3000);
   };
 
   const handleStudentLogin = async () => {
     if (!studentName.trim()) { setError('이름을 입력해주세요.'); setTimeout(() => setError(''), 2000); return; }
-    const { student, totalCount, allNames } = await findStudent(studentName);
+    let { student, totalCount, allNames } = await findStudent(studentName);
+    // ★ 학생을 찾지 못하면 Firebase에서 최신본 강제 조회 후 재시도 (모바일 캐시 이슈 대응)
+    if (!student) {
+      const fresh = await findStudent(studentName, true);
+      if (fresh.student) { student = fresh.student; totalCount = fresh.totalCount; allNames = fresh.allNames; }
+      else { totalCount = fresh.totalCount; allNames = fresh.allNames; }
+    }
     if (!student) {
       const nameList = allNames && allNames.length > 0 ? ` 등록 이름: ${allNames.join(', ')}` : '';
       setError(`"${studentName.trim()}" 학생이 없습니다. (${totalCount}명 확인)${nameList}`);
@@ -1450,8 +1499,15 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
     if (student.status === 'withdrawn') { setError('퇴원 처리된 학생입니다. 로그인이 제한됩니다.'); setTimeout(() => setError(''), 4000); return; }
     if (student.status === 'transferred') { setError('관이동 처리된 학생입니다. 로그인이 제한됩니다.'); setTimeout(() => setError(''), 4000); return; }
     const pw = student.studentPassword || student.parentPassword || '0000';
-    if (password === pw) { onLogin('student', student); }
-    else { setError('비밀번호가 틀렸습니다.'); setTimeout(() => setError(''), 2000); }
+    if (password === pw) { onLogin('student', student); return; }
+    // ★ 비밀번호 불일치: Firebase 최신본으로 한 번 더 확인 (다른 기기에서 변경했을 수 있음)
+    setError('비밀번호 확인 중...');
+    const fresh = await findStudent(studentName, true);
+    if (fresh.student) {
+      const freshPw = fresh.student.studentPassword || fresh.student.parentPassword || '0000';
+      if (password === freshPw) { onLogin('student', fresh.student); return; }
+    }
+    setError('비밀번호가 틀렸습니다.'); setTimeout(() => setError(''), 2000);
   };
 
   const resetForm = () => { goMode('select'); };
