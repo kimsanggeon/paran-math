@@ -22224,61 +22224,61 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                               ) : (
                                 <div className="space-y-1">
                                   {(assignment.wrongProblemsList || []).map((wp, wpIdx) => (
-                                    <div key={wp.id} className="flex items-center gap-1 bg-white p-1.5 rounded border">
-                                      <span className="w-5 h-5 bg-red-500 text-white rounded text-xs flex items-center justify-center font-bold">{wpIdx + 1}</span>
-                                      <input
-                                        type="text"
-                                        value={wp.page || ''}
-                                        onChange={(e) => {
-                                          const newList = [...(assignment.wrongProblemsList || [])];
-                                          newList[wpIdx] = { ...newList[wpIdx], page: e.target.value };
-                                          updateAssignment(assignment.id, 'wrongProblemsList', newList);
-                                        }}
-                                        className="w-14 p-1 border rounded text-xs text-center"
-                                        placeholder="p.25"
-                                      />
-                                      <input
-                                        type="text"
-                                        value={wp.number || ''}
-                                        onChange={(e) => {
-                                          const newList = [...(assignment.wrongProblemsList || [])];
-                                          newList[wpIdx] = { ...newList[wpIdx], number: e.target.value };
-                                          updateAssignment(assignment.id, 'wrongProblemsList', newList);
-                                        }}
-                                        className="w-12 p-1 border rounded text-xs text-center"
-                                        placeholder="3번"
-                                      />
-                                      <select
-                                        value={wp.errorType || ''}
-                                        onChange={(e) => {
-                                          const newList = [...(assignment.wrongProblemsList || [])];
-                                          newList[wpIdx] = { ...newList[wpIdx], errorType: e.target.value, customErrorType: e.target.value === '기타' ? (newList[wpIdx].customErrorType || '') : '' };
-                                          updateAssignment(assignment.id, 'wrongProblemsList', newList);
-                                        }}
-                                        className={`flex-1 p-1 border rounded text-xs ${wp.errorType ? 'bg-red-100' : ''}`}
-                                      >
-                                        <option value="">유형</option>
-                                        <option value="개념">📚 개념</option>
-                                        <option value="계산">🧮 계산</option>
-                                        <option value="해석">🤔 해석</option>
-                                        <option value="전략">🎯 전략</option>
-                                        <option value="조건">🔍 조건</option>
-                                        <option value="시간">⏰ 시간</option>
-                                        <option value="단위">📏 단위</option>
-                                        <option value="기타">📌 기타</option>
-                                      </select>
-                                      <button
-                                        onClick={() => {
-                                          const newList = (assignment.wrongProblemsList || []).filter((_, i) => i !== wpIdx);
-                                          updateAssignment(assignment.id, 'wrongProblemsList', newList);
-                                        }}
-                                        className="text-red-400 hover:text-red-600"
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
-                                    </div>
-                                    {wp.errorType === '기타' && (
-                                      <div className="mt-1">
+                                    <div key={wp.id} className="bg-white p-1.5 rounded border">
+                                      <div className="flex items-center gap-1">
+                                        <span className="w-5 h-5 bg-red-500 text-white rounded text-xs flex items-center justify-center font-bold">{wpIdx + 1}</span>
+                                        <input
+                                          type="text"
+                                          value={wp.page || ''}
+                                          onChange={(e) => {
+                                            const newList = [...(assignment.wrongProblemsList || [])];
+                                            newList[wpIdx] = { ...newList[wpIdx], page: e.target.value };
+                                            updateAssignment(assignment.id, 'wrongProblemsList', newList);
+                                          }}
+                                          className="w-14 p-1 border rounded text-xs text-center"
+                                          placeholder="p.25"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={wp.number || ''}
+                                          onChange={(e) => {
+                                            const newList = [...(assignment.wrongProblemsList || [])];
+                                            newList[wpIdx] = { ...newList[wpIdx], number: e.target.value };
+                                            updateAssignment(assignment.id, 'wrongProblemsList', newList);
+                                          }}
+                                          className="w-12 p-1 border rounded text-xs text-center"
+                                          placeholder="3번"
+                                        />
+                                        <select
+                                          value={wp.errorType || ''}
+                                          onChange={(e) => {
+                                            const newList = [...(assignment.wrongProblemsList || [])];
+                                            newList[wpIdx] = { ...newList[wpIdx], errorType: e.target.value, customErrorType: e.target.value === '기타' ? (newList[wpIdx].customErrorType || '') : '' };
+                                            updateAssignment(assignment.id, 'wrongProblemsList', newList);
+                                          }}
+                                          className={`flex-1 p-1 border rounded text-xs ${wp.errorType ? 'bg-red-100' : ''}`}
+                                        >
+                                          <option value="">유형</option>
+                                          <option value="개념">📚 개념</option>
+                                          <option value="계산">🧮 계산</option>
+                                          <option value="해석">🤔 해석</option>
+                                          <option value="전략">🎯 전략</option>
+                                          <option value="조건">🔍 조건</option>
+                                          <option value="시간">⏰ 시간</option>
+                                          <option value="단위">📏 단위</option>
+                                          <option value="기타">📌 기타</option>
+                                        </select>
+                                        <button
+                                          onClick={() => {
+                                            const newList = (assignment.wrongProblemsList || []).filter((_, i) => i !== wpIdx);
+                                            updateAssignment(assignment.id, 'wrongProblemsList', newList);
+                                          }}
+                                          className="text-red-400 hover:text-red-600"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                      {wp.errorType === '기타' && (
                                         <input
                                           type="text"
                                           value={wp.customErrorType || ''}
@@ -22288,10 +22288,10 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                             updateAssignment(assignment.id, 'wrongProblemsList', newList);
                                           }}
                                           placeholder="유형 직접 입력"
-                                          className="w-full p-1.5 border border-indigo-300 rounded text-xs bg-indigo-50"
+                                          className="w-full mt-1 p-1.5 border border-indigo-300 rounded text-xs bg-indigo-50"
                                         />
-                                      </div>
-                                    )}
+                                      )}
+                                    </div>
                                   ))}
                                 </div>
                               )}
