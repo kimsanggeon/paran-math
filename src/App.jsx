@@ -3546,14 +3546,24 @@ function ParentView({ student, students, onLogout }) {
     });
     
     const errorTypeLabels = {
-      careless: { label: '단순 실수', icon: '😅' },
-      concept: { label: '개념 미숙', icon: '📚' },
-      understanding: { label: '문제 이해 부족', icon: '🤔' },
-      formula: { label: '공식 오류', icon: '📐' },
-      process: { label: '풀이 과정 오류', icon: '📝' },
-      time: { label: '시간 부족', icon: '⏰' },
-      blank: { label: '공백 처리', icon: '⬜' },
-      reading: { label: '문제 안 읽음', icon: '👀' }
+      // ★ 교재/테스트 오답 체크리스트 기준 8개 유형
+      '개념': { label: '개념', icon: '📚' },
+      '계산': { label: '계산', icon: '🧮' },
+      '해석': { label: '해석', icon: '🤔' },
+      '전략': { label: '전략', icon: '🎯' },
+      '조건': { label: '조건', icon: '🔍' },
+      '시간': { label: '시간', icon: '⏰' },
+      '단위': { label: '단위', icon: '📏' },
+      '기타': { label: '기타', icon: '📌' },
+      // 하위 호환 (구 데이터)
+      careless: { label: '계산', icon: '🧮' },
+      concept: { label: '개념', icon: '📚' },
+      understanding: { label: '해석', icon: '🤔' },
+      formula: { label: '개념', icon: '📚' },
+      process: { label: '전략', icon: '🎯' },
+      time: { label: '시간', icon: '⏰' },
+      blank: { label: '기타', icon: '📌' },
+      reading: { label: '조건', icon: '🔍' }
     };
     
     const stats = Object.entries(errorTypeCounts)
@@ -4491,19 +4501,35 @@ function ParentView({ student, students, onLogout }) {
                 </div>
               ))}
             </div>
-            {errorTypeStats.stats.length > 0 && (
-              <p className="text-xs text-gray-500 mt-3 p-2 bg-yellow-50 rounded">
-                💡 <strong>{errorTypeStats.stats[0]?.label}</strong>이(가) 가장 많습니다. 
-                {errorTypeStats.stats[0]?.value === 'careless' && ' 문제를 끝까지 꼼꼼히 확인하는 습관을 기르면 좋겠습니다.'}
-                {errorTypeStats.stats[0]?.value === 'concept' && ' 해당 개념을 다시 한번 복습해주세요.'}
-                {errorTypeStats.stats[0]?.value === 'understanding' && ' 문제를 천천히 읽고 조건을 파악하는 연습이 필요합니다.'}
-                {errorTypeStats.stats[0]?.value === 'formula' && ' 공식을 정확히 암기하고 적용하는 연습이 필요합니다.'}
-                {errorTypeStats.stats[0]?.value === 'process' && ' 풀이 과정을 차근차근 정리하는 연습이 필요합니다.'}
-                {errorTypeStats.stats[0]?.value === 'time' && ' 시간 관리 연습이 필요합니다. 쉬운 문제부터 빠르게 풀어보세요.'}
-                {errorTypeStats.stats[0]?.value === 'blank' && ' 모르는 문제도 일단 적어보는 습관을 기르면 좋겠습니다.'}
-                {errorTypeStats.stats[0]?.value === 'reading' && ' 문제의 조건을 꼼꼼히 체크하는 습관이 필요합니다.'}
-              </p>
-            )}
+            {errorTypeStats.stats.length > 0 && (() => {
+              const tipMap = {
+                // 문서 기준 8개
+                '개념': ' 해당 단원의 개념과 공식을 다시 한번 복습해주세요.',
+                '계산': ' 문제를 다 푼 뒤 반드시 검산하는 습관을 들이면 실수가 줄어듭니다.',
+                '해석': ' 문제를 천천히 두 번 읽고 조건과 구하는 것을 밑줄 치는 연습이 필요합니다.',
+                '전략': ' 접근 방법을 한 번 더 고민하고 비슷한 유형의 예제를 찾아 풀이 방향을 익히세요.',
+                '조건': ' 문제의 핵심 조건에 동그라미를 치고 하나도 빠뜨리지 않았는지 재확인하세요.',
+                '시간': ' 시간 관리 연습이 필요합니다. 쉬운 문제부터 빠르게 풀어보세요.',
+                '단위': ' 단위 변환과 답에 단위 표기를 놓치지 않도록 점검하세요.',
+                '기타': ' 직접 입력한 원인에 맞는 맞춤형 보완 학습이 필요합니다.',
+                // 하위 호환
+                careless: ' 문제를 끝까지 꼼꼼히 확인하는 습관을 기르면 좋겠습니다.',
+                concept: ' 해당 개념을 다시 한번 복습해주세요.',
+                understanding: ' 문제를 천천히 읽고 조건을 파악하는 연습이 필요합니다.',
+                formula: ' 공식을 정확히 암기하고 적용하는 연습이 필요합니다.',
+                process: ' 풀이 과정을 차근차근 정리하는 연습이 필요합니다.',
+                time: ' 시간 관리 연습이 필요합니다. 쉬운 문제부터 빠르게 풀어보세요.',
+                blank: ' 모르는 문제도 일단 적어보는 습관을 기르면 좋겠습니다.',
+                reading: ' 문제의 조건을 꼼꼼히 체크하는 습관이 필요합니다.',
+              };
+              const topValue = errorTypeStats.stats[0]?.value;
+              return (
+                <p className="text-xs text-gray-500 mt-3 p-2 bg-yellow-50 rounded">
+                  💡 <strong>{errorTypeStats.stats[0]?.label}</strong>이(가) 가장 많습니다.
+                  {tipMap[topValue] || ''}
+                </p>
+              );
+            })()}
           </div>
         )}
 
@@ -6875,18 +6901,34 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                                                     value={wp.errorType || ''}
                                                     onChange={(e) => {
                                                       const newList = [...(assignment.wrongProblemsList || [])];
-                                                      newList[wpIdx] = { ...newList[wpIdx], errorType: e.target.value };
+                                                      newList[wpIdx] = { ...newList[wpIdx], errorType: e.target.value, errorTypeOther: e.target.value === '기타' ? (newList[wpIdx].errorTypeOther || '') : '' };
                                                       updateAssignmentByStudent(actualIdx, assignment.id, 'wrongProblemsList', newList);
                                                     }}
                                                     className="flex-1 p-1 border rounded text-xs"
                                                   >
                                                     <option value="">유형</option>
-                                                    <option value="careless">😅실수</option>
-                                                    <option value="concept">📚개념</option>
-                                                    <option value="understanding">🤔이해</option>
-                                                    <option value="formula">📐공식</option>
-                                                    <option value="process">📝풀이</option>
+                                                    <option value="개념">📚 개념</option>
+                                                    <option value="계산">🧮 계산</option>
+                                                    <option value="해석">🤔 해석</option>
+                                                    <option value="전략">🎯 전략</option>
+                                                    <option value="조건">🔍 조건</option>
+                                                    <option value="시간">⏰ 시간</option>
+                                                    <option value="단위">📏 단위</option>
+                                                    <option value="기타">📌 기타</option>
                                                   </select>
+                                                  {wp.errorType === '기타' && (
+                                                    <input
+                                                      type="text"
+                                                      value={wp.errorTypeOther || ''}
+                                                      onChange={(e) => {
+                                                        const newList = [...(assignment.wrongProblemsList || [])];
+                                                        newList[wpIdx] = { ...newList[wpIdx], errorTypeOther: e.target.value };
+                                                        updateAssignmentByStudent(actualIdx, assignment.id, 'wrongProblemsList', newList);
+                                                      }}
+                                                      placeholder="유형 직접 입력"
+                                                      className="flex-1 p-1 border border-indigo-300 rounded text-xs bg-indigo-50"
+                                                    />
+                                                  )}
                                                   <button
                                                     onClick={() => {
                                                       const newList = (assignment.wrongProblemsList || []).filter((_, i) => i !== wpIdx);
@@ -6981,12 +7023,19 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                                         </p>
                                         {(ps.wrongProblemsList || []).length > 0 && (
                                           <div className="ml-4 mt-1 flex flex-wrap gap-1">
-                                            {ps.wrongProblemsList.map((wp, wpIdx) => (
-                                              <span key={wpIdx} className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs">
-                                                {wp.page} {wp.number}
-                                                {wp.errorType && ` (${ wp.errorType === 'careless' ? '😅' : wp.errorType === 'concept' ? '📚' : wp.errorType === 'understanding' ? '🤔' : wp.errorType === 'formula' ? '📐' : wp.errorType === 'process' ? '📝' : wp.errorType === 'time' ? '⏰' : '👀' })`}
-                                              </span>
-                                            ))}
+                                            {ps.wrongProblemsList.map((wp, wpIdx) => {
+                                              const etIconMap = {
+                                                '개념':'📚','계산':'🧮','해석':'🤔','전략':'🎯','조건':'🔍','시간':'⏰','단위':'📏','기타':'📌',
+                                                // 하위 호환
+                                                careless:'🧮',concept:'📚',understanding:'🤔',formula:'📚',process:'🎯',time:'⏰',blank:'📌',reading:'🔍'
+                                              };
+                                              return (
+                                                <span key={wpIdx} className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs">
+                                                  {wp.page} {wp.number}
+                                                  {wp.errorType && ` (${etIconMap[wp.errorType] || '❓'}${wp.errorType === '기타' && wp.errorTypeOther ? ' ' + wp.errorTypeOther : ''})`}
+                                                </span>
+                                              );
+                                            })}
                                           </div>
                                         )}
                                       </div>
@@ -7816,22 +7865,40 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
           });
 
           const labels = {
-            careless: { label: '단순 실수', icon: '😅', color: 'bg-red-500', lightBg: 'bg-red-50', textColor: 'text-red-700',
-              tip: '문제를 다 풀고 반드시 검산하는 습관을 들이세요. 실수를 줄이는 것만으로 점수가 크게 오릅니다.' },
-            concept: { label: '개념 미숙', icon: '📚', color: 'bg-blue-500', lightBg: 'bg-blue-50', textColor: 'text-blue-700',
-              tip: '해당 단원의 교과서 개념을 다시 정리하세요. 개념이 확실해야 응용도 됩니다.' },
-            understanding: { label: '문제 이해 부족', icon: '🤔', color: 'bg-purple-500', lightBg: 'bg-purple-50', textColor: 'text-purple-700',
+            // ★ 문서 기준 8개 유형
+            '개념': { label: '개념', icon: '📚', color: 'bg-red-500', lightBg: 'bg-red-50', textColor: 'text-red-700',
+              tip: '해당 단원의 교과서 개념과 공식을 다시 정리하세요. 개념이 확실해야 응용도 됩니다.' },
+            '계산': { label: '계산', icon: '🧮', color: 'bg-yellow-500', lightBg: 'bg-yellow-50', textColor: 'text-yellow-700',
+              tip: '문제를 다 풀고 반드시 검산하는 습관을 들이세요. 계산 실수를 줄이는 것만으로 점수가 크게 오릅니다.' },
+            '해석': { label: '해석', icon: '🤔', color: 'bg-orange-500', lightBg: 'bg-orange-50', textColor: 'text-orange-700',
               tip: '문제를 천천히 두 번 읽고, 조건과 구하는 것을 밑줄 치는 연습을 해보세요.' },
-            formula: { label: '공식 오류', icon: '📐', color: 'bg-orange-500', lightBg: 'bg-orange-50', textColor: 'text-orange-700',
-              tip: '공식을 단순 암기하지 말고, 유도 과정을 이해하면 혼동이 줄어듭니다.' },
-            process: { label: '풀이 과정 오류', icon: '📝', color: 'bg-teal-500', lightBg: 'bg-teal-50', textColor: 'text-teal-700',
-              tip: '풀이를 한 줄씩 정리하며 쓰세요. 머릿속 계산을 줄이면 실수가 줄어듭니다.' },
-            time: { label: '시간 부족', icon: '⏰', color: 'bg-amber-500', lightBg: 'bg-amber-50', textColor: 'text-amber-700',
+            '전략': { label: '전략', icon: '🎯', color: 'bg-purple-500', lightBg: 'bg-purple-50', textColor: 'text-purple-700',
+              tip: '접근 방법을 한 번 더 고민하고, 비슷한 유형의 예제를 찾아 풀이 방향을 익히세요.' },
+            '조건': { label: '조건', icon: '🔍', color: 'bg-pink-500', lightBg: 'bg-pink-50', textColor: 'text-pink-700',
+              tip: '문제의 핵심 조건에 동그라미를 치고, 하나도 빠뜨리지 않았는지 재확인하는 습관을 들여보세요.' },
+            '시간': { label: '시간', icon: '⏰', color: 'bg-amber-500', lightBg: 'bg-amber-50', textColor: 'text-amber-700',
               tip: '타이머를 설정하고 문제풀이 시간을 관리하는 연습이 필요합니다.' },
-            blank: { label: '공백 처리', icon: '⬜', color: 'bg-gray-500', lightBg: 'bg-gray-50', textColor: 'text-gray-700',
-              tip: '모르는 문제도 부분 점수를 노려보세요. 아는 것까지라도 쓰는 습관이 중요합니다.' },
-            reading: { label: '문제 안 읽음', icon: '👀', color: 'bg-pink-500', lightBg: 'bg-pink-50', textColor: 'text-pink-700',
-              tip: '문제의 핵심 키워드에 동그라미를 치는 습관을 들여보세요.' }
+            '단위': { label: '단위', icon: '📏', color: 'bg-blue-500', lightBg: 'bg-blue-50', textColor: 'text-blue-700',
+              tip: '단위 변환(cm↔m, m↔km 등)과 답에 단위 표기를 놓치지 않도록 점검하세요.' },
+            '기타': { label: '기타', icon: '📌', color: 'bg-indigo-500', lightBg: 'bg-indigo-50', textColor: 'text-indigo-700',
+              tip: '직접 입력한 사유를 확인하고, 해당 원인에 맞는 보완 학습을 진행하세요.' },
+            // 하위 호환
+            careless: { label: '계산', icon: '🧮', color: 'bg-yellow-500', lightBg: 'bg-yellow-50', textColor: 'text-yellow-700',
+              tip: '문제를 다 풀고 반드시 검산하는 습관을 들이세요.' },
+            concept: { label: '개념', icon: '📚', color: 'bg-red-500', lightBg: 'bg-red-50', textColor: 'text-red-700',
+              tip: '해당 단원의 교과서 개념을 다시 정리하세요.' },
+            understanding: { label: '해석', icon: '🤔', color: 'bg-orange-500', lightBg: 'bg-orange-50', textColor: 'text-orange-700',
+              tip: '문제를 천천히 두 번 읽고, 조건과 구하는 것을 밑줄 치는 연습을 해보세요.' },
+            formula: { label: '개념', icon: '📚', color: 'bg-red-500', lightBg: 'bg-red-50', textColor: 'text-red-700',
+              tip: '공식을 단순 암기하지 말고, 유도 과정을 이해하면 혼동이 줄어듭니다.' },
+            process: { label: '전략', icon: '🎯', color: 'bg-purple-500', lightBg: 'bg-purple-50', textColor: 'text-purple-700',
+              tip: '풀이를 한 줄씩 정리하며 쓰세요.' },
+            time: { label: '시간', icon: '⏰', color: 'bg-amber-500', lightBg: 'bg-amber-50', textColor: 'text-amber-700',
+              tip: '타이머를 설정하고 문제풀이 시간을 관리하는 연습이 필요합니다.' },
+            blank: { label: '기타', icon: '📌', color: 'bg-indigo-500', lightBg: 'bg-indigo-50', textColor: 'text-indigo-700',
+              tip: '모르는 문제도 부분 점수를 노려보세요.' },
+            reading: { label: '조건', icon: '🔍', color: 'bg-pink-500', lightBg: 'bg-pink-50', textColor: 'text-pink-700',
+              tip: '문제의 핵심 조건에 동그라미를 치는 습관을 들여보세요.' }
           };
 
           const stats = Object.entries(errorTypeCounts)
@@ -8117,15 +8184,16 @@ function StudentErrorChecklist({ student, students, saveStudents, reportData, se
   const [checklists, setChecklists] = useState([]);
   const [saveStatus, setSaveStatus] = useState('');
 
-  // ─── 선생님 오답유형과 동일한 7가지 ───
+  // ─── 교재/테스트 오답 체크리스트 문서 기준 8가지 유형 ───
   const errorTypeOptions = [
-    { value: 'careless',      label: '😅 단순 실수' },
-    { value: 'concept',       label: '📚 개념 미숙' },
-    { value: 'understanding', label: '🤔 이해 부족' },
-    { value: 'formula',       label: '📐 공식 오류' },
-    { value: 'process',       label: '📝 풀이 오류' },
-    { value: 'time',          label: '⏰ 시간 부족' },
-    { value: 'reading',       label: '👀 문제 안읽음' },
+    { value: '개념', label: '📚 개념' },
+    { value: '계산', label: '🧮 계산' },
+    { value: '해석', label: '🤔 해석' },
+    { value: '전략', label: '🎯 전략' },
+    { value: '조건', label: '🔍 조건' },
+    { value: '시간', label: '⏰ 시간' },
+    { value: '단위', label: '📏 단위' },
+    { value: '기타', label: '📌 기타' },
   ];
 
   // ─── 시험 체크리스트 상태 (선생님 tests 폼과 동일) ───
@@ -9064,14 +9132,24 @@ function DirectorReportsView({ students, allReports, teachers }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const errorTypeMap = {
-    careless: { label: '단순 실수', icon: '😅' },
-    concept: { label: '개념 미숙', icon: '📚' },
-    understanding: { label: '이해 부족', icon: '🤔' },
-    formula: { label: '공식 오류', icon: '📐' },
-    process: { label: '풀이 오류', icon: '📝' },
-    time: { label: '시간 부족', icon: '⏰' },
-    blank: { label: '공백', icon: '⬜' },
-    reading: { label: '문제 안 읽음', icon: '👀' }
+    // ★ 문서 기준 8개
+    '개념': { label: '개념', icon: '📚' },
+    '계산': { label: '계산', icon: '🧮' },
+    '해석': { label: '해석', icon: '🤔' },
+    '전략': { label: '전략', icon: '🎯' },
+    '조건': { label: '조건', icon: '🔍' },
+    '시간': { label: '시간', icon: '⏰' },
+    '단위': { label: '단위', icon: '📏' },
+    '기타': { label: '기타', icon: '📌' },
+    // 하위 호환
+    careless: { label: '계산', icon: '🧮' },
+    concept: { label: '개념', icon: '📚' },
+    understanding: { label: '해석', icon: '🤔' },
+    formula: { label: '개념', icon: '📚' },
+    process: { label: '전략', icon: '🎯' },
+    time: { label: '시간', icon: '⏰' },
+    blank: { label: '기타', icon: '📌' },
+    reading: { label: '조건', icon: '🔍' }
   };
 
   const sessionTypeMap = {
@@ -13222,7 +13300,7 @@ function StatisticsTab({ students, isReadOnly = false }) {
                   problemStats.forEach(s => { Object.entries(s.wrongTypeCount).forEach(([k,v]) => { totalCounts[k] = (totalCounts[k]||0)+v; }); });
                   const sorted = Object.entries(totalCounts).sort((a,b)=>b[1]-a[1]);
                   const maxCount = sorted[0]?.[1] || 1;
-                  const labels = { careless:'😅 단순실수', concept:'📚 개념미숙', understanding:'🤔 이해부족', formula:'📐 공식오류', process:'📝 풀이오류', time:'⏰ 시간부족', reading:'👀 안읽음' };
+                  const labels = { '개념':'📚 개념','계산':'🧮 계산','해석':'🤔 해석','전략':'🎯 전략','조건':'🔍 조건','시간':'⏰ 시간','단위':'📏 단위','기타':'📌 기타', careless:'🧮 계산', concept:'📚 개념', understanding:'🤔 해석', formula:'📚 개념', process:'🎯 전략', time:'⏰ 시간', reading:'🔍 조건', blank:'📌 기타' };
                   if (sorted.length === 0) return <p className="text-gray-400 text-sm text-center">오답 유형 데이터 없음</p>;
                   return (
                     <div className="space-y-2">
@@ -16601,17 +16679,16 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
     return Object.entries(wrongTypes).map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count);
   }, [reportData.sessions]);
 
-  // 🔴 오답 유형 범례 (errorTypeStats보다 먼저 정의 필요)
+  // 🔴 오답 유형 범례 — 교재/테스트 오답 체크리스트 문서 기준 8개 유형
   const errorTypes = [
-    { value: 'careless', label: '단순 실수', icon: '😅', color: 'bg-yellow-100 text-yellow-700', desc: '계산 실수, 부호 오류 등' },
-    { value: 'concept', label: '개념 미숙', icon: '📚', color: 'bg-red-100 text-red-700', desc: '개념 이해 부족' },
-    { value: 'understanding', label: '문제 이해 부족', icon: '🤔', color: 'bg-orange-100 text-orange-700', desc: '문제를 잘못 이해함' },
-    { value: 'formula', label: '공식 오류', icon: '📐', color: 'bg-purple-100 text-purple-700', desc: '공식을 잘못 적용함' },
-    { value: 'process', label: '풀이 과정 오류', icon: '📝', color: 'bg-blue-100 text-blue-700', desc: '풀이 중간에 실수' },
-    { value: 'time', label: '시간 부족', icon: '⏰', color: 'bg-gray-100 text-gray-700', desc: '시간이 부족하여 못 품' },
-    { value: 'blank', label: '미응답', icon: '❓', color: 'bg-gray-200 text-gray-600', desc: '답을 쓰지 않음' },
-    { value: 'reading', label: '문제 안 읽음', icon: '👀', color: 'bg-pink-100 text-pink-700', desc: '조건을 빠뜨림' },
-    { value: 'other', label: '기타', icon: '📌', color: 'bg-indigo-100 text-indigo-700', desc: '기타 사유' }
+    { value: '개념', label: '개념', icon: '📚', color: 'bg-red-100 text-red-700',    desc: '공식이나 개념을 잘못 알고 있음' },
+    { value: '계산', label: '계산', icon: '🧮', color: 'bg-yellow-100 text-yellow-700', desc: '연산 과정에서 단순 실수 발생' },
+    { value: '해석', label: '해석', icon: '🤔', color: 'bg-orange-100 text-orange-700', desc: '문제의 조건이나 의미를 잘못 파악' },
+    { value: '전략', label: '전략', icon: '🎯', color: 'bg-purple-100 text-purple-700', desc: '접근 방법이나 풀이 방향이 틀림' },
+    { value: '조건', label: '조건', icon: '🔍', color: 'bg-pink-100 text-pink-700',    desc: '문제의 조건을 빠뜨리고 풀이' },
+    { value: '시간', label: '시간', icon: '⏰', color: 'bg-gray-100 text-gray-700',   desc: '시간이 부족해서 못 풀었음' },
+    { value: '단위', label: '단위', icon: '📏', color: 'bg-blue-100 text-blue-700',    desc: '단위 변환이나 표기 오류' },
+    { value: '기타', label: '기타', icon: '📌', color: 'bg-indigo-100 text-indigo-700', desc: '위 유형에 해당하지 않는 경우' }
   ];
 
   // 🔴 전체 세션 오답 유형 종합 통계
@@ -20781,7 +20858,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                   });
                 });
                 const topError = Object.entries(errorCounts).sort((a, b) => b[1] - a[1])[0];
-                const errorLabels = { careless:'단순 실수', concept:'개념 미숙', understanding:'이해 부족', formula:'공식 오류', process:'풀이 과정', time:'시간 부족', reading:'문제 안 읽음', blank:'공백' };
+                const errorLabels = { '개념':'개념','계산':'계산','해석':'해석','전략':'전략','조건':'조건','시간':'시간','단위':'단위','기타':'기타', careless:'계산', concept:'개념', understanding:'해석', formula:'개념', process:'전략', time:'시간', reading:'조건', blank:'기타' };
                 
                 // 5. 수업 빈도 (최근 2주)
                 const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
@@ -21938,27 +22015,27 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                         <Trash2 size={14} />
                                       </button>
                                     </div>
-                                    {/* 2행: 오답유형 선택 (전체 폭) */}
+                                    {/* 2행: 오답유형 선택 (전체 폭) — 교재/테스트 오답 체크리스트 문서 기준 8유형 */}
                                     <select
                                       value={wp.errorType || ''}
                                       onChange={(e) => {
                                         const newList = [...(ps.wrongProblemsList || [])];
-                                        newList[wpIdx] = { ...newList[wpIdx], errorType: e.target.value };
+                                        newList[wpIdx] = { ...newList[wpIdx], errorType: e.target.value, customErrorType: (e.target.value === '기타' || e.target.value === 'other') ? (newList[wpIdx].customErrorType || '') : '' };
                                         updateProblemSet(ps.id, 'wrongProblemsList', newList);
                                       }}
                                       className={`w-full p-1 border rounded text-xs ${wp.errorType ? 'bg-red-100 text-red-700' : ''}`}
                                     >
                                       <option value="">오답유형 선택</option>
-                                      <option value="careless">😅 단순 실수</option>
-                                      <option value="concept">📚 개념 미숙</option>
-                                      <option value="understanding">🤔 문제 이해 부족</option>
-                                      <option value="formula">📐 공식 오류</option>
-                                      <option value="process">📝 풀이 과정 오류</option>
-                                      <option value="time">⏰ 시간 부족</option>
-                                      <option value="reading">👀 문제 안 읽음</option>
-                                      <option value="other">✏️ 기타 (직접 입력)</option>
+                                      <option value="개념">📚 개념 (공식·개념 오류)</option>
+                                      <option value="계산">🧮 계산 (단순 연산 실수)</option>
+                                      <option value="해석">🤔 해석 (문제 의미 파악)</option>
+                                      <option value="전략">🎯 전략 (풀이 방향)</option>
+                                      <option value="조건">🔍 조건 (조건 누락)</option>
+                                      <option value="시간">⏰ 시간 부족</option>
+                                      <option value="단위">📏 단위 (변환·표기)</option>
+                                      <option value="기타">📌 기타 (직접 입력)</option>
                                     </select>
-                                    {wp.errorType === 'other' && (
+                                    {(wp.errorType === '기타' || wp.errorType === 'other') && (
                                       <input
                                         type="text"
                                         value={wp.customErrorType || ''}
@@ -21972,19 +22049,20 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                         placeholder="오답 유형을 직접 입력하세요"
                                       />
                                     )}
-                                    {wp.errorType && wp.errorType !== 'other' && (
+                                    {wp.errorType && wp.errorType !== '기타' && wp.errorType !== 'other' && (
                                       <div className="text-xs text-red-600 mt-1">
-                                        {wp.errorType === 'careless' && '😅 단순 실수'}
-                                        {wp.errorType === 'concept' && '📚 개념 미숙'}
-                                        {wp.errorType === 'understanding' && '🤔 문제 이해 부족'}
-                                        {wp.errorType === 'formula' && '📐 공식 오류'}
-                                        {wp.errorType === 'process' && '📝 풀이 과정 오류'}
-                                        {wp.errorType === 'time' && '⏰ 시간 부족'}
-                                        {wp.errorType === 'reading' && '👀 문제 안 읽음'}
+                                        {(() => {
+                                          const map = {
+                                            '개념':'📚 개념','계산':'🧮 계산','해석':'🤔 해석','전략':'🎯 전략','조건':'🔍 조건','시간':'⏰ 시간','단위':'📏 단위',
+                                            // 하위 호환
+                                            careless:'🧮 계산', concept:'📚 개념', understanding:'🤔 해석', formula:'📚 개념', process:'🎯 전략', time:'⏰ 시간', reading:'🔍 조건', blank:'📌 기타'
+                                          };
+                                          return map[wp.errorType] || wp.errorType;
+                                        })()}
                                       </div>
                                     )}
-                                    {wp.errorType === 'other' && wp.customErrorType && (
-                                      <div className="text-xs text-red-600 mt-1">✏️ {wp.customErrorType}</div>
+                                    {(wp.errorType === '기타' || wp.errorType === 'other') && wp.customErrorType && (
+                                      <div className="text-xs text-red-600 mt-1">📌 {wp.customErrorType}</div>
                                     )}
                                   </div>
                                 ))}
@@ -22005,12 +22083,14 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                       }
                                     });
                                     const labels = {
-                                      careless: '😅 단순실수', concept: '📚 개념미숙', understanding: '🤔 이해부족',
-                                      formula: '📐 공식오류', process: '📝 풀이오류', time: '⏰ 시간부족', reading: '👀 안읽음'
+                                      // 문서 기준 8개
+                                      '개념':'📚 개념','계산':'🧮 계산','해석':'🤔 해석','전략':'🎯 전략','조건':'🔍 조건','시간':'⏰ 시간','단위':'📏 단위','기타':'📌 기타',
+                                      // 하위 호환
+                                      careless: '🧮 계산', concept: '📚 개념', understanding: '🤔 해석', formula: '📚 개념', process: '🎯 전략', time: '⏰ 시간', reading: '🔍 조건', blank: '📌 기타'
                                     };
                                     return Object.entries(counts).map(([type, count]) => (
                                       <span key={type} className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">
-                                        {labels[type] || `✏️ ${type}`}: {count}개
+                                        {labels[type] || `📌 ${type}`}: {count}개
                                       </span>
                                     ));
                                   })()}
@@ -22172,19 +22252,20 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                         value={wp.errorType || ''}
                                         onChange={(e) => {
                                           const newList = [...(assignment.wrongProblemsList || [])];
-                                          newList[wpIdx] = { ...newList[wpIdx], errorType: e.target.value };
+                                          newList[wpIdx] = { ...newList[wpIdx], errorType: e.target.value, customErrorType: e.target.value === '기타' ? (newList[wpIdx].customErrorType || '') : '' };
                                           updateAssignment(assignment.id, 'wrongProblemsList', newList);
                                         }}
                                         className={`flex-1 p-1 border rounded text-xs ${wp.errorType ? 'bg-red-100' : ''}`}
                                       >
                                         <option value="">유형</option>
-                                        <option value="careless">😅실수</option>
-                                        <option value="concept">📚개념</option>
-                                        <option value="understanding">🤔이해</option>
-                                        <option value="formula">📐공식</option>
-                                        <option value="process">📝풀이</option>
-                                        <option value="time">⏰시간</option>
-                                        <option value="reading">👀안읽음</option>
+                                        <option value="개념">📚 개념</option>
+                                        <option value="계산">🧮 계산</option>
+                                        <option value="해석">🤔 해석</option>
+                                        <option value="전략">🎯 전략</option>
+                                        <option value="조건">🔍 조건</option>
+                                        <option value="시간">⏰ 시간</option>
+                                        <option value="단위">📏 단위</option>
+                                        <option value="기타">📌 기타</option>
                                       </select>
                                       <button
                                         onClick={() => {
@@ -22196,6 +22277,21 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                         <Trash2 size={12} />
                                       </button>
                                     </div>
+                                    {wp.errorType === '기타' && (
+                                      <div className="mt-1">
+                                        <input
+                                          type="text"
+                                          value={wp.customErrorType || ''}
+                                          onChange={(e) => {
+                                            const newList = [...(assignment.wrongProblemsList || [])];
+                                            newList[wpIdx] = { ...newList[wpIdx], customErrorType: e.target.value };
+                                            updateAssignment(assignment.id, 'wrongProblemsList', newList);
+                                          }}
+                                          placeholder="유형 직접 입력"
+                                          className="w-full p-1.5 border border-indigo-300 rounded text-xs bg-indigo-50"
+                                        />
+                                      </div>
+                                    )}
                                   ))}
                                 </div>
                               )}
@@ -23656,15 +23752,25 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
           {expandedSections.repeatAlerts && (() => {
             // ── 이 섹션 내부에서만 사용하는 헬퍼 ──────────────────────────────
             const ET_MAP = {
-              careless:      { label:'단순 실수', icon:'😅' },
-              concept:       { label:'개념 미숙', icon:'📚' },
-              understanding: { label:'이해 부족', icon:'🤔' },
-              formula:       { label:'공식 오류', icon:'📐' },
-              process:       { label:'풀이 오류', icon:'📝' },
-              time:          { label:'시간 부족', icon:'⏰' },
-              blank:         { label:'미응답',    icon:'❓' },
-              reading:       { label:'문제 안 읽음', icon:'👀' },
-              other:         { label:'기타',      icon:'📌' }
+              // ★ 문서 기준 8개
+              '개념': { label:'개념', icon:'📚' },
+              '계산': { label:'계산', icon:'🧮' },
+              '해석': { label:'해석', icon:'🤔' },
+              '전략': { label:'전략', icon:'🎯' },
+              '조건': { label:'조건', icon:'🔍' },
+              '시간': { label:'시간', icon:'⏰' },
+              '단위': { label:'단위', icon:'📏' },
+              '기타': { label:'기타', icon:'📌' },
+              // 하위 호환
+              careless:      { label:'계산', icon:'🧮' },
+              concept:       { label:'개념', icon:'📚' },
+              understanding: { label:'해석', icon:'🤔' },
+              formula:       { label:'개념', icon:'📚' },
+              process:       { label:'전략', icon:'🎯' },
+              time:          { label:'시간', icon:'⏰' },
+              blank:         { label:'기타', icon:'📌' },
+              reading:       { label:'조건', icon:'🔍' },
+              other:         { label:'기타', icon:'📌' }
             };
 
             // 날짜+1일
@@ -28801,7 +28907,7 @@ function WeaknessPatternAnalyzer({ student, wrongNotes }) {
   }, [CACHE_KEY]);
 
   // 오답 유형 집계
-  const ET_LABELS = { careless:'단순 실수', concept:'개념 미숙', understanding:'이해 부족', formula:'공식 오류', process:'풀이 오류', time:'시간 부족', blank:'미응답', reading:'문제 안 읽음', other:'기타' };
+  const ET_LABELS = { '개념':'개념','계산':'계산','해석':'해석','전략':'전략','조건':'조건','시간':'시간','단위':'단위','기타':'기타', careless:'계산', concept:'개념', understanding:'해석', formula:'개념', process:'전략', time:'시간', blank:'기타', reading:'조건', other:'기타' };
   const typeCounts = {};
   const unitCounts = {};
   wrongNotes.forEach(n => {
@@ -29175,7 +29281,7 @@ function NextLessonPrepCard({ studentName, reportData }) {
   const today = new Date().toISOString().split('T')[0];
 
   // 지난 수업 오답 추출 (problemSets + tests)
-  const ET_LABELS = { careless:'단순 실수', concept:'개념 미숙', understanding:'이해 부족', formula:'공식 오류', process:'풀이 오류', time:'시간 부족', blank:'미응답', reading:'문제 안 읽음', other:'기타' };
+  const ET_LABELS = { '개념':'개념','계산':'계산','해석':'해석','전략':'전략','조건':'조건','시간':'시간','단위':'단위','기타':'기타', careless:'계산', concept:'개념', understanding:'해석', formula:'개념', process:'전략', time:'시간', blank:'기타', reading:'조건', other:'기타' };
   const lastWrong = [];
   (lastSession?.problemSets || []).forEach(ps => {
     const tb = ps.textbook === '기타' ? (ps.customTextbook || '교재') : (ps.textbook || '교재');
@@ -30672,7 +30778,7 @@ function ErrorTypeAnalysis({ reportData }) {
   const analysis = React.useMemo(() => {
     if (!reportData?.sessions?.length) return null;
     const types = {};
-    const typeLabels = { concept: '개념 미이해', calculation: '계산 실수', misread: '문제 해석 오류', careless: '단순 실수', time: '시간 부족', formula: '공식 오류', process: '풀이 과정 오류', understanding: '문제 이해 부족', reading: '문제 안 읽음', blank: '공백 처리' };
+    const typeLabels = { '개념':'개념','계산':'계산','해석':'해석','전략':'전략','조건':'조건','시간':'시간','단위':'단위','기타':'기타', concept: '개념', calculation: '계산', misread: '해석', careless: '계산', time: '시간', formula: '개념', process: '전략', understanding: '해석', reading: '조건', blank: '기타' };
     
     reportData.sessions.forEach(s => {
       // 시험 오답 유형
@@ -32477,11 +32583,14 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
   // 오답 유형 영→한 변환
   const errorTypeKorean = (type) => {
     const map = {
-      careless:'단순 실수', concept:'개념 미숙', understanding:'문제 이해 부족',
-      formula:'공식 오류', process:'풀이 과정 오류', time:'시간 부족',
-      blank:'공백 처리', reading:'문제 안 읽음',
-      '계산 실수':'계산 실수', '개념 부족':'개념 부족', '문제 이해 오류':'문제 이해 오류',
-      '공식 암기 부족':'공식 암기 부족', '시간 부족':'시간 부족', '기타':'기타',
+      // ★ 문서 기준 8개
+      '개념':'개념','계산':'계산','해석':'해석','전략':'전략','조건':'조건','시간':'시간','단위':'단위','기타':'기타',
+      // 하위 호환
+      careless:'계산', concept:'개념', understanding:'해석',
+      formula:'개념', process:'전략', time:'시간',
+      blank:'기타', reading:'조건',
+      '계산 실수':'계산', '개념 부족':'개념', '문제 이해 오류':'해석',
+      '공식 암기 부족':'개념', '시간 부족':'시간',
     };
     return map[type] || type || '미분류';
   };
@@ -33504,29 +33613,38 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
 
               {/* 오답 유형별 통계 */}
               {Object.keys(typeStats).length > 0 && (() => {
-                // 영어 키 + 한국어 키 모두 매핑
+                // ★ 문서 기준 8개 + 하위 호환 + 자유입력용
                 const typeLabels = {
-                  careless: { label: '단순 실수', icon: '😅', color: '#F59E0B' },
-                  concept: { label: '개념 미숙', icon: '📚', color: '#EF4444' },
-                  understanding: { label: '문제 이해 부족', icon: '🤔', color: '#8B5CF6' },
-                  formula: { label: '공식 오류', icon: '📐', color: '#3B82F6' },
-                  process: { label: '풀이 과정 오류', icon: '📝', color: '#10B981' },
-                  time: { label: '시간 부족', icon: '⏰', color: '#F97316' },
-                  blank: { label: '공백 처리', icon: '⬜', color: '#6B7280' },
-                  reading: { label: '문제 안 읽음', icon: '👀', color: '#EC4899' },
-                  // 한국어 키 (수동 입력용)
-                  '계산 실수': { label: '계산 실수', icon: '😅', color: '#F59E0B' },
-                  '단순 실수': { label: '단순 실수', icon: '😅', color: '#F59E0B' },
-                  '개념 부족': { label: '개념 부족', icon: '📚', color: '#EF4444' },
-                  '개념 미숙': { label: '개념 미숙', icon: '📚', color: '#EF4444' },
-                  '문제 이해 오류': { label: '문제 이해 오류', icon: '🤔', color: '#8B5CF6' },
-                  '문제 이해 부족': { label: '문제 이해 부족', icon: '🤔', color: '#8B5CF6' },
-                  '공식 암기 부족': { label: '공식 암기 부족', icon: '📐', color: '#3B82F6' },
-                  '공식 오류': { label: '공식 오류', icon: '📐', color: '#3B82F6' },
-                  '시간 부족': { label: '시간 부족', icon: '⏰', color: '#F97316' },
-                  '풀이 과정 오류': { label: '풀이 과정 오류', icon: '📝', color: '#10B981' },
-                  '공백 처리': { label: '공백 처리', icon: '⬜', color: '#6B7280' },
-                  '기타': { label: '기타', icon: '❓', color: '#9CA3AF' },
+                  // 문서 기준 8개
+                  '개념': { label: '개념', icon: '📚', color: '#EF4444' },
+                  '계산': { label: '계산', icon: '🧮', color: '#F59E0B' },
+                  '해석': { label: '해석', icon: '🤔', color: '#F97316' },
+                  '전략': { label: '전략', icon: '🎯', color: '#8B5CF6' },
+                  '조건': { label: '조건', icon: '🔍', color: '#EC4899' },
+                  '시간': { label: '시간', icon: '⏰', color: '#64748B' },
+                  '단위': { label: '단위', icon: '📏', color: '#3B82F6' },
+                  '기타': { label: '기타', icon: '📌', color: '#6366F1' },
+                  // 하위 호환 (구 영어 키)
+                  careless: { label: '계산', icon: '🧮', color: '#F59E0B' },
+                  concept: { label: '개념', icon: '📚', color: '#EF4444' },
+                  understanding: { label: '해석', icon: '🤔', color: '#F97316' },
+                  formula: { label: '개념', icon: '📚', color: '#EF4444' },
+                  process: { label: '전략', icon: '🎯', color: '#8B5CF6' },
+                  time: { label: '시간', icon: '⏰', color: '#64748B' },
+                  blank: { label: '기타', icon: '📌', color: '#6366F1' },
+                  reading: { label: '조건', icon: '🔍', color: '#EC4899' },
+                  // 하위 호환 (긴 한국어 키)
+                  '계산 실수': { label: '계산', icon: '🧮', color: '#F59E0B' },
+                  '단순 실수': { label: '계산', icon: '🧮', color: '#F59E0B' },
+                  '개념 부족': { label: '개념', icon: '📚', color: '#EF4444' },
+                  '개념 미숙': { label: '개념', icon: '📚', color: '#EF4444' },
+                  '문제 이해 오류': { label: '해석', icon: '🤔', color: '#F97316' },
+                  '문제 이해 부족': { label: '해석', icon: '🤔', color: '#F97316' },
+                  '공식 암기 부족': { label: '개념', icon: '📚', color: '#EF4444' },
+                  '공식 오류': { label: '개념', icon: '📚', color: '#EF4444' },
+                  '시간 부족': { label: '시간', icon: '⏰', color: '#64748B' },
+                  '풀이 과정 오류': { label: '전략', icon: '🎯', color: '#8B5CF6' },
+                  '공백 처리': { label: '기타', icon: '📌', color: '#6366F1' },
                   '미분류': { label: '미분류', icon: '❓', color: '#9CA3AF' },
                 };
                 const getInfo = (type) => typeLabels[type] || { label: errorTypeKorean(type), icon: '❓', color: '#9CA3AF' };
