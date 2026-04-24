@@ -11697,11 +11697,12 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
           })
           .sort((a, b) => (b.pct || 0) - (a.pct || 0));
 
-        // 체킹누적테스트 순위 (평균 정답률)
+        // 체킹누적테스트 순위 (평균 정답률) — 채점 미완료도 횟수에 포함, 평균은 채점 완료된 것만
         const checkingRanking = studentScores
           .filter(s => s.checkingTests.length > 0)
           .map(s => {
-            const avgPct = Math.round(s.checkingTests.reduce((sum, t) => sum + (t.pct || 0), 0) / s.checkingTests.length);
+            const validTests = s.checkingTests.filter(t => t.pct !== null && t.pct !== undefined);
+            const avgPct = validTests.length > 0 ? Math.round(validTests.reduce((sum, t) => sum + t.pct, 0) / validTests.length) : 0;
             const latest = s.checkingTests[s.checkingTests.length - 1];
             // A, B, C, D 단계별 시험 결과 분류
             const byLevel = {};
@@ -11710,12 +11711,15 @@ function ClassScoresDashboard({ students, reportCache, teachers = [] }) {
               if (!byLevel[lv]) byLevel[lv] = [];
               byLevel[lv].push(t);
             });
-            const levelStats = Object.entries(byLevel).map(([lv, tests]) => ({
-              level: lv,
-              count: tests.length,
-              avgPct: Math.round(tests.reduce((sum, t) => sum + (t.pct || 0), 0) / tests.length),
-              latest: tests[tests.length - 1]
-            })).sort((a, b) => {
+            const levelStats = Object.entries(byLevel).map(([lv, tests]) => {
+              const valid = tests.filter(t => t.pct !== null && t.pct !== undefined);
+              return {
+                level: lv,
+                count: tests.length,
+                avgPct: valid.length > 0 ? Math.round(valid.reduce((sum, t) => sum + t.pct, 0) / valid.length) : null,
+                latest: tests[tests.length - 1]
+              };
+            }).sort((a, b) => {
               const order = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 };
               return (order[a.level] ?? 99) - (order[b.level] ?? 99);
             });
@@ -34901,14 +34905,18 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                     scope: t.testScope, name: t.customTestName
                   });
                 }
-                if (t.testType === '체킹누적테스트' && (t.testScore || t.testAnswers?.length)) {
+                // 체킹누적테스트: testType이 일치하면 무조건 수집 (채점 미완료도 횟수에 포함)
+                if (t.testType === '체킹누적테스트') {
                   const answers = (t.testAnswers || []).filter(a => a !== null && a !== undefined);
                   const correct = (t.testAnswers || []).filter(a => a === true).length;
                   const wrong = (t.testAnswers || []).filter(a => a === false).length;
+                  const sc = parseFloat(t.testScore), tot = parseFloat(t.testTotal);
                   tests.checking.push({
-                    date: t._date, score: t.testScore, total: t.testTotal,
+                    date: t._date,
+                    score: t.testScore !== undefined && t.testScore !== null && t.testScore !== '' ? t.testScore : '-',
+                    total: t.testTotal !== undefined && t.testTotal !== null && t.testTotal !== '' ? t.testTotal : '-',
                     level: t.checkingLevel, wrong,
-                    percent: answers.length > 0 ? Math.round(correct / answers.length * 100) : (t.testScore && t.testTotal ? Math.round(parseInt(t.testScore) / parseInt(t.testTotal) * 100) : null),
+                    percent: answers.length > 0 ? Math.round(correct / answers.length * 100) : ((!isNaN(sc) && !isNaN(tot) && tot > 0) ? Math.round(sc / tot * 100) : null),
                     scope: t.testScope
                   });
                 }
@@ -35366,16 +35374,17 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
           {testCache[student.id].checking.length > 0 && (() => {
             const checks = testCache[student.id].checking;
             const latest = checks[checks.length - 1];
-            const avgPercent = Math.round(checks.reduce((s, c) => s + (c.percent || 0), 0) / checks.length);
+            const validPcts = checks.filter(c => c.percent !== null && c.percent !== undefined);
+            const avgPercent = validPcts.length > 0 ? Math.round(validPcts.reduce((s, c) => s + c.percent, 0) / validPcts.length) : null;
             return (
               <div className="p-2 bg-indigo-50 rounded-lg text-xs border border-indigo-200">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-indigo-700">🔄 누적체킹 ({checks.length}회)</span>
-                  <span className="font-bold text-indigo-800">평균 {avgPercent}%</span>
+                  <span className="font-bold text-indigo-800">{avgPercent !== null ? `평균 ${avgPercent}%` : '채점 대기'}</span>
                 </div>
                 <div className="flex gap-2 mt-1">
                   {latest.level && <span className={`font-bold px-1.5 py-0.5 rounded ${latest.level === 'A' ? 'bg-red-200 text-red-800' : latest.level === 'B' ? 'bg-orange-200 text-orange-800' : latest.level === 'C' ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800'}`}>{latest.level}단계</span>}
-                  <span className="text-indigo-600">최근: {latest.percent}%</span>
+                  <span className="text-indigo-600">최근: {latest.percent !== null && latest.percent !== undefined ? `${latest.percent}%` : '미채점'}</span>
                   <span className="text-gray-400">{latest.date?.slice(5)}</span>
                 </div>
               </div>
