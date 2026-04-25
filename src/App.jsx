@@ -16695,50 +16695,83 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
     { value: '기타', label: '기타', icon: '📌', color: 'bg-indigo-100 text-indigo-700', desc: '위 유형에 해당하지 않는 경우' }
   ];
 
-  // 🔴 전체 세션 오답 유형 종합 통계
+  // 🔴 전체 세션 오답 유형 종합 통계 — 옛/새 유형 모두 8유형으로 정규화하여 합산
   const errorTypeStats = useMemo(() => {
+    // 옛 키(영어/긴 한국어) → 새 8유형 정규화
+    const normalizeErrorType = (raw) => {
+      const map = {
+        // 영어 키 (구버전)
+        careless:'계산', concept:'개념', understanding:'해석',
+        formula:'개념', process:'전략', time:'시간',
+        blank:'기타', reading:'조건', other:'기타',
+        // 긴 한국어 키 (구버전 입력)
+        '계산 실수':'계산', '단순 실수':'계산',
+        '개념 부족':'개념', '개념 미숙':'개념',
+        '공식 암기 부족':'개념', '공식 오류':'개념',
+        '문제 이해 오류':'해석', '문제 이해 부족':'해석', '문제 안 읽음':'해석',
+        '풀이 과정 오류':'전략', '풀이 오류':'전략',
+        '시간 부족':'시간',
+        '공백 처리':'기타',
+      };
+      return map[raw] || raw; // 이미 정규화된 8유형은 그대로 통과
+    };
+
     const stats = {};
     let totalErrors = 0;
-    
+
     (reportData.sessions || []).forEach(s => {
       // 간단 채점판의 testErrorTypes
       if (s.testErrorTypes && s.testAnswers) {
         s.testErrorTypes.forEach((et, idx) => {
           if (et && s.testAnswers[idx] === false) {
-            stats[et] = (stats[et] || 0) + 1;
+            const key = normalizeErrorType(et);
+            stats[key] = (stats[key] || 0) + 1;
             totalErrors++;
           }
         });
       }
-      
+
       // 다중 시험의 testErrorTypes
       (s.tests || []).forEach(test => {
         if (test.testErrorTypes && test.testAnswers) {
           test.testErrorTypes.forEach((et, idx) => {
             if (et && test.testAnswers[idx] === false) {
-              stats[et] = (stats[et] || 0) + 1;
+              const key = normalizeErrorType(et);
+              stats[key] = (stats[key] || 0) + 1;
               totalErrors++;
             }
           });
         }
       });
-      
+
       // 고급 채점 모달의 errorTypeAnalysis
       if (s.errorTypeAnalysis) {
         s.errorTypeAnalysis.forEach(e => {
-          stats[e.type] = (stats[e.type] || 0) + e.count;
+          const key = normalizeErrorType(e.type);
+          stats[key] = (stats[key] || 0) + e.count;
           totalErrors += e.count;
         });
       }
     });
-    
-    // errorTypes 배열과 매칭하여 정보 추가
-    const result = errorTypes.map(et => ({
+
+    // errorTypes 배열(8유형)과 매칭 + 매핑되지 않은 자유입력 유형도 포함
+    const matched = errorTypes.map(et => ({
       ...et,
       count: stats[et.value] || 0,
       percent: totalErrors > 0 ? Math.round(((stats[et.value] || 0) / totalErrors) * 100) : 0
-    })).filter(e => e.count > 0).sort((a, b) => b.count - a.count);
-    
+    })).filter(e => e.count > 0);
+
+    // 8유형에 매핑되지 않은 자유입력 키도 표시 (기타로 흡수되지 않은 사용자 정의 유형)
+    const knownValues = new Set(errorTypes.map(et => et.value));
+    const customs = Object.entries(stats)
+      .filter(([k]) => !knownValues.has(k) && k)
+      .map(([k, count]) => ({
+        value: k, label: k, icon: '📌', color: 'bg-indigo-100 text-indigo-700',
+        count, percent: totalErrors > 0 ? Math.round((count / totalErrors) * 100) : 0
+      }));
+
+    const result = [...matched, ...customs].sort((a, b) => b.count - a.count);
+
     return { stats: result, total: totalErrors };
   }, [reportData.sessions]);
 
