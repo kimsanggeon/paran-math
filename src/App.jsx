@@ -32584,17 +32584,22 @@ function StudentSimilarProblemsTab({ student, similarProblems, setSimilarProblem
 
 // ========== 3. 오답노트 탭 ==========
 function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
-  // 오답 유형 영→한 변환
+  // 오답 유형 영→한 변환 — 모든 옛 표기 → 문서 기준 8유형 통합 매핑
   const errorTypeKorean = (type) => {
     const map = {
       // ★ 문서 기준 8개
       '개념':'개념','계산':'계산','해석':'해석','전략':'전략','조건':'조건','시간':'시간','단위':'단위','기타':'기타',
-      // 하위 호환
+      // 영어 키 (구버전 코드)
       careless:'계산', concept:'개념', understanding:'해석',
       formula:'개념', process:'전략', time:'시간',
       blank:'기타', reading:'조건',
-      '계산 실수':'계산', '개념 부족':'개념', '문제 이해 오류':'해석',
-      '공식 암기 부족':'개념', '시간 부족':'시간',
+      // 긴 한국어 키 (구버전 입력)
+      '계산 실수':'계산', '단순 실수':'계산',
+      '개념 부족':'개념', '개념 미숙':'개념', '공식 암기 부족':'개념', '공식 오류':'개념',
+      '문제 이해 오류':'해석', '문제 이해 부족':'해석', '문제 안 읽음':'해석',
+      '풀이 과정 오류':'전략', '풀이 오류':'전략',
+      '시간 부족':'시간',
+      '공백 처리':'기타', '미분류':'미분류',
     };
     return map[type] || type || '미분류';
   };
@@ -32741,19 +32746,20 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
       return acc;
     }, {});
     
-    // 유형별 통계
+    // 유형별 통계 — 옛 유형(단순 실수, 개념 미숙 등)을 새 유형(계산, 개념 등)으로 정규화하여 합산
     const typeStats = wrongNotes.reduce((acc, note) => {
-      const type = note.type || '미분류';
+      const rawType = note.type || '미분류';
+      const type = errorTypeKorean(rawType); // 옛/새 유형 모두 8유형으로 통합
       if (!acc[type]) acc[type] = { total: 0, conquered: 0 };
       acc[type].total++;
       if (note.conquered) acc[type].conquered++;
       return acc;
     }, {});
-    
+
     // 교재별 통계
     const textbookStats = wrongNotes.reduce((acc, note) => {
-      const tb = (note.textbook === '기타' || note.textbook === '시험') 
-        ? (note.customTextbook || note.textbook || '미분류') 
+      const tb = (note.textbook === '기타' || note.textbook === '시험')
+        ? (note.customTextbook || note.textbook || '미분류')
         : (note.textbook || '미분류');
       if (!acc[tb]) acc[tb] = { total: 0, conquered: 0 };
       acc[tb].total++;
@@ -32974,12 +32980,13 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
     return acc;
   }, {});
 
-  // 오답 유형별 통계
+  // 오답 유형별 통계 — 옛 유형(단순 실수, 개념 미숙 등)을 새 유형(계산, 개념 등)으로 정규화하여 합산
   const typeStats = wrongNotes.reduce((acc, note) => {
     if (note.type) {
-      if (!acc[note.type]) acc[note.type] = { total: 0, conquered: 0 };
-      acc[note.type].total++;
-      if (note.conquered) acc[note.type].conquered++;
+      const normalizedType = errorTypeKorean(note.type); // 옛/새 유형을 8유형으로 통합
+      if (!acc[normalizedType]) acc[normalizedType] = { total: 0, conquered: 0 };
+      acc[normalizedType].total++;
+      if (note.conquered) acc[normalizedType].conquered++;
     }
     return acc;
   }, {});
@@ -32988,10 +32995,11 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
   const getRecommendations = () => {
     const recommendations = [];
     
-    // 미정복 문제 중 가장 많은 오답 유형 분석
+    // 미정복 문제 중 가장 많은 오답 유형 분석 — 옛/새 유형 통합
     const unconqueredTypeStats = unconqueredNotes.reduce((acc, note) => {
       if (note.type) {
-        acc[note.type] = (acc[note.type] || 0) + 1;
+        const normalizedType = errorTypeKorean(note.type);
+        acc[normalizedType] = (acc[normalizedType] || 0) + 1;
       }
       return acc;
     }, {});
@@ -33011,40 +33019,66 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
       .forEach(([type, count]) => {
         let advice = '';
         let priority = 'high';
-        
+
+        // ★ 문서 기준 8유형 + 옛 유형도 모두 처리
         switch(type) {
+          case '계산':
           case '계산 실수':
+          case '단순 실수':
             advice = '풀이 과정을 천천히 쓰고, 검산 습관을 기르세요. 계산 연습 문제를 매일 5~10문제씩 풀어보세요.';
             priority = count >= 4 ? 'critical' : 'high';
             break;
+          case '개념':
           case '개념 부족':
-            advice = '해당 단원의 개념을 교과서나 개념서로 다시 정리하세요. 개념 확인 문제부터 다시 풀어보세요.';
+          case '개념 미숙':
+          case '공식 암기 부족':
+          case '공식 오류':
+            advice = '해당 단원의 개념과 공식을 교과서나 개념서로 다시 정리하세요. 개념 확인 문제부터 다시 풀어보세요.';
             priority = 'critical';
             break;
+          case '해석':
           case '문제 이해 오류':
+          case '문제 이해 부족':
+          case '문제 안 읽음':
             advice = '문제를 읽을 때 중요한 조건에 밑줄을 긋고, 구하는 것을 명확히 파악하세요.';
             priority = count >= 3 ? 'high' : 'medium';
             break;
-          case '공식 암기 부족':
-            advice = '자주 틀리는 공식을 카드로 만들어 암기하세요. 공식 유도 과정도 함께 이해하면 좋습니다.';
+          case '전략':
+          case '풀이 과정 오류':
+            advice = '풀이 방향을 정한 뒤 단계별로 정리해 풀어보세요. 비슷한 유형의 풀이 패턴을 익히면 좋습니다.';
             priority = 'high';
             break;
+          case '조건':
+            advice = '문제의 모든 조건을 빠짐없이 적어두고 푸는 연습을 하세요. 누락한 조건이 있는지 매번 확인하세요.';
+            priority = 'high';
+            break;
+          case '시간':
           case '시간 부족':
             advice = '시간을 재고 문제를 풀어보세요. 어려운 문제는 표시해두고 나중에 풀도록 연습하세요.';
+            priority = 'medium';
+            break;
+          case '단위':
+            advice = '단위 변환과 표기를 정리한 카드를 만들어 두세요. 답을 적기 전에 단위가 맞는지 마지막으로 확인하세요.';
+            priority = 'medium';
+            break;
+          case '기타':
+          case '공백 처리':
+            advice = '모르는 문제도 일단 풀이를 시도해 적어보는 습관을 기르면 좋겠습니다.';
             priority = 'medium';
             break;
           default:
             advice = '해당 유형의 문제를 집중적으로 연습하세요.';
             priority = 'medium';
         }
-        
+
         recommendations.push({
           category: 'type',
           name: type,
           count,
           advice,
           priority,
-          relatedNotes: unconqueredNotes.filter(n => n.type === type)
+          // 옛/새 유형 모두에 해당하는 노트 모으기
+          relatedNotes: unconqueredNotes.filter(n => n.type && errorTypeKorean(n.type) === type)
         });
       });
     
