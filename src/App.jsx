@@ -19369,12 +19369,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
       weakUnitsHtml = `<div class="card"> <div class="section-header"><span class="section-title">⚠️ 취약 단원</span><span class="section-badge">자동</span></div> <div class="orange-box">${weakUnitsAuto.map(u => `<span class="tag tag-red">${u}</span>`).join(' ')}</div> </div>`;
     }
 
-    // 오답노트
+    // 오답노트 요약 — 워드 다운로드에서는 표시하지 않음 (오답 유형 종합 분석으로 대체)
     let mistakesHtml = '';
-    if (mistakeNotesAuto.length > 0) {
-      let mistakeRows = mistakeNotesAuto.map(n => `<tr><td>${n.type}</td><td class="center"><span class="tag tag-red">${n.count}회</span></td></tr>`).join('');
-      mistakesHtml = `<div class="card"> <div class="section-header"><span class="section-title">📓 오답노트 요약</span><span class="section-badge">자동</span></div> <table><tr><th>오답 유형</th><th class="center" style="width:25%">발생 횟수</th></tr>${mistakeRows}</table> </div>`;
-    }
 
     // 🔴 오답 유형 종합 통계
     let errorTypeStatsHtml = '';
