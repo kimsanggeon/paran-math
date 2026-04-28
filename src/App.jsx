@@ -29100,9 +29100,52 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
   const [filterStatus, setFilterStatus] = useState('pending'); // pending | resolved | all
   const [denyModal, setDenyModal] = useState(null); // { request, student }
   const [denyReason, setDenyReason] = useState('');
+  // ★ 학생이 다른 기기에서 신청한 면제권을 즉시 표시하기 위해 Firebase에서 최신 학생 데이터를 직접 가져옴
+  const [freshStudents, setFreshStudents] = useState(students);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [refreshing, setRefreshing] = useState(false);
+
+  // 부모 props가 갱신되면 같이 갱신
+  useEffect(() => { setFreshStudents(students); }, [students]);
+
+  // ★ Firebase에서 최신 학생 데이터(tower.ticketRequests 포함)를 직접 fetch
+  const fetchFresh = async (silent = false) => {
+    if (!silent) setRefreshing(true);
+    try {
+      let firebaseStudents = null;
+      if (typeof loadStudentsFromFirebase === 'function') {
+        firebaseStudents = await loadStudentsFromFirebase();
+      }
+      if (firebaseStudents && firebaseStudents.length > 0) {
+        // 기존 students의 ID 순서/필드를 유지하되, tower 등 변경된 필드는 firebase 값으로 덮어쓰기
+        const fbMap = new Map(firebaseStudents.map(s => [String(s.id), s]));
+        const merged = students.map(s => {
+          const fb = fbMap.get(String(s.id));
+          return fb ? { ...s, ...fb } : s;
+        });
+        // firebase에만 있는 새 학생도 추가
+        firebaseStudents.forEach(fb => {
+          if (!merged.find(m => String(m.id) === String(fb.id))) merged.push(fb);
+        });
+        setFreshStudents(merged);
+        setLastRefresh(new Date());
+      }
+    } catch (e) { console.log('면제권 데이터 새로고침 오류:', e); }
+    if (!silent) setRefreshing(false);
+  };
+
+  // 마운트 시 + 30초마다 자동 폴링 (조용히)
+  useEffect(() => {
+    fetchFresh(true);
+    const interval = setInterval(() => fetchFresh(true), 30000);
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchFresh(true); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+    // eslint-disable-next-line
+  }, []);
 
   // 모든 신청을 학생 정보와 함께 평탄화
-  const allRequests = students.flatMap(st => {
+  const allRequests = freshStudents.flatMap(st => {
     const reqs = st.tower?.ticketRequests || [];
     return reqs.map(r => ({ ...r, student: st }));
   }).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
@@ -29113,7 +29156,7 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
   const visible = filterStatus === 'pending' ? pending : filterStatus === 'resolved' ? resolved : allRequests;
 
   // 학생 보유 잔액 요약 (전체 학생)
-  const balances = students.map(st => ({
+  const balances = freshStudents.map(st => ({
     student: st,
     homework: st.tower?.tickets?.homework || 0,
     retest: st.tower?.tickets?.retest || 0,
@@ -29126,7 +29169,9 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
     const newRequests = (st.tower?.ticketRequests || []).map(r =>
       r.id === reqId ? { ...r, status: 'approved', resolvedAt: new Date().toISOString() } : r
     );
-    const updatedStudents = students.map(s => s.id === st.id ? { ...s, tower: { ...s.tower, ticketRequests: newRequests } } : s);
+    // freshStudents 기반으로 업데이트하여 다른 기기 변경사항 보존
+    const updatedStudents = freshStudents.map(s => s.id === st.id ? { ...s, tower: { ...s.tower, ticketRequests: newRequests } } : s);
+    setFreshStudents(updatedStudents);
     saveStudents(updatedStudents);
 
     // 숙제 면제권 승인 시 → 해당 날짜 세션의 homeworkExempt를 true로 (학습 보고서 자동 반영)
@@ -29182,7 +29227,8 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
     const newRequests = (st.tower?.ticketRequests || []).map(r =>
       r.id === req.id ? { ...r, status: 'denied', resolvedAt: new Date().toISOString(), resolvedNote: denyReason.trim() || '사유 미기재' } : r
     );
-    const updatedStudents = students.map(s => s.id === st.id ? { ...s, tower: { ...s.tower, tickets: restored, ticketRequests: newRequests } } : s);
+    const updatedStudents = freshStudents.map(s => s.id === st.id ? { ...s, tower: { ...s.tower, tickets: restored, ticketRequests: newRequests } } : s);
+    setFreshStudents(updatedStudents);
     saveStudents(updatedStudents);
     setDenyModal(null);
     setDenyReason('');
@@ -29193,11 +29239,20 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
     <div className="space-y-4">
       {/* 헤더 */}
       <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 text-white">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
           <h2 className="text-lg font-bold">🎫 면제권 승인 관리</h2>
-          {pending.length > 0 && <span className="bg-white text-orange-600 px-3 py-1 rounded-full text-sm font-bold animate-pulse">⏳ 대기 {pending.length}건</span>}
+          <div className="flex items-center gap-2">
+            {pending.length > 0 && <span className="bg-white text-orange-600 px-3 py-1 rounded-full text-sm font-bold animate-pulse">⏳ 대기 {pending.length}건</span>}
+            <button
+              onClick={() => fetchFresh(false)}
+              disabled={refreshing}
+              className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold flex items-center gap-1">
+              {refreshing ? '⏳ 불러오는 중…' : '🔄 새로고침'}
+            </button>
+          </div>
         </div>
         <p className="text-sm text-white/90">학생들의 숙제/재시험 면제권 사용 신청을 검토하고 승인/거절하세요.</p>
+        <p className="text-[11px] text-white/70 mt-1">최근 갱신: {lastRefresh.toLocaleTimeString('ko-KR')} · 30초마다 자동 갱신</p>
       </div>
 
       {/* 학생별 보유 잔액 요약 */}
