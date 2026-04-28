@@ -909,6 +909,7 @@ export default function ParanMathSystem() {
       { id: 'class-dashboard', label: '📊 반별 대시보드', icon: BarChart3 },
       { id: 'lesson-prep', label: '📝 수업 준비', icon: FileText },
       { id: 'gamification', label: '🎮 게이미피케이션', icon: Trophy },
+      { id: 'ticket-approval', label: '🎫 면제권 승인', icon: ClipboardCheck },
       { id: 'report', label: '📋 학습 보고서', icon: FileText },
       { id: 'wrongnotes', label: '📝 오답노트', icon: PenTool },
       { id: 'homework', label: '📚 숙제 관리', icon: ClipboardCheck },
@@ -1069,6 +1070,9 @@ export default function ParanMathSystem() {
         )}
         {activeTab === 'gamification' && (
           <GamificationTab students={myStudents} saveStudents={saveMergedStudents} />
+        )}
+        {activeTab === 'ticket-approval' && (
+          <TicketApprovalTab students={myStudents} saveStudents={saveMergedStudents} userType={userType} isReadOnly={isReadOnly} />
         )}
         {activeTab === 'report' && (
           <LearningReportTab students={myStudents} saveStudents={readOnlySave} userType={userType} loggedInTeacher={loggedInTeacher} teachers={teachers} isReadOnly={isReadOnly} />
@@ -5161,6 +5165,10 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   const [territories, setTerritories] = useState({}); // 영토 점령 배틀
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(null);
   const [journalSaveStatus, setJournalSaveStatus] = useState('');
+  // 면제권 사용 신청 모달 상태
+  const [ticketRequestModal, setTicketRequestModal] = useState(null); // { type: 'homework' | 'retest' }
+  const [ticketRequestDate, setTicketRequestDate] = useState('');
+  const [ticketRequestReason, setTicketRequestReason] = useState('');
 
   // ★ student 객체 안전 보장 — 모든 배열 속성에 기본값 적용
   const student = {
@@ -6128,16 +6136,20 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                             <button onClick={() => {
                               const claimed = [...(student.tower?.claimedMilestones || []), m];
                               const newHistory = [...(student.tower?.rewardHistory || []), { reward: '🎯 숙제 면제권 (' + m + '층)', cost: 0, date: new Date().toISOString() }];
-                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory } } : s);
+                              const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
+                              const newTickets = { ...curTickets, homework: (curTickets.homework || 0) + 1 };
+                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory, tickets: newTickets } } : s);
                               saveStudents(updated);
-                              alert('🎯 숙제 1회 면제권을 받았습니다! 선생님께 확인해주세요.');
+                              alert('🎯 숙제 1회 면제권이 보유함에 추가되었습니다! 사용 신청은 보유 면제권 카드에서 할 수 있어요.');
                             }} className="px-2 py-1 bg-blue-500 text-white rounded text-[10px] font-bold">🎯 숙제면제</button>
                             <button onClick={() => {
                               const claimed = [...(student.tower?.claimedMilestones || []), m];
                               const newHistory = [...(student.tower?.rewardHistory || []), { reward: '🛡️ 재시험 면제권 (' + m + '층)', cost: 0, date: new Date().toISOString() }];
-                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory } } : s);
+                              const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
+                              const newTickets = { ...curTickets, retest: (curTickets.retest || 0) + 1 };
+                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory, tickets: newTickets } } : s);
                               saveStudents(updated);
-                              alert('🛡️ 재시험 1회 면제권을 받았습니다! 선생님께 확인해주세요.');
+                              alert('🛡️ 재시험 1회 면제권이 보유함에 추가되었습니다! 사용 신청은 보유 면제권 카드에서 할 수 있어요.');
                             }} className="px-2 py-1 bg-purple-500 text-white rounded text-[10px] font-bold">🛡️ 재시험면제</button>
                           </div>
                         </div>
@@ -6178,6 +6190,98 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                       </div>
                     </div>
                   </details>
+                </div>
+              );
+            })()}
+
+            {/* 🎫 보유 면제권 + 사용 신청 */}
+            {(() => {
+              const tickets = student.tower?.tickets || { homework: 0, retest: 0 };
+              const allRequests = student.tower?.ticketRequests || [];
+              const pendingReqs = allRequests.filter(r => r.status === 'pending');
+              const recentResolved = allRequests.filter(r => r.status !== 'pending').slice(-3).reverse();
+              return (
+                <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-4 border border-amber-200 shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-amber-800 flex items-center gap-2">🎫 보유 면제권</h3>
+                    {pendingReqs.length > 0 && (
+                      <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">⏳ 승인 대기 {pendingReqs.length}건</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="bg-white rounded-lg p-3 text-center border border-blue-200">
+                      <p className="text-3xl mb-1">🎯</p>
+                      <p className="text-[11px] text-gray-500 mb-1">숙제 면제권</p>
+                      <p className="text-2xl font-black text-blue-600 mb-2">{tickets.homework || 0}<span className="text-sm font-normal text-gray-500">장</span></p>
+                      <button
+                        disabled={(tickets.homework || 0) === 0}
+                        onClick={() => {
+                          setTicketRequestModal({ type: 'homework' });
+                          setTicketRequestDate(new Date().toISOString().split('T')[0]);
+                          setTicketRequestReason('');
+                        }}
+                        className={`w-full py-1.5 rounded text-xs font-bold ${(tickets.homework || 0) > 0 ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                        사용 신청
+                      </button>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 text-center border border-purple-200">
+                      <p className="text-3xl mb-1">🛡️</p>
+                      <p className="text-[11px] text-gray-500 mb-1">재시험 면제권</p>
+                      <p className="text-2xl font-black text-purple-600 mb-2">{tickets.retest || 0}<span className="text-sm font-normal text-gray-500">장</span></p>
+                      <button
+                        disabled={(tickets.retest || 0) === 0}
+                        onClick={() => {
+                          setTicketRequestModal({ type: 'retest' });
+                          setTicketRequestDate(new Date().toISOString().split('T')[0]);
+                          setTicketRequestReason('');
+                        }}
+                        className={`w-full py-1.5 rounded text-xs font-bold ${(tickets.retest || 0) > 0 ? 'bg-purple-500 hover:bg-purple-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                        사용 신청
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 진행 중 신청 */}
+                  {pendingReqs.length > 0 && (
+                    <div className="mb-2">
+                      <p className="text-[11px] font-bold text-gray-600 mb-1">⏳ 승인 대기 중</p>
+                      {pendingReqs.map(r => (
+                        <div key={r.id} className="flex items-center justify-between bg-orange-50 rounded p-1.5 mb-1 text-xs">
+                          <span className="text-gray-700">
+                            {r.type === 'homework' ? '🎯 숙제' : '🛡️ 재시험'} · {r.sessionDate}
+                            {r.reason && <span className="text-gray-400 ml-1">({r.reason.slice(0, 12)}{r.reason.length > 12 ? '…' : ''})</span>}
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (!confirm('이 신청을 취소할까요? 면제권은 다시 보유함으로 돌아옵니다.')) return;
+                              const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
+                              const restored = { ...curTickets, [r.type]: (curTickets[r.type] || 0) + 1 };
+                              const updatedReqs = allRequests.filter(x => x.id !== r.id);
+                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, tickets: restored, ticketRequests: updatedReqs } } : s);
+                              saveStudents(updated);
+                            }}
+                            className="text-red-500 text-[10px] underline">취소</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 최근 처리된 신청 */}
+                  {recentResolved.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-bold text-gray-600 mb-1">최근 처리</p>
+                      {recentResolved.map(r => (
+                        <div key={r.id} className={`text-[11px] px-2 py-1 rounded mb-0.5 ${r.status === 'approved' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                          {r.status === 'approved' ? '✅ 승인' : '❌ 거절'} · {r.type === 'homework' ? '🎯 숙제' : '🛡️ 재시험'} · {r.sessionDate}
+                          {r.resolvedNote && <span className="text-gray-500 ml-1">({r.resolvedNote})</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {(tickets.homework || 0) === 0 && (tickets.retest || 0) === 0 && pendingReqs.length === 0 && (
+                    <p className="text-[11px] text-gray-400 text-center py-1">아직 보유한 면제권이 없어요. 10층 달성이나 보상 상점에서 받을 수 있어요!</p>
+                  )}
                 </div>
               );
             })()}
@@ -6249,9 +6353,18 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                           if (!confirm(`${r.name}을(를) ${r.cost}P로 교환할까요?`)) return;
                           const newPoints = myPoints - r.cost;
                           const newHistory = [...rewardHistory, { reward: r.name, cost: r.cost, date: new Date().toISOString() }];
-                          const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, manualPoints: newPoints, rewardHistory: newHistory } } : s);
+                          // 면제권 구매 시 잔액 증가
+                          const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
+                          let newTickets = curTickets;
+                          if (r.name.includes('숙제 면제권')) newTickets = { ...curTickets, homework: (curTickets.homework || 0) + 1 };
+                          else if (r.name.includes('재시험 면제권')) newTickets = { ...curTickets, retest: (curTickets.retest || 0) + 1 };
+                          const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, manualPoints: newPoints, rewardHistory: newHistory, tickets: newTickets } } : s);
                           saveStudents(updated);
-                          alert(`🎉 ${r.name} 교환 완료! 선생님께 확인해주세요.`);
+                          if (r.name.includes('면제권')) {
+                            alert(`🎉 ${r.name} 교환 완료! 보유함에 추가되었어요. 사용 신청은 보유 면제권 카드에서 할 수 있어요.`);
+                          } else {
+                            alert(`🎉 ${r.name} 교환 완료! 선생님께 확인해주세요.`);
+                          }
                         }}
                         className={`p-2 rounded-lg border text-center transition-all ${myPoints >= r.cost ? 'bg-amber-50 border-amber-200 hover:bg-amber-100' : 'bg-gray-50 border-gray-200 opacity-50'}`}>
                         <p className="font-bold text-xs">{r.name}</p>
@@ -8174,6 +8287,67 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
           <p>🔵 파란수학학원 몰입관</p>
         </div>
       </div>
+
+      {/* 🎫 면제권 사용 신청 모달 */}
+      {ticketRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4" onClick={() => setTicketRequestModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                {ticketRequestModal.type === 'homework' ? '🎯 숙제 면제권' : '🛡️ 재시험 면제권'} 사용 신청
+              </h3>
+              <button onClick={() => setTicketRequestModal(null)} className="text-gray-400 text-xl">×</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">📅 면제하고 싶은 날짜</label>
+                <input type="date" value={ticketRequestDate} onChange={e => setTicketRequestDate(e.target.value)}
+                  className="w-full p-2 border rounded text-sm" />
+                <p className="text-[10px] text-gray-400 mt-1">
+                  {ticketRequestModal.type === 'homework' ? '이 날짜의 숙제가 면제 대상이에요.' : '이 날짜의 시험이 재시험 면제 대상이에요.'}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-1">💬 사유 (간단히)</label>
+                <textarea value={ticketRequestReason} onChange={e => setTicketRequestReason(e.target.value)}
+                  rows={3} placeholder="예: 가족 행사로 시간이 부족했어요"
+                  className="w-full p-2 border rounded text-sm resize-none" />
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded p-2 text-[11px] text-amber-700">
+                💡 신청 후 선생님이 확인해야 면제가 적용돼요. 신청 즉시 보유함에서 1장이 차감됩니다 (거절 시 자동 환원).
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setTicketRequestModal(null)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded font-bold text-sm">취소</button>
+              <button
+                onClick={() => {
+                  if (!ticketRequestDate) { alert('날짜를 선택해 주세요.'); return; }
+                  const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
+                  const balance = curTickets[ticketRequestModal.type] || 0;
+                  if (balance < 1) { alert('보유 면제권이 부족해요.'); setTicketRequestModal(null); return; }
+                  const newTickets = { ...curTickets, [ticketRequestModal.type]: balance - 1 };
+                  const newReq = {
+                    id: 'TR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                    type: ticketRequestModal.type,
+                    sessionDate: ticketRequestDate,
+                    reason: ticketRequestReason.trim(),
+                    status: 'pending',
+                    requestedAt: new Date().toISOString(),
+                  };
+                  const allReqs = [...(student.tower?.ticketRequests || []), newReq];
+                  const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, tickets: newTickets, ticketRequests: allReqs } } : s);
+                  saveStudents(updated);
+                  setTicketRequestModal(null);
+                  alert('✅ 신청이 접수되었어요. 선생님 승인을 기다려 주세요!');
+                }}
+                className={`flex-2 px-4 py-2 rounded font-bold text-sm text-white ${ticketRequestModal.type === 'homework' ? 'bg-blue-500' : 'bg-purple-500'}`}
+                style={{ flex: 2 }}>
+                신청하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -28914,6 +29088,208 @@ function GamificationTab({ students, saveStudents }) {
         </div>
       )}
       </>)}
+    </div>
+  );
+}
+
+
+// ============================================================
+// 🎫 면제권 승인 탭 (선생님/원장)
+// ============================================================
+function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isReadOnly = false }) {
+  const [filterStatus, setFilterStatus] = useState('pending'); // pending | resolved | all
+  const [denyModal, setDenyModal] = useState(null); // { request, student }
+  const [denyReason, setDenyReason] = useState('');
+
+  // 모든 신청을 학생 정보와 함께 평탄화
+  const allRequests = students.flatMap(st => {
+    const reqs = st.tower?.ticketRequests || [];
+    return reqs.map(r => ({ ...r, student: st }));
+  }).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
+
+  const pending = allRequests.filter(r => r.status === 'pending');
+  const resolved = allRequests.filter(r => r.status !== 'pending');
+
+  const visible = filterStatus === 'pending' ? pending : filterStatus === 'resolved' ? resolved : allRequests;
+
+  // 학생 보유 잔액 요약 (전체 학생)
+  const balances = students.map(st => ({
+    student: st,
+    homework: st.tower?.tickets?.homework || 0,
+    retest: st.tower?.tickets?.retest || 0,
+  })).filter(b => b.homework > 0 || b.retest > 0).sort((a, b) => (b.homework + b.retest) - (a.homework + a.retest));
+
+  const handleApprove = async (req) => {
+    if (isReadOnly) { alert('읽기 전용 모드입니다.'); return; }
+    const st = req.student;
+    const reqId = req.id;
+    const newRequests = (st.tower?.ticketRequests || []).map(r =>
+      r.id === reqId ? { ...r, status: 'approved', resolvedAt: new Date().toISOString() } : r
+    );
+    const updatedStudents = students.map(s => s.id === st.id ? { ...s, tower: { ...s.tower, ticketRequests: newRequests } } : s);
+    saveStudents(updatedStudents);
+
+    // 숙제 면제권 승인 시 → 해당 날짜 세션의 homeworkExempt를 true로 (학습 보고서 자동 반영)
+    if (req.type === 'homework') {
+      try {
+        const reportKey = `paran:report:${st.name}`;
+        let reportData = null;
+        if (window.storage) {
+          const r = await window.storage.get(reportKey, true);
+          if (r?.value) reportData = JSON.parse(r.value);
+        }
+        if (!reportData) {
+          const local = localStorage.getItem(reportKey);
+          if (local) reportData = JSON.parse(local);
+        }
+        if (reportData && Array.isArray(reportData.sessions)) {
+          let modified = false;
+          reportData.sessions = reportData.sessions.map(s => {
+            if (s.date === req.sessionDate && !s.homeworkExempt) {
+              modified = true;
+              return { ...s, homeworkExempt: true, homeworkExemptReason: '🎫 면제권 승인 (' + new Date().toISOString().slice(0, 10) + ')' };
+            }
+            return s;
+          });
+          if (modified) {
+            const json = JSON.stringify(reportData);
+            try { localStorage.setItem(reportKey, json); } catch (e) {}
+            try { localStorage.setItem(`report:${st.name}`, json); } catch (e) {}
+            if (window.storage) {
+              try { await window.storage.set(reportKey, json, true); } catch (e) {}
+              try { await window.storage.set(`report:${st.name}`, json, true); } catch (e) {}
+            }
+          }
+        }
+      } catch (e) { console.log('학습 보고서 면제 적용 오류:', e); }
+    }
+
+    alert(`✅ ${st.name} 학생의 ${req.type === 'homework' ? '숙제' : '재시험'} 면제권 신청을 승인했습니다.`);
+  };
+
+  const handleDeny = (req) => {
+    if (isReadOnly) { alert('읽기 전용 모드입니다.'); return; }
+    setDenyModal({ request: req });
+    setDenyReason('');
+  };
+
+  const submitDeny = () => {
+    const req = denyModal.request;
+    const st = req.student;
+    // 거절 시 보유 잔액 환원
+    const curTickets = st.tower?.tickets || { homework: 0, retest: 0 };
+    const restored = { ...curTickets, [req.type]: (curTickets[req.type] || 0) + 1 };
+    const newRequests = (st.tower?.ticketRequests || []).map(r =>
+      r.id === req.id ? { ...r, status: 'denied', resolvedAt: new Date().toISOString(), resolvedNote: denyReason.trim() || '사유 미기재' } : r
+    );
+    const updatedStudents = students.map(s => s.id === st.id ? { ...s, tower: { ...s.tower, tickets: restored, ticketRequests: newRequests } } : s);
+    saveStudents(updatedStudents);
+    setDenyModal(null);
+    setDenyReason('');
+    alert(`❌ ${st.name} 학생의 신청을 거절했습니다. 면제권은 학생에게 환원되었습니다.`);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* 헤더 */}
+      <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 text-white">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-bold">🎫 면제권 승인 관리</h2>
+          {pending.length > 0 && <span className="bg-white text-orange-600 px-3 py-1 rounded-full text-sm font-bold animate-pulse">⏳ 대기 {pending.length}건</span>}
+        </div>
+        <p className="text-sm text-white/90">학생들의 숙제/재시험 면제권 사용 신청을 검토하고 승인/거절하세요.</p>
+      </div>
+
+      {/* 학생별 보유 잔액 요약 */}
+      {balances.length > 0 && (
+        <div className="bg-white rounded-xl shadow p-4">
+          <h3 className="font-bold text-gray-800 mb-2 text-sm">📦 학생별 보유 면제권</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {balances.map(b => (
+              <div key={b.student.id} className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg p-2 border border-amber-200 text-xs">
+                <p className="font-bold text-gray-800 truncate">{b.student.name}</p>
+                <p className="text-[11px] text-gray-500">{b.student.className || ''} {b.student.grade || ''}</p>
+                <div className="flex gap-1 mt-1">
+                  {b.homework > 0 && <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold">🎯×{b.homework}</span>}
+                  {b.retest > 0 && <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-bold">🛡️×{b.retest}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 필터 */}
+      <div className="flex gap-2">
+        <button onClick={() => setFilterStatus('pending')} className={`px-3 py-1.5 rounded-lg text-sm font-bold ${filterStatus === 'pending' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+          ⏳ 대기 중 ({pending.length})
+        </button>
+        <button onClick={() => setFilterStatus('resolved')} className={`px-3 py-1.5 rounded-lg text-sm font-bold ${filterStatus === 'resolved' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+          ✅ 처리 완료 ({resolved.length})
+        </button>
+        <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 rounded-lg text-sm font-bold ${filterStatus === 'all' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600'}`}>
+          전체 ({allRequests.length})
+        </button>
+      </div>
+
+      {/* 신청 목록 */}
+      <div className="space-y-2">
+        {visible.length === 0 ? (
+          <div className="bg-white rounded-xl p-8 text-center text-gray-400 shadow">
+            <p className="text-3xl mb-2">📭</p>
+            <p className="text-sm">{filterStatus === 'pending' ? '대기 중인 신청이 없습니다.' : '신청 내역이 없습니다.'}</p>
+          </div>
+        ) : (
+          visible.map(req => (
+            <div key={req.id} className={`bg-white rounded-xl p-4 shadow border-l-4 ${req.status === 'pending' ? 'border-orange-400' : req.status === 'approved' ? 'border-green-400' : 'border-red-400'}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-bold text-gray-800">{req.student.name}</span>
+                    <span className="text-[11px] text-gray-500">{req.student.className || ''} {req.student.grade || ''}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${req.type === 'homework' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                      {req.type === 'homework' ? '🎯 숙제 면제권' : '🛡️ 재시험 면제권'}
+                    </span>
+                    {req.status === 'pending' && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-[11px] font-bold">⏳ 대기</span>}
+                    {req.status === 'approved' && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[11px] font-bold">✅ 승인</span>}
+                    {req.status === 'denied' && <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[11px] font-bold">❌ 거절</span>}
+                  </div>
+                  <p className="text-sm text-gray-700 mb-1">📅 면제 대상 날짜: <strong>{req.sessionDate}</strong></p>
+                  {req.reason && <p className="text-xs text-gray-600 mb-1">💬 사유: {req.reason}</p>}
+                  <p className="text-[10px] text-gray-400">신청: {new Date(req.requestedAt).toLocaleString('ko-KR')}</p>
+                  {req.resolvedAt && <p className="text-[10px] text-gray-400">처리: {new Date(req.resolvedAt).toLocaleString('ko-KR')}{req.resolvedNote ? ` · ${req.resolvedNote}` : ''}</p>}
+                </div>
+                {req.status === 'pending' && !isReadOnly && (
+                  <div className="flex flex-col gap-1">
+                    <button onClick={() => handleApprove(req)} className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded text-xs font-bold whitespace-nowrap">✅ 승인</button>
+                    <button onClick={() => handleDeny(req)} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-bold whitespace-nowrap">❌ 거절</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* 거절 사유 모달 */}
+      {denyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDenyModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-3">❌ 면제권 신청 거절</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              <strong>{denyModal.request.student.name}</strong> 학생의 {denyModal.request.type === 'homework' ? '🎯 숙제' : '🛡️ 재시험'} 면제권 신청을 거절합니다. 면제권은 학생 보유함으로 환원됩니다.
+            </p>
+            <label className="block text-xs font-bold text-gray-600 mb-1">거절 사유 (학생에게 표시됨)</label>
+            <textarea value={denyReason} onChange={e => setDenyReason(e.target.value)} rows={3}
+              placeholder="예: 정당한 사유가 부족해 보여요. 다음 기회에 다시 신청해 주세요."
+              className="w-full p-2 border rounded text-sm resize-none mb-3" />
+            <div className="flex gap-2">
+              <button onClick={() => setDenyModal(null)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded font-bold text-sm">취소</button>
+              <button onClick={submitDeny} className="flex-1 py-2 bg-red-500 text-white rounded font-bold text-sm">거절하기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
