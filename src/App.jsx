@@ -30384,15 +30384,17 @@ function SelfStudyTab({ student }) {
 
   const moods = ['😊', '😐', '😴', '🤔', '💪', '😤'];
 
-  // 타이머 카드 컴포넌트
-  const TimerCard = ({ type, label, field, whatField, whatPlaceholder }) => {
+  // ★ 타이머 카드 — 인라인 JSX로 변환 (이전 inline 컴포넌트 정의가 매 렌더마다 새로 만들어져
+  // input이 unmount/remount 되며 포커스 손실 + 한글 IME 깨짐 버그가 있었음)
+  const TIMER_COLORS = {
+    hw:    { bg: 'bg-blue-50',  border: 'border-blue-200',  text: 'text-blue-700',  btn: 'bg-blue-500 hover:bg-blue-600' },
+    extra: { bg: 'bg-teal-50',  border: 'border-teal-200',  text: 'text-teal-700',  btn: 'bg-teal-500 hover:bg-teal-600' }
+  };
+  const renderTimerCard = (type, label, field, whatField, whatPlaceholder) => {
     const isActive = activeTimer === type;
-    const colors = {
-      hw:    { bg: 'bg-blue-50',   border: 'border-blue-200',  text: 'text-blue-700',  btn: 'bg-blue-500 hover:bg-blue-600',  inputBorder: 'border-blue-200' },
-      extra: { bg: 'bg-teal-50',   border: 'border-teal-200',  text: 'text-teal-700',  btn: 'bg-teal-500 hover:bg-teal-600',  inputBorder: 'border-teal-200' }
-    }[type];
+    const colors = TIMER_COLORS[type];
     return (
-      <div className={`rounded-xl p-3 border-2 ${isActive ? colors.border + ' ' + colors.bg : 'border-gray-200 bg-gray-50'} transition-all`}>
+      <div key={type} className={`rounded-xl p-3 border-2 ${isActive ? colors.border + ' ' + colors.bg : 'border-gray-200 bg-gray-50'} transition-all`}>
         <div className="flex items-center justify-between mb-2">
           <div>
             <p className={`text-xs font-bold ${isActive ? colors.text : 'text-gray-500'}`}>{label}</p>
@@ -30423,9 +30425,12 @@ function SelfStudyTab({ student }) {
               placeholder="타이머를 사용하세요" />
           </div>
           <div>
-            <input type="text" value={form[whatField] || ''}
+            <input
+              key={`${type}-what`}
+              type="text"
+              value={form[whatField] || ''}
               onChange={e => setForm(p => ({ ...p, [whatField]: e.target.value }))}
-              className={`w-full p-2 border rounded-lg text-xs ${colors.bg} placeholder-gray-300 focus:outline-none focus:${colors.inputBorder}`}
+              className={`w-full p-2 border rounded-lg text-xs ${colors.bg} placeholder-gray-300 focus:outline-none focus:${colors.border}`}
               placeholder={whatPlaceholder} />
           </div>
         </div>
@@ -30538,8 +30543,8 @@ function SelfStudyTab({ student }) {
 
         {/* 숙제 시간 / 자습 시간 — 분리 입력 */}
         <div className="space-y-2">
-          <TimerCard type="hw"    label="📚 숙제 시간"        field="hwMinutes"    whatField="hwWhat"    whatPlaceholder="숙제 내용 (예: 개념원리 p.55~60 연립방정식)" />
-          <TimerCard type="extra" label="➕ 숙제 외 수학 자습" field="extraMinutes" whatField="extraWhat" whatPlaceholder="자습 내용 (예: 수매씽 p.30~40 이차방정식 복습)" />
+          {renderTimerCard('hw',    '📚 숙제 시간',        'hwMinutes',    'hwWhat',    '숙제 내용 (예: 개념원리 p.55~60 연립방정식)')}
+          {renderTimerCard('extra', '➕ 숙제 외 수학 자습', 'extraMinutes', 'extraWhat', '자습 내용 (예: 수매씽 p.30~40 이차방정식 복습)')}
         </div>
 
         {/* 합계 미리보기 */}
