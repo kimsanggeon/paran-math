@@ -5169,17 +5169,23 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
   const [ticketRequestModal, setTicketRequestModal] = useState(null); // { type: 'homework' | 'retest' }
   const [ticketRequestDate, setTicketRequestDate] = useState('');
   const [ticketRequestReason, setTicketRequestReason] = useState('');
+  // ★ 10층 보상 수령 중복 클릭 방지 (비동기 state 업데이트 사이의 race 차단)
+  const claimingMilestonesRef = React.useRef(new Set());
+  const [claimingTick, setClaimingTick] = useState(0); // re-render 트리거용
 
-  // ★ student 객체 안전 보장 — 모든 배열 속성에 기본값 적용
+  // ★ student 객체: 로그인 스냅샷(rawStudent)이 아니라 부모 students 배열의 최신 본을 우선
+  // (saveStudents 호출 후 students 배열은 업데이트되지만 rawStudent는 그대로라 stale 발생)
+  const freshStudentFromList = (students || []).find(s => s.id === rawStudent?.id);
+  const baseStudent = freshStudentFromList || rawStudent || {};
   const student = {
-    ...(rawStudent || {}),
-    badges: rawStudent?.badges || [],
-    homework: rawStudent?.homework || [],
-    wrongNotes: rawStudent?.wrongNotes || [],
-    tests: rawStudent?.tests || [],
-    exp: rawStudent?.exp || 0,
-    streak: rawStudent?.streak || 0,
-    tower: rawStudent?.tower || {},
+    ...baseStudent,
+    badges: baseStudent.badges || [],
+    homework: baseStudent.homework || [],
+    wrongNotes: baseStudent.wrongNotes || [],
+    tests: baseStudent.tests || [],
+    exp: baseStudent.exp || 0,
+    streak: baseStudent.streak || 0,
+    tower: baseStudent.tower || {},
   };
 
   // ★ 면제권 신청 마이그레이션: 학생의 로컬 tower.ticketRequests에 있는 pending 신청을
@@ -6168,34 +6174,49 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                     )}
                   </div>
 
-                  {/* 10층 단위 보상 수령 */}
+                  {/* 10층 단위 보상 수령 — 한 마일스톤은 한 번만 수령 가능 (동기 ref 가드로 race 차단) */}
                   {tower.unclaimedMilestones.length > 0 && (
                     <div className="mt-2 space-y-1">
-                      {tower.unclaimedMilestones.map(m => (
-                        <div key={m} className="flex items-center justify-between bg-gradient-to-r from-amber-400/20 to-yellow-400/20 rounded-lg px-3 py-2 border border-yellow-400/40">
-                          <span className="text-yellow-200 text-xs font-bold">🎉 {m}층 달성 보상!</span>
-                          <div className="flex gap-1">
-                            <button onClick={() => {
-                              const claimed = [...(student.tower?.claimedMilestones || []), m];
-                              const newHistory = [...(student.tower?.rewardHistory || []), { reward: '🎯 숙제 면제권 (' + m + '층)', cost: 0, date: new Date().toISOString() }];
-                              const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
-                              const newTickets = { ...curTickets, homework: (curTickets.homework || 0) + 1 };
-                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory, tickets: newTickets } } : s);
-                              saveStudents(updated);
-                              alert('🎯 숙제 1회 면제권이 보유함에 추가되었습니다! 사용 신청은 보유 면제권 카드에서 할 수 있어요.');
-                            }} className="px-2 py-1 bg-blue-500 text-white rounded text-[10px] font-bold">🎯 숙제면제</button>
-                            <button onClick={() => {
-                              const claimed = [...(student.tower?.claimedMilestones || []), m];
-                              const newHistory = [...(student.tower?.rewardHistory || []), { reward: '🛡️ 재시험 면제권 (' + m + '층)', cost: 0, date: new Date().toISOString() }];
-                              const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
-                              const newTickets = { ...curTickets, retest: (curTickets.retest || 0) + 1 };
-                              const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory, tickets: newTickets } } : s);
-                              saveStudents(updated);
-                              alert('🛡️ 재시험 1회 면제권이 보유함에 추가되었습니다! 사용 신청은 보유 면제권 카드에서 할 수 있어요.');
-                            }} className="px-2 py-1 bg-purple-500 text-white rounded text-[10px] font-bold">🛡️ 재시험면제</button>
+                      {tower.unclaimedMilestones.map(m => {
+                        const isClaiming = claimingMilestonesRef.current.has(m);
+                        const alreadyClaimed = (student.tower?.claimedMilestones || []).includes(m);
+                        const isLocked = isClaiming || alreadyClaimed;
+                        const claim = (kind) => {
+                          // ★ 동기 가드: 같은 마일스톤은 첫 클릭 직후 추가 클릭 무시
+                          if (claimingMilestonesRef.current.has(m)) return;
+                          if ((student.tower?.claimedMilestones || []).includes(m)) return;
+                          claimingMilestonesRef.current.add(m);
+                          setClaimingTick(t => t + 1); // 즉시 버튼 비활성화 표시
+
+                          const claimed = [...(student.tower?.claimedMilestones || []), m];
+                          const rewardName = kind === 'homework' ? '🎯 숙제 면제권' : '🛡️ 재시험 면제권';
+                          const newHistory = [...(student.tower?.rewardHistory || []), { reward: rewardName + ' (' + m + '층)', cost: 0, date: new Date().toISOString() }];
+                          const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
+                          const newTickets = { ...curTickets, [kind]: (curTickets[kind] || 0) + 1 };
+                          const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, claimedMilestones: claimed, rewardHistory: newHistory, tickets: newTickets } } : s);
+                          saveStudents(updated);
+                          alert((kind === 'homework' ? '🎯 숙제' : '🛡️ 재시험') + ' 1회 면제권이 보유함에 추가되었습니다! 사용 신청은 보유 면제권 카드에서 할 수 있어요.');
+                        };
+                        return (
+                          <div key={m} className="flex items-center justify-between bg-gradient-to-r from-amber-400/20 to-yellow-400/20 rounded-lg px-3 py-2 border border-yellow-400/40">
+                            <span className="text-yellow-200 text-xs font-bold">🎉 {m}층 달성 보상!</span>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => claim('homework')}
+                                disabled={isLocked}
+                                className={`px-2 py-1 rounded text-[10px] font-bold text-white ${isLocked ? 'bg-gray-400 opacity-50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}>
+                                🎯 숙제면제
+                              </button>
+                              <button
+                                onClick={() => claim('retest')}
+                                disabled={isLocked}
+                                className={`px-2 py-1 rounded text-[10px] font-bold text-white ${isLocked ? 'bg-gray-400 opacity-50 cursor-not-allowed' : 'bg-purple-500 hover:bg-purple-600'}`}>
+                                🛡️ 재시험면제
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
