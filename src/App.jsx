@@ -5181,7 +5181,49 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
     streak: rawStudent?.streak || 0,
     tower: rawStudent?.tower || {},
   };
-  
+
+  // ★ 면제권 신청 마이그레이션: 학생의 로컬 tower.ticketRequests에 있는 pending 신청을
+  // 글로벌 신청함(window.storage 'paran:ticket-requests')으로 동기화.
+  // Firebase students 컬렉션 쓰기가 막혀서 선생님이 못 보던 기존 신청도 복구됨.
+  useEffect(() => {
+    const syncTicketRequestsToGlobal = async () => {
+      try {
+        const localReqs = student.tower?.ticketRequests || [];
+        if (localReqs.length === 0) return;
+        const TR_KEY = 'paran:ticket-requests';
+        let globalList = [];
+        if (typeof window !== 'undefined' && window.storage) {
+          try {
+            const r = await window.storage.get(TR_KEY);
+            if (r?.value) globalList = JSON.parse(r.value);
+          } catch (e) {}
+        }
+        if (globalList.length === 0) {
+          try { globalList = JSON.parse(localStorage.getItem(TR_KEY) || '[]'); } catch (e) {}
+        }
+        // 글로벌에 없는 학생 신청을 추가 (학생 정보 포함하여 정규화)
+        const existingIds = new Set(globalList.map(r => r.id));
+        const toMerge = localReqs
+          .filter(r => r.id && !existingIds.has(r.id))
+          .map(r => ({
+            ...r,
+            studentId: r.studentId || student.id,
+            studentName: r.studentName || student.name,
+          }));
+        if (toMerge.length > 0) {
+          const merged = [...globalList, ...toMerge];
+          const json = JSON.stringify(merged);
+          try { localStorage.setItem(TR_KEY, json); } catch (e) {}
+          if (window.storage) {
+            try { await window.storage.set(TR_KEY, json); console.log('🎫 면제권 신청 ' + toMerge.length + '건 글로벌 동기화 완료'); } catch (e) {}
+          }
+        }
+      } catch (e) { console.log('ticket-requests 동기화 오류:', e); }
+    };
+    syncTicketRequestsToGlobal();
+    // eslint-disable-next-line
+  }, [student.id, student.tower?.ticketRequests?.length]);
+
   // 복습 주기 (에빙하우스 망각곡선 기반)
   const reviewIntervals = [1, 3, 7, 14, 30];
   
@@ -6252,13 +6294,25 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                             {r.reason && <span className="text-gray-400 ml-1">({r.reason.slice(0, 12)}{r.reason.length > 12 ? '…' : ''})</span>}
                           </span>
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               if (!confirm('이 신청을 취소할까요? 면제권은 다시 보유함으로 돌아옵니다.')) return;
                               const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
                               const restored = { ...curTickets, [r.type]: (curTickets[r.type] || 0) + 1 };
                               const updatedReqs = allRequests.filter(x => x.id !== r.id);
                               const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, tickets: restored, ticketRequests: updatedReqs } } : s);
                               saveStudents(updated);
+                              // 글로벌 신청함에서도 제거
+                              try {
+                                if (window.storage) {
+                                  const TR_KEY = 'paran:ticket-requests';
+                                  const fb = await window.storage.get(TR_KEY);
+                                  const list = fb?.value ? JSON.parse(fb.value) : [];
+                                  const filtered = list.filter(x => x.id !== r.id);
+                                  await window.storage.set(TR_KEY, JSON.stringify(filtered));
+                                }
+                                const cached = JSON.parse(localStorage.getItem('paran:ticket-requests') || '[]');
+                                localStorage.setItem('paran:ticket-requests', JSON.stringify(cached.filter(x => x.id !== r.id)));
+                              } catch (e) { console.log('ticket-requests 취소 동기화 오류:', e); }
                             }}
                             className="text-red-500 text-[10px] underline">취소</button>
                         </div>
@@ -8320,7 +8374,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
             <div className="flex gap-2 mt-4">
               <button onClick={() => setTicketRequestModal(null)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded font-bold text-sm">취소</button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!ticketRequestDate) { alert('날짜를 선택해 주세요.'); return; }
                   const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
                   const balance = curTickets[ticketRequestModal.type] || 0;
@@ -8328,6 +8382,8 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                   const newTickets = { ...curTickets, [ticketRequestModal.type]: balance - 1 };
                   const newReq = {
                     id: 'TR-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                    studentId: student.id,
+                    studentName: student.name,
                     type: ticketRequestModal.type,
                     sessionDate: ticketRequestDate,
                     reason: ticketRequestReason.trim(),
@@ -8337,6 +8393,28 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                   const allReqs = [...(student.tower?.ticketRequests || []), newReq];
                   const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, tickets: newTickets, ticketRequests: allReqs } } : s);
                   saveStudents(updated);
+
+                  // ★ window.storage에도 별도 신청함 저장 (cross-device 안정성: students 컬렉션 쓰기가
+                  //   막혀도 면제권 신청은 항상 보임)
+                  try {
+                    if (window.storage) {
+                      const TR_KEY = 'paran:ticket-requests';
+                      let existing = [];
+                      try {
+                        const r = await window.storage.get(TR_KEY);
+                        if (r?.value) existing = JSON.parse(r.value);
+                      } catch (e) {}
+                      const merged = [...existing.filter(x => x.id !== newReq.id), newReq];
+                      await window.storage.set(TR_KEY, JSON.stringify(merged));
+                    }
+                  } catch (e) { console.log('ticket-requests 저장 오류:', e); }
+                  // 로컬 캐시도 업데이트
+                  try {
+                    const TR_KEY = 'paran:ticket-requests';
+                    const cached = JSON.parse(localStorage.getItem(TR_KEY) || '[]');
+                    localStorage.setItem(TR_KEY, JSON.stringify([...cached.filter(x => x.id !== newReq.id), newReq]));
+                  } catch (e) {}
+
                   setTicketRequestModal(null);
                   alert('✅ 신청이 접수되었어요. 선생님 승인을 기다려 주세요!');
                 }}
@@ -29102,35 +29180,60 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
   const [denyReason, setDenyReason] = useState('');
   // ★ 학생이 다른 기기에서 신청한 면제권을 즉시 표시하기 위해 Firebase에서 최신 학생 데이터를 직접 가져옴
   const [freshStudents, setFreshStudents] = useState(students);
+  // ★ 학생들이 student 컬렉션 쓰기가 막혀도 신청은 보이도록 별도 신청함 사용
+  const [globalRequests, setGlobalRequests] = useState([]);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
 
   // 부모 props가 갱신되면 같이 갱신
   useEffect(() => { setFreshStudents(students); }, [students]);
 
-  // ★ Firebase에서 최신 학생 데이터(tower.ticketRequests 포함)를 직접 fetch
+  // ★ Firebase 학생 + 글로벌 신청함을 모두 fetch
   const fetchFresh = async (silent = false) => {
     if (!silent) setRefreshing(true);
+    // 1) 글로벌 신청함 (window.storage)
+    try {
+      if (window.storage) {
+        const r = await window.storage.get('paran:ticket-requests');
+        if (r?.value) {
+          const list = JSON.parse(r.value);
+          setGlobalRequests(Array.isArray(list) ? list : []);
+        }
+      }
+    } catch (e) { console.log('글로벌 신청함 로드 오류:', e); }
+    // localStorage fallback
+    try {
+      const local = localStorage.getItem('paran:ticket-requests');
+      if (local) {
+        const list = JSON.parse(local);
+        setGlobalRequests(prev => {
+          // window.storage가 더 많은 경우 그대로 두고, 없을 때만 local 사용
+          if (prev.length === 0 && Array.isArray(list)) return list;
+          return prev;
+        });
+      }
+    } catch (e) {}
+
+    // 2) Firebase 학생 데이터(tower 포함)
     try {
       let firebaseStudents = null;
       if (typeof loadStudentsFromFirebase === 'function') {
         firebaseStudents = await loadStudentsFromFirebase();
       }
       if (firebaseStudents && firebaseStudents.length > 0) {
-        // 기존 students의 ID 순서/필드를 유지하되, tower 등 변경된 필드는 firebase 값으로 덮어쓰기
         const fbMap = new Map(firebaseStudents.map(s => [String(s.id), s]));
         const merged = students.map(s => {
           const fb = fbMap.get(String(s.id));
           return fb ? { ...s, ...fb } : s;
         });
-        // firebase에만 있는 새 학생도 추가
         firebaseStudents.forEach(fb => {
           if (!merged.find(m => String(m.id) === String(fb.id))) merged.push(fb);
         });
         setFreshStudents(merged);
-        setLastRefresh(new Date());
       }
-    } catch (e) { console.log('면제권 데이터 새로고침 오류:', e); }
+    } catch (e) { console.log('면제권 학생 새로고침 오류:', e); }
+
+    setLastRefresh(new Date());
     if (!silent) setRefreshing(false);
   };
 
@@ -29144,11 +29247,39 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
     // eslint-disable-next-line
   }, []);
 
-  // 모든 신청을 학생 정보와 함께 평탄화
-  const allRequests = freshStudents.flatMap(st => {
-    const reqs = st.tower?.ticketRequests || [];
-    return reqs.map(r => ({ ...r, student: st }));
-  }).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
+  // 학생 ID/이름으로 학생 객체 찾기
+  const findStudentForReq = (req) => {
+    if (req.studentId) {
+      const byId = freshStudents.find(s => String(s.id) === String(req.studentId));
+      if (byId) return byId;
+    }
+    if (req.studentName) {
+      const byName = freshStudents.find(s => s.name === req.studentName);
+      if (byName) return byName;
+    }
+    // 학생 객체가 없으면 최소 정보만 가진 가짜 객체
+    return { id: req.studentId || 'unknown', name: req.studentName || '알 수 없는 학생', tower: {} };
+  };
+
+  // ★ 글로벌 신청함과 students 컬렉션의 ticketRequests를 모두 합쳐 표시 (중복 제거)
+  const requestsFromStudents = freshStudents.flatMap(st =>
+    (st.tower?.ticketRequests || []).map(r => ({ ...r, studentId: r.studentId || st.id, studentName: r.studentName || st.name }))
+  );
+  const requestsFromGlobal = globalRequests;
+  const reqMap = new Map();
+  // 글로벌 신청함을 우선 (선생님이 처리 후 students 컬렉션에 안 반영됐을 수도 있는 경우 대비)
+  [...requestsFromStudents, ...requestsFromGlobal].forEach(r => {
+    if (!r || !r.id) return;
+    const existing = reqMap.get(r.id);
+    // resolvedAt이 더 최근인 것을 채택, 없으면 글로벌 우선
+    if (!existing || (r.resolvedAt && (!existing.resolvedAt || r.resolvedAt > existing.resolvedAt))) {
+      reqMap.set(r.id, r);
+    }
+  });
+  const allRequests = Array.from(reqMap.values()).map(r => ({
+    ...r,
+    student: findStudentForReq(r),
+  })).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
 
   const pending = allRequests.filter(r => r.status === 'pending');
   const resolved = allRequests.filter(r => r.status !== 'pending');
@@ -29162,17 +29293,45 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
     retest: st.tower?.tickets?.retest || 0,
   })).filter(b => b.homework > 0 || b.retest > 0).sort((a, b) => (b.homework + b.retest) - (a.homework + a.retest));
 
+  // 글로벌 신청함 업데이트 헬퍼
+  const updateGlobalRequest = async (reqId, patch) => {
+    try {
+      // 우선 메모리 상태 갱신
+      setGlobalRequests(prev => prev.map(r => r.id === reqId ? { ...r, ...patch } : r));
+      // window.storage / localStorage 갱신
+      let list = [];
+      if (window.storage) {
+        const r = await window.storage.get('paran:ticket-requests');
+        if (r?.value) list = JSON.parse(r.value);
+      }
+      if (list.length === 0) {
+        try { list = JSON.parse(localStorage.getItem('paran:ticket-requests') || '[]'); } catch (e) {}
+      }
+      // 기존에 없는 신청이면 새로 추가 (학생이 글로벌 신청함에는 못 썼지만 students 컬렉션엔 있는 경우)
+      const exists = list.find(r => r.id === reqId);
+      const updated = exists
+        ? list.map(r => r.id === reqId ? { ...r, ...patch } : r)
+        : [...list, { id: reqId, ...patch }];
+      const json = JSON.stringify(updated);
+      localStorage.setItem('paran:ticket-requests', json);
+      if (window.storage) await window.storage.set('paran:ticket-requests', json);
+    } catch (e) { console.log('글로벌 신청함 업데이트 오류:', e); }
+  };
+
   const handleApprove = async (req) => {
     if (isReadOnly) { alert('읽기 전용 모드입니다.'); return; }
     const st = req.student;
     const reqId = req.id;
+    const resolvedAt = new Date().toISOString();
     const newRequests = (st.tower?.ticketRequests || []).map(r =>
-      r.id === reqId ? { ...r, status: 'approved', resolvedAt: new Date().toISOString() } : r
+      r.id === reqId ? { ...r, status: 'approved', resolvedAt } : r
     );
     // freshStudents 기반으로 업데이트하여 다른 기기 변경사항 보존
     const updatedStudents = freshStudents.map(s => s.id === st.id ? { ...s, tower: { ...s.tower, ticketRequests: newRequests } } : s);
     setFreshStudents(updatedStudents);
     saveStudents(updatedStudents);
+    // 글로벌 신청함도 갱신 (다른 기기/세션 동기화)
+    await updateGlobalRequest(reqId, { status: 'approved', resolvedAt, type: req.type, sessionDate: req.sessionDate, studentId: st.id, studentName: st.name, requestedAt: req.requestedAt, reason: req.reason });
 
     // 숙제 면제권 승인 시 → 해당 날짜 세션의 homeworkExempt를 true로 (학습 보고서 자동 반영)
     if (req.type === 'homework') {
@@ -29218,18 +29377,22 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
     setDenyReason('');
   };
 
-  const submitDeny = () => {
+  const submitDeny = async () => {
     const req = denyModal.request;
     const st = req.student;
+    const resolvedAt = new Date().toISOString();
+    const resolvedNote = denyReason.trim() || '사유 미기재';
     // 거절 시 보유 잔액 환원
     const curTickets = st.tower?.tickets || { homework: 0, retest: 0 };
     const restored = { ...curTickets, [req.type]: (curTickets[req.type] || 0) + 1 };
     const newRequests = (st.tower?.ticketRequests || []).map(r =>
-      r.id === req.id ? { ...r, status: 'denied', resolvedAt: new Date().toISOString(), resolvedNote: denyReason.trim() || '사유 미기재' } : r
+      r.id === req.id ? { ...r, status: 'denied', resolvedAt, resolvedNote } : r
     );
     const updatedStudents = freshStudents.map(s => s.id === st.id ? { ...s, tower: { ...s.tower, tickets: restored, ticketRequests: newRequests } } : s);
     setFreshStudents(updatedStudents);
     saveStudents(updatedStudents);
+    // 글로벌 신청함도 갱신
+    await updateGlobalRequest(req.id, { status: 'denied', resolvedAt, resolvedNote, type: req.type, sessionDate: req.sessionDate, studentId: st.id, studentName: st.name, requestedAt: req.requestedAt, reason: req.reason });
     setDenyModal(null);
     setDenyReason('');
     alert(`❌ ${st.name} 학생의 신청을 거절했습니다. 면제권은 학생에게 환원되었습니다.`);
