@@ -1087,7 +1087,7 @@ export default function ParanMathSystem() {
           <HomeworkTab students={myStudents} saveStudents={saveMergedStudents} />
         )}
         {activeTab === 'attendance' && (
-          <AttendanceTab students={myStudents} saveStudents={saveMergedStudents} />
+          <AttendanceTab students={myStudents} saveStudents={saveMergedStudents} teachers={teachers} userType={userType} />
         )}
         {activeTab === 'payment' && (
           <PaymentTab students={myStudents} saveStudents={saveMergedStudents} />
@@ -39797,13 +39797,14 @@ function ScheduleTab({ students }) {
 }
 
 // ========== 출결 관리 탭 ==========
-function AttendanceTab({ students, saveStudents }) {
+function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teacher' }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [viewMode, setViewMode] = useState('daily'); // daily, weekly, monthly, stats
   const [attendanceRecords, setAttendanceRecords] = useState({});
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrStudent, setQrStudent] = useState(null);
   const [filterClass, setFilterClass] = useState('all');
+  const [filterTeacher, setFilterTeacher] = useState('all'); // 담당 선생님 필터 ('all' | teacherId | 'unassigned')
 
   // 출결 데이터 로드
   useEffect(() => {
@@ -39932,9 +39933,40 @@ function AttendanceTab({ students, saveStudents }) {
 
   // 반 목록 가져오기
   const classes = [...new Set(students.map(s => s.class || '미지정'))].sort();
-  const filteredStudents = filterClass === 'all' 
-    ? students 
-    : students.filter(s => (s.class || '미지정') === filterClass);
+  // 반 + 담당 선생님 필터 적용
+  const filteredStudents = students.filter(s => {
+    if (filterClass !== 'all' && (s.class || '미지정') !== filterClass) return false;
+    if (filterTeacher !== 'all') {
+      if (filterTeacher === 'unassigned') {
+        if (s.teacherId) return false;
+      } else if (s.teacherId !== filterTeacher) return false;
+    }
+    return true;
+  });
+
+  // 담당 선생님 이름 조회
+  const getTeacherName = (teacherId) => {
+    if (!teacherId) return '담당 미지정';
+    const t = teachers.find(t => t.id === teacherId);
+    return t ? t.name : '담당 미지정';
+  };
+
+  // 학생들을 담당 선생님별로 그룹화 (선생님 이름 알파벳/한글 순, '담당 미지정'은 마지막)
+  const groupByTeacher = (list) => {
+    const groups = {};
+    list.forEach(s => {
+      const tid = s.teacherId || '__none__';
+      if (!groups[tid]) groups[tid] = { teacherId: tid, teacherName: getTeacherName(s.teacherId), students: [] };
+      groups[tid].students.push(s);
+    });
+    return Object.values(groups).sort((a, b) => {
+      if (a.teacherId === '__none__') return 1;
+      if (b.teacherId === '__none__') return -1;
+      return a.teacherName.localeCompare(b.teacherName);
+    });
+  };
+  const teacherGroups = groupByTeacher(filteredStudents);
+  const showTeacherGroups = teachers.length > 0; // 등록된 선생님이 있을 때만 그룹화 표시
 
   // 요일 이름
   const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
@@ -39968,7 +40000,20 @@ function AttendanceTab({ students, saveStudents }) {
             ))}
           </div>
           
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-3 items-center flex-wrap">
+            {/* 담당 선생님 필터 (등록된 선생님 있을 때만) */}
+            {teachers.length > 0 && (
+              <select
+                value={filterTeacher}
+                onChange={(e) => setFilterTeacher(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-amber-50 border-amber-200">
+                <option value="all">👨‍🏫 전체 선생님</option>
+                {teachers.map(t => (
+                  <option key={t.id} value={t.id}>{t.name} 선생님</option>
+                ))}
+                <option value="unassigned">담당 미지정</option>
+              </select>
+            )}
             <select
               value={filterClass}
               onChange={(e) => setFilterClass(e.target.value)}
@@ -39979,7 +40024,7 @@ function AttendanceTab({ students, saveStudents }) {
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-            
+
             <input
               type="date"
               value={selectedDate}
@@ -40004,12 +40049,12 @@ function AttendanceTab({ students, saveStudents }) {
               <div className="p-8 text-center text-gray-500">
                 등록된 학생이 없습니다. 학생 관리에서 먼저 학생을 추가해주세요.
               </div>
-            ) : (
-              filteredStudents.map(student => {
+            ) : (() => {
+              // 학생 카드 렌더 함수
+              const renderStudentCard = (student) => {
                 const record = getAttendanceStatus(student.id, selectedDate);
                 const style = getStatusStyle(record?.status);
                 const StatusIcon = style.icon;
-                
                 return (
                   <div key={student.id} className="p-3 flex flex-col gap-2 hover:bg-gray-50">
                     <div className="flex items-center gap-3">
@@ -40021,7 +40066,6 @@ function AttendanceTab({ students, saveStudents }) {
                         <p className="text-xs text-gray-500 whitespace-nowrap">{student.class || '미지정'} · {student.grade || ''}</p>
                       </div>
                     </div>
-                    
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {record && (
                         <div className={`px-3 py-1 rounded-full flex items-center gap-1 ${style.bg} ${style.text}`}>
@@ -40032,7 +40076,6 @@ function AttendanceTab({ students, saveStudents }) {
                           )}
                         </div>
                       )}
-                      
                       <div className="flex gap-1 flex-wrap">
                         <button
                           onClick={() => handleQRCheckIn(student)}
@@ -40057,8 +40100,47 @@ function AttendanceTab({ students, saveStudents }) {
                     </div>
                   </div>
                 );
-              })
-            )}
+              };
+
+              // 선생님이 등록되지 않았거나 특정 선생님으로 필터링된 경우 단순 목록
+              if (!showTeacherGroups || filterTeacher !== 'all') {
+                return filteredStudents.map(renderStudentCard);
+              }
+
+              // 담당 선생님별 그룹화 표시
+              const teacherColors = ['from-blue-500 to-indigo-600', 'from-emerald-500 to-teal-600', 'from-purple-500 to-violet-600', 'from-orange-500 to-amber-600', 'from-pink-500 to-rose-600'];
+              return teacherGroups.map((g, idx) => {
+                // 그룹별 출석 요약
+                const summary = { present: 0, late: 0, early: 0, absent: 0, excused: 0, none: 0 };
+                g.students.forEach(s => {
+                  const rec = getAttendanceStatus(s.id, selectedDate);
+                  if (rec?.status) summary[rec.status] = (summary[rec.status] || 0) + 1;
+                  else summary.none++;
+                });
+                const colorClass = g.teacherId === '__none__' ? 'from-gray-500 to-slate-600' : teacherColors[idx % teacherColors.length];
+                return (
+                  <div key={g.teacherId}>
+                    {/* 선생님 그룹 헤더 */}
+                    <div className={`bg-gradient-to-r ${colorClass} px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap sticky top-0 z-[1]`}>
+                      <div className="flex items-center gap-2 text-white">
+                        <span className="text-base">👨‍🏫</span>
+                        <span className="font-bold text-sm">{g.teacherName}</span>
+                        <span className="text-xs opacity-80">({g.students.length}명)</span>
+                      </div>
+                      <div className="flex gap-1.5 text-[11px] flex-wrap">
+                        {summary.present > 0 && <span className="bg-white/25 text-white px-2 py-0.5 rounded-full font-bold">출석 {summary.present}</span>}
+                        {summary.late > 0 && <span className="bg-white/25 text-white px-2 py-0.5 rounded-full font-bold">지각 {summary.late}</span>}
+                        {summary.early > 0 && <span className="bg-white/25 text-white px-2 py-0.5 rounded-full font-bold">조퇴 {summary.early}</span>}
+                        {summary.absent > 0 && <span className="bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-bold">결석 {summary.absent}</span>}
+                        {summary.excused > 0 && <span className="bg-white/25 text-white px-2 py-0.5 rounded-full font-bold">사유 {summary.excused}</span>}
+                        {summary.none > 0 && <span className="bg-white/15 text-white/80 px-2 py-0.5 rounded-full">미입력 {summary.none}</span>}
+                      </div>
+                    </div>
+                    <div className="divide-y">{g.students.map(renderStudentCard)}</div>
+                  </div>
+                );
+              });
+            })()}
           </div>
           
           {/* 일별 요약 */}
@@ -40103,55 +40185,75 @@ function AttendanceTab({ students, saveStudents }) {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filteredStudents.map(student => {
+                {(() => {
                   const weekDates = getWeekDates(selectedDate);
-                  const presentCount = weekDates.filter(date => 
-                    getAttendanceStatus(student.id, date)?.status === 'present'
-                  ).length;
-                  const totalRecords = weekDates.filter(date => 
-                    getAttendanceStatus(student.id, date)
-                  ).length;
-                  const rate = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
-                  
-                  return (
-                    <tr key={student.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-gradient-to-br from-teal-400 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                            {student.name.charAt(0)}
+                  const colSpan = weekDates.length + 2; // 학생 컬럼 + 날짜들 + 출석률
+                  const renderRow = (student) => {
+                    const presentCount = weekDates.filter(date =>
+                      getAttendanceStatus(student.id, date)?.status === 'present'
+                    ).length;
+                    const totalRecords = weekDates.filter(date =>
+                      getAttendanceStatus(student.id, date)
+                    ).length;
+                    const rate = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
+                    return (
+                      <tr key={student.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-gradient-to-br from-teal-400 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                              {student.name.charAt(0)}
+                            </div>
+                            <span className="font-medium">{student.name}</span>
                           </div>
-                          <span className="font-medium">{student.name}</span>
-                        </div>
-                      </td>
-                      {weekDates.map(date => {
-                        const record = getAttendanceStatus(student.id, date);
-                        const style = getStatusStyle(record?.status);
-                        const StatusIcon = style.icon;
-                        return (
-                          <td key={date} className="px-2 py-3 text-center">
-                            <button
-                              onClick={() => {
-                                const statuses = ['present', 'late', 'early', 'absent', 'excused'];
-                                const currentIndex = statuses.indexOf(record?.status);
-                                const nextStatus = statuses[(currentIndex + 1) % statuses.length];
-                                updateAttendance(student.id, date, nextStatus);
-                              }}
-                              className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${style.bg} ${style.text} hover:ring-2 hover:ring-offset-1`}
-                              title={style.label}
-                            >
-                              <StatusIcon size={18} />
-                            </button>
-                          </td>
-                        );
-                      })}
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-3 py-1 rounded-full font-bold ${ rate >= 90 ? 'bg-green-100 text-green-700' : rate >= 70 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700' }`}>
-                          {rate}%
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        {weekDates.map(date => {
+                          const record = getAttendanceStatus(student.id, date);
+                          const style = getStatusStyle(record?.status);
+                          const StatusIcon = style.icon;
+                          return (
+                            <td key={date} className="px-2 py-3 text-center">
+                              <button
+                                onClick={() => {
+                                  const statuses = ['present', 'late', 'early', 'absent', 'excused'];
+                                  const currentIndex = statuses.indexOf(record?.status);
+                                  const nextStatus = statuses[(currentIndex + 1) % statuses.length];
+                                  updateAttendance(student.id, date, nextStatus);
+                                }}
+                                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${style.bg} ${style.text} hover:ring-2 hover:ring-offset-1`}
+                                title={style.label}
+                              >
+                                <StatusIcon size={18} />
+                              </button>
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-3 py-1 rounded-full font-bold ${ rate >= 90 ? 'bg-green-100 text-green-700' : rate >= 70 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700' }`}>
+                            {rate}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  };
+
+                  if (!showTeacherGroups || filterTeacher !== 'all') {
+                    return filteredStudents.map(renderRow);
+                  }
+
+                  // 담당 선생님별 그룹 헤더 + 학생 행
+                  const teacherColors = ['bg-blue-100 text-blue-800', 'bg-emerald-100 text-emerald-800', 'bg-purple-100 text-purple-800', 'bg-orange-100 text-orange-800', 'bg-pink-100 text-pink-800'];
+                  return teacherGroups.flatMap((g, idx) => {
+                    const colorClass = g.teacherId === '__none__' ? 'bg-gray-100 text-gray-700' : teacherColors[idx % teacherColors.length];
+                    return [
+                      <tr key={'header-' + g.teacherId} className={colorClass}>
+                        <td colSpan={colSpan} className="px-4 py-2 font-bold text-sm">
+                          👨‍🏫 {g.teacherName} <span className="text-xs opacity-70">({g.students.length}명)</span>
+                        </td>
+                      </tr>,
+                      ...g.students.map(renderRow)
+                    ];
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -40168,55 +40270,77 @@ function AttendanceTab({ students, saveStudents }) {
           </div>
           
           <div className="p-4 grid gap-4">
-            {filteredStudents.map(student => {
+            {(() => {
               const monthDates = getMonthDates(selectedDate);
-              const stats = calculateStats(student.id, monthDates[0], monthDates[monthDates.length - 1]);
-              
-              return (
-                <div key={student.id} className="border rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold">
-                        {student.name.charAt(0)}
+              const renderCard = (student) => {
+                const stats = calculateStats(student.id, monthDates[0], monthDates[monthDates.length - 1]);
+                return (
+                  <div key={student.id} className="border rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold">
+                          {student.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-bold">{student.name}</p>
+                          <p className="text-sm text-gray-500">{student.class || '미지정'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold">{student.name}</p>
-                        <p className="text-sm text-gray-500">{student.class || '미지정'}</p>
+                      <div className="flex gap-2 text-sm">
+                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded">출석 {stats.present}</span>
+                        <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">지각 {stats.late}</span>
+                        <span className="px-2 py-1 bg-red-100 text-red-700 rounded">결석 {stats.absent}</span>
+                        <span className={`px-2 py-1 rounded font-bold ${ stats.rate >= 90 ? 'bg-green-500 text-white' : stats.rate >= 70 ? 'bg-yellow-500 text-white' : 'bg-red-500 text-white' }`}>
+                          {stats.rate}%
+                        </span>
                       </div>
                     </div>
-                    <div className="flex gap-2 text-sm">
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">출석 {stats.present}</span>
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">지각 {stats.late}</span>
-                      <span className="px-2 py-1 bg-red-100 text-red-700 rounded">결석 {stats.absent}</span>
-                      <span className={`px-2 py-1 rounded font-bold ${ stats.rate >= 90 ? 'bg-green-500 text-white' : stats.rate >= 70 ? 'bg-yellow-500 text-white' : 'bg-red-500 text-white' }`}>
-                        {stats.rate}%
-                      </span>
+                    <div className="flex flex-wrap gap-1">
+                      {monthDates.map(date => {
+                        const record = getAttendanceStatus(student.id, date);
+                        const style = getStatusStyle(record?.status);
+                        const day = new Date(date).getDate();
+                        return (
+                          <button
+                            key={date}
+                            onClick={() => {
+                              setSelectedDate(date);
+                              setViewMode('daily');
+                            }}
+                            className={`w-7 h-7 rounded text-xs font-medium ${style.bg} ${style.text} hover:ring-2 hover:ring-offset-1 transition-all`}
+                            title={`${date} - ${style.label}`}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  
-                  <div className="flex flex-wrap gap-1">
-                    {monthDates.map(date => {
-                      const record = getAttendanceStatus(student.id, date);
-                      const style = getStatusStyle(record?.status);
-                      const day = new Date(date).getDate();
-                      return (
-                        <button
-                          key={date}
-                          onClick={() => {
-                            setSelectedDate(date);
-                            setViewMode('daily');
-                          }}
-                          className={`w-7 h-7 rounded text-xs font-medium ${style.bg} ${style.text} hover:ring-2 hover:ring-offset-1 transition-all`}
-                          title={`${date} - ${style.label}`}
-                        >
-                          {day}
-                        </button>
-                      );
-                    })}
+                );
+              };
+
+              if (!showTeacherGroups || filterTeacher !== 'all') {
+                return filteredStudents.map(renderCard);
+              }
+
+              // 담당 선생님별 섹션
+              const teacherColors = ['from-blue-500 to-indigo-600', 'from-emerald-500 to-teal-600', 'from-purple-500 to-violet-600', 'from-orange-500 to-amber-600', 'from-pink-500 to-rose-600'];
+              return teacherGroups.map((g, idx) => {
+                const colorClass = g.teacherId === '__none__' ? 'from-gray-500 to-slate-600' : teacherColors[idx % teacherColors.length];
+                return (
+                  <div key={g.teacherId} className="space-y-3">
+                    <div className={`bg-gradient-to-r ${colorClass} rounded-lg px-4 py-2 flex items-center gap-2 text-white`}>
+                      <span className="text-base">👨‍🏫</span>
+                      <span className="font-bold text-sm">{g.teacherName}</span>
+                      <span className="text-xs opacity-80">({g.students.length}명)</span>
+                    </div>
+                    <div className="grid gap-3">
+                      {g.students.map(renderCard)}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
         </div>
       )}
