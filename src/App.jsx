@@ -5188,13 +5188,29 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
     tower: baseStudent.tower || {},
   };
 
-  // ★ 면제권 신청 마이그레이션: 학생의 로컬 tower.ticketRequests에 있는 pending 신청을
-  // 글로벌 신청함(window.storage 'paran:ticket-requests')으로 동기화.
-  // Firebase students 컬렉션 쓰기가 막혀서 선생님이 못 보던 기존 신청도 복구됨.
+  // ★ 면제권 신청 마이그레이션: 학생의 로컬 데이터를 학생별 개인 문서 + 글로벌 신청함에 동기화
+  // 학생별 문서(paran:tickets:{이름})는 학생이 자기 이름 키엔 항상 쓸 수 있어 가장 신뢰성 높음
   useEffect(() => {
-    const syncTicketRequestsToGlobal = async () => {
+    const syncToServerChannels = async () => {
       try {
         const localReqs = student.tower?.ticketRequests || [];
+        const localTickets = student.tower?.tickets || { homework: 0, retest: 0 };
+        // 학생별 개인 문서에 항상 최신 상태 백업 (가장 신뢰성 있는 채널)
+        if (typeof window !== 'undefined' && window.storage && student.name) {
+          try {
+            const PS_KEY = 'paran:tickets:' + student.name;
+            const payload = {
+              studentId: student.id,
+              studentName: student.name,
+              tickets: localTickets,
+              ticketRequests: localReqs,
+              updatedAt: new Date().toISOString(),
+            };
+            await window.storage.set(PS_KEY, JSON.stringify(payload));
+            console.log('🎫 면제권 학생 문서 백업 완료:', student.name, '신청 ' + localReqs.length + '건');
+          } catch (e) { console.log('학생 면제권 문서 백업 실패:', e); }
+        }
+        // 추가로 글로벌 신청함도 시도
         if (localReqs.length === 0) return;
         const TR_KEY = 'paran:ticket-requests';
         let globalList = [];
@@ -5207,7 +5223,6 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
         if (globalList.length === 0) {
           try { globalList = JSON.parse(localStorage.getItem(TR_KEY) || '[]'); } catch (e) {}
         }
-        // 글로벌에 없는 학생 신청을 추가 (학생 정보 포함하여 정규화)
         const existingIds = new Set(globalList.map(r => r.id));
         const toMerge = localReqs
           .filter(r => r.id && !existingIds.has(r.id))
@@ -5221,14 +5236,14 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
           const json = JSON.stringify(merged);
           try { localStorage.setItem(TR_KEY, json); } catch (e) {}
           if (window.storage) {
-            try { await window.storage.set(TR_KEY, json); console.log('🎫 면제권 신청 ' + toMerge.length + '건 글로벌 동기화 완료'); } catch (e) {}
+            try { await window.storage.set(TR_KEY, json); console.log('🎫 글로벌 신청함 ' + toMerge.length + '건 동기화'); } catch (e) {}
           }
         }
-      } catch (e) { console.log('ticket-requests 동기화 오류:', e); }
+      } catch (e) { console.log('면제권 동기화 오류:', e); }
     };
-    syncTicketRequestsToGlobal();
+    syncToServerChannels();
     // eslint-disable-next-line
-  }, [student.id, student.tower?.ticketRequests?.length]);
+  }, [student.id, student.tower?.ticketRequests?.length, student.tower?.tickets?.homework, student.tower?.tickets?.retest]);
 
   // 복습 주기 (에빙하우스 망각곡선 기반)
   const reviewIntervals = [1, 3, 7, 14, 30];
@@ -8415,8 +8430,26 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                   const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, tickets: newTickets, ticketRequests: allReqs } } : s);
                   saveStudents(updated);
 
-                  // ★ window.storage에도 별도 신청함 저장 (cross-device 안정성: students 컬렉션 쓰기가
-                  //   막혀도 면제권 신청은 항상 보임)
+                  // ★ 학생별 개인 면제권 문서에 저장 (학생이 자기 이름으로 된 storage 키에는 쓸 수 있음 — 자습 기록과 동일한 채널)
+                  let perStudentOk = false;
+                  try {
+                    if (window.storage) {
+                      const PS_KEY = 'paran:tickets:' + student.name;
+                      const payload = {
+                        studentId: student.id,
+                        studentName: student.name,
+                        tickets: newTickets,
+                        ticketRequests: allReqs,
+                        updatedAt: new Date().toISOString(),
+                      };
+                      await window.storage.set(PS_KEY, JSON.stringify(payload));
+                      perStudentOk = true;
+                    }
+                    localStorage.setItem('paran:tickets:' + student.name, JSON.stringify({ tickets: newTickets, ticketRequests: allReqs }));
+                  } catch (e) { console.log('per-student tickets 저장 오류:', e); }
+
+                  // ★ 글로벌 신청함도 시도 (cross-device 보조 채널)
+                  let globalOk = false;
                   try {
                     if (window.storage) {
                       const TR_KEY = 'paran:ticket-requests';
@@ -8427,9 +8460,9 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                       } catch (e) {}
                       const merged = [...existing.filter(x => x.id !== newReq.id), newReq];
                       await window.storage.set(TR_KEY, JSON.stringify(merged));
+                      globalOk = true;
                     }
                   } catch (e) { console.log('ticket-requests 저장 오류:', e); }
-                  // 로컬 캐시도 업데이트
                   try {
                     const TR_KEY = 'paran:ticket-requests';
                     const cached = JSON.parse(localStorage.getItem(TR_KEY) || '[]');
@@ -8437,7 +8470,11 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                   } catch (e) {}
 
                   setTicketRequestModal(null);
-                  alert('✅ 신청이 접수되었어요. 선생님 승인을 기다려 주세요!');
+                  if (perStudentOk || globalOk) {
+                    alert('✅ 신청이 접수되었어요. 선생님 승인을 기다려 주세요!');
+                  } else {
+                    alert('⚠️ 신청이 접수되었지만 서버 동기화에 실패했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+                  }
                 }}
                 className={`flex-2 px-4 py-2 rounded font-bold text-sm text-white ${ticketRequestModal.type === 'homework' ? 'bg-blue-500' : 'bg-purple-500'}`}
                 style={{ flex: 2 }}>
@@ -29209,38 +29246,54 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
   // 부모 props가 갱신되면 같이 갱신
   useEffect(() => { setFreshStudents(students); }, [students]);
 
-  // ★ Firebase 학생 + 글로벌 신청함을 모두 fetch
+  // ★ 학생별 개인 면제권 문서, 글로벌 신청함, Firebase 학생 데이터 모두 fetch
   const fetchFresh = async (silent = false) => {
     if (!silent) setRefreshing(true);
-    // 1) 글로벌 신청함 (window.storage)
+
+    // 1) 글로벌 신청함 (window.storage 'paran:ticket-requests')
+    let globalList = [];
     try {
       if (window.storage) {
         const r = await window.storage.get('paran:ticket-requests');
         if (r?.value) {
           const list = JSON.parse(r.value);
-          setGlobalRequests(Array.isArray(list) ? list : []);
+          if (Array.isArray(list)) globalList = list;
         }
       }
     } catch (e) { console.log('글로벌 신청함 로드 오류:', e); }
-    // localStorage fallback
-    try {
-      const local = localStorage.getItem('paran:ticket-requests');
-      if (local) {
-        const list = JSON.parse(local);
-        setGlobalRequests(prev => {
-          // window.storage가 더 많은 경우 그대로 두고, 없을 때만 local 사용
-          if (prev.length === 0 && Array.isArray(list)) return list;
-          return prev;
-        });
-      }
-    } catch (e) {}
+    if (globalList.length === 0) {
+      try {
+        const local = localStorage.getItem('paran:ticket-requests');
+        if (local) globalList = JSON.parse(local) || [];
+      } catch (e) {}
+    }
 
-    // 2) Firebase 학생 데이터(tower 포함)
+    // 2) 학생별 개인 면제권 문서들 (paran:tickets:{이름}) — 학생이 본인 이름 키엔 쓸 수 있음
+    const perStudentMap = {}; // { studentName: { tickets, ticketRequests } }
+    if (window.storage) {
+      // 학생 한 명씩 fetch (병렬)
+      await Promise.all(students.map(async (st) => {
+        try {
+          const r = await window.storage.get('paran:tickets:' + st.name);
+          if (r?.value) {
+            const data = JSON.parse(r.value);
+            if (data && (data.ticketRequests || data.tickets)) {
+              perStudentMap[st.name] = { ...data, _studentId: st.id };
+            }
+          }
+        } catch (e) {}
+      }));
+    }
+
+    setGlobalRequests(globalList);
+
+    // 3) Firebase 학생 데이터(tower 포함) + per-student 데이터 병합
     try {
       let firebaseStudents = null;
       if (typeof loadStudentsFromFirebase === 'function') {
         firebaseStudents = await loadStudentsFromFirebase();
       }
+      let baseList = students;
       if (firebaseStudents && firebaseStudents.length > 0) {
         const fbMap = new Map(firebaseStudents.map(s => [String(s.id), s]));
         const merged = students.map(s => {
@@ -29250,8 +29303,22 @@ function TicketApprovalTab({ students, saveStudents, userType = 'teacher', isRea
         firebaseStudents.forEach(fb => {
           if (!merged.find(m => String(m.id) === String(fb.id))) merged.push(fb);
         });
-        setFreshStudents(merged);
+        baseList = merged;
       }
+      // 학생별 문서가 있으면 그게 가장 최신 (학생이 본인 doc은 항상 쓸 수 있으므로) → tower에 덮어쓰기
+      const finalList = baseList.map(s => {
+        const ps = perStudentMap[s.name];
+        if (!ps) return s;
+        return {
+          ...s,
+          tower: {
+            ...(s.tower || {}),
+            tickets: ps.tickets || s.tower?.tickets || { homework: 0, retest: 0 },
+            ticketRequests: ps.ticketRequests || s.tower?.ticketRequests || [],
+          }
+        };
+      });
+      setFreshStudents(finalList);
     } catch (e) { console.log('면제권 학생 새로고침 오류:', e); }
 
     setLastRefresh(new Date());
