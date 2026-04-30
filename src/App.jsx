@@ -35832,9 +35832,23 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
 
   const updateStudent = () => {
     if (!editingStudent) return;
-
-    const newStudents = students.map(s => 
-      s.id === editingStudent.id ? editingStudent : s
+    if (!editingStudent.id) {
+      alert('학생 ID가 없어 저장할 수 없습니다. 새로고침 후 다시 시도해 주세요.');
+      return;
+    }
+    const targetId = String(editingStudent.id);
+    const matches = students.filter(s => String(s.id) === targetId);
+    if (matches.length > 1) {
+      alert('⚠️ 동일한 ID(' + targetId + ')의 학생이 ' + matches.length + '명 있어 안전하게 저장할 수 없습니다. 한 학생의 점수가 다른 학생에게 적용될 수 있으니 학생 데이터를 정리한 뒤 다시 시도해 주세요.\n\n중복 학생: ' + matches.map(s => s.name).join(', '));
+      console.warn('중복 학생 ID:', targetId, matches.map(s => ({ id: s.id, name: s.name })));
+      return;
+    }
+    if (matches.length === 0) {
+      alert('해당 학생을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.');
+      return;
+    }
+    const newStudents = students.map(s =>
+      String(s.id) === targetId ? editingStudent : s
     );
     saveStudents(newStudents);
     setEditingStudent(null);
@@ -36026,7 +36040,16 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
             <TrendingUp size={18} />
           </button>
           {!isReadOnly && (
-          <button onClick={() => { setEditingStudent(student); setActiveTab('basic'); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded">
+          <button onClick={() => {
+            // ★ 깊은 복사: editingStudent가 원본 student 객체와 참조를 공유하면 schoolScores 배열 등이
+            // 다른 학생과 공유될 수 있어 한 학생의 점수 입력이 모든 학생에게 적용되는 버그가 발생함
+            try {
+              setEditingStudent(JSON.parse(JSON.stringify(student)));
+            } catch (e) {
+              setEditingStudent({ ...student, schoolScores: [...(student.schoolScores || [])] });
+            }
+            setActiveTab('basic');
+          }} className="p-1 text-blue-600 hover:bg-blue-50 rounded">
             <Edit3 size={18} />
           </button>
           )}
