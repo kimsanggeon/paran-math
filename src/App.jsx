@@ -35903,9 +35903,21 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
       // ★ 선생님이 직접 추가 시 자동으로 본인 담당으로 배정
       const assignedTeacherId = (userType === 'teacher' && loggedInTeacher) ? loggedInTeacher.id : (newStudent.teacherId || '');
 
+      // ★ 폼에 입력했지만 "+ 성적 추가" 버튼 미클릭 상태인 점수도 자동 포함
+      let initialSchoolScores = Array.isArray(newStudent.schoolScores) ? newStudent.schoolScores.map(x => ({ ...x })) : [];
+      if (newScore.score && String(newScore.score).trim() !== '') {
+        initialSchoolScores.push({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          year: newScore.year, semester: newScore.semester, examType: newScore.examType,
+          subject: newScore.subject, score: newScore.score, average: newScore.average,
+          rank: newScore.rank, totalStudents: newScore.totalStudents,
+        });
+      }
+
       const student = {
         id: Date.now().toString(),
         ...newStudent,
+        schoolScores: initialSchoolScores,
         teacherId: assignedTeacherId,
         parentPassword: newStudent.parentPassword || '0000',
         exp: 0,
@@ -35957,6 +35969,27 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
     } catch (e) {
       cleanedEditing = { ...editingStudent, schoolScores: [...(editingStudent.schoolScores || [])] };
     }
+
+    // ★ 폼에 입력했지만 "+ 성적 추가" 버튼을 누르지 않은 점수도 자동으로 같이 저장
+    // (사용자가 입력 후 바로 "저장" 누르면 폼의 점수가 사라지는 UX 버그 방지)
+    if (newScore.score && String(newScore.score).trim() !== '') {
+      const autoAddedScore = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        year: newScore.year,
+        semester: newScore.semester,
+        examType: newScore.examType,
+        subject: newScore.subject,
+        score: newScore.score,
+        average: newScore.average,
+        rank: newScore.rank,
+        totalStudents: newScore.totalStudents,
+      };
+      cleanedEditing.schoolScores = [
+        ...(Array.isArray(cleanedEditing.schoolScores) ? cleanedEditing.schoolScores : []),
+        autoAddedScore,
+      ];
+    }
+
     // 다른 학생들도 schoolScores 배열을 새 배열로 (참조 공유가 있던 경우 끊기 위해)
     const newStudents = students.map(s => {
       if (String(s.id) === targetId) return cleanedEditing;
@@ -37083,13 +37116,17 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
                       </div>
                       <button
                         onClick={() => addSchoolScore(true)}
-                        className="w-full py-2 bg-green-500 text-white rounded text-sm font-medium hover:bg-green-600"
+                        disabled={!newScore.score}
+                        className={`w-full py-2 rounded text-sm font-bold ${newScore.score ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                       >
-                        + 성적 추가
+                        + 성적 추가 (목록에 넣기)
                       </button>
+                      <p className="text-[11px] text-gray-500 text-center">
+                        💡 점수 입력 후 위 버튼을 누르거나 모달의 "저장"을 누르면 자동 추가됩니다.
+                      </p>
                     </div>
                   </div>
-                  
+
                   {/* 등록된 성적 목록 */}
                   {(editingStudent.schoolScores || []).length > 0 && (
                     <div className="space-y-2">
