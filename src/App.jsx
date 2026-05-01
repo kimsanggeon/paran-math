@@ -661,15 +661,58 @@ export default function ParanMathSystem() {
     }
   }, [students.length > 0]); // eslint-disable-line
 
+  // ★ 학생들을 안전한 형태로 정규화: 모든 nested 배열/객체가 독립된 참조가 되도록 깊은 복사 +
+  // 중복 ID 자동 정리 (한 학생의 정보가 다른 학생에게 적용되는 버그 방지)
+  const sanitizeStudents = (list) => {
+    if (!Array.isArray(list)) return [];
+    const seenIds = new Map(); // id -> first index
+    const cleaned = [];
+    list.forEach((s, idx) => {
+      if (!s || typeof s !== 'object') return;
+      // 깊은 복사로 모든 nested 배열 참조 차단
+      let copy;
+      try { copy = JSON.parse(JSON.stringify(s)); } catch (e) { copy = { ...s }; }
+      // 중요한 배열 필드는 새 배열로 교체 (이중 안전장치)
+      copy.schoolScores = Array.isArray(copy.schoolScores) ? [...copy.schoolScores] : [];
+      copy.badges = Array.isArray(copy.badges) ? [...copy.badges] : [];
+      copy.homework = Array.isArray(copy.homework) ? [...copy.homework] : [];
+      copy.wrongNotes = Array.isArray(copy.wrongNotes) ? [...copy.wrongNotes] : [];
+      copy.tests = Array.isArray(copy.tests) ? [...copy.tests] : [];
+      // ID 누락 시 자동 부여
+      if (!copy.id) copy.id = 'auto-' + Date.now() + '-' + idx;
+      // 중복 ID 검출 → 신규 ID 부여 (이름이 다른 경우 별개 학생으로 처리)
+      const idStr = String(copy.id);
+      if (seenIds.has(idStr)) {
+        const firstIdx = seenIds.get(idStr);
+        const firstName = cleaned[firstIdx]?.name;
+        if (firstName && firstName !== copy.name) {
+          // 이름이 다르므로 별개 학생 → 새 ID 부여
+          copy.id = 'auto-' + Date.now() + '-' + idx;
+          seenIds.set(String(copy.id), cleaned.length);
+          console.warn('⚠️ 학생 중복 ID 자동 정리:', firstName, '→', copy.name, '신규 ID:', copy.id);
+        } else {
+          // 이름까지 같으면 중복 학생 → 스킵
+          console.warn('⚠️ 학생 중복 (id+이름) 제거:', copy.name);
+          return;
+        }
+      } else {
+        seenIds.set(idStr, cleaned.length);
+      }
+      cleaned.push(copy);
+    });
+    return cleaned;
+  };
+
   const loadStudents = async () => {
     try {
       // ★ 1순위: Firebase academies/default/students (개별 문서)
       if (isFirebaseConnected()) {
         const firebaseStudents = await loadStudentsFromFirebase();
         if (firebaseStudents && firebaseStudents.length > 0) {
-          setStudents(firebaseStudents);
-          window.__paranStudents = firebaseStudents;
-          try { localStorage.setItem('paran:students', JSON.stringify(firebaseStudents)); } catch(e) {}
+          const cleaned = sanitizeStudents(firebaseStudents);
+          setStudents(cleaned);
+          window.__paranStudents = cleaned;
+          try { localStorage.setItem('paran:students', JSON.stringify(cleaned)); } catch(e) {}
           return;
         }
       }
@@ -680,9 +723,10 @@ export default function ParanMathSystem() {
           if (r?.value) {
             const list = JSON.parse(r.value);
             if (list.length > 0) {
-              setStudents(list);
-              window.__paranStudents = list;
-              try { localStorage.setItem('paran:students', JSON.stringify(list)); } catch(e) {}
+              const cleaned = sanitizeStudents(list);
+              setStudents(cleaned);
+              window.__paranStudents = cleaned;
+              try { localStorage.setItem('paran:students', JSON.stringify(cleaned)); } catch(e) {}
               return;
             }
           }
@@ -692,14 +736,19 @@ export default function ParanMathSystem() {
       const lsData = localStorage.getItem('paran:students');
       if (lsData) {
         const list = JSON.parse(lsData);
-        setStudents(list);
-        window.__paranStudents = list;
+        const cleaned = sanitizeStudents(list);
+        setStudents(cleaned);
+        window.__paranStudents = cleaned;
       }
     } catch (e) {
       console.log('학생 로드 오류:', e);
       try {
         const saved = localStorage.getItem('paran:students');
-        if (saved) { const p = JSON.parse(saved); setStudents(p); window.__paranStudents = p; }
+        if (saved) {
+          const p = sanitizeStudents(JSON.parse(saved));
+          setStudents(p);
+          window.__paranStudents = p;
+        }
       } catch(e2) {}
     }
   };
@@ -35737,23 +35786,33 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
   const semesterOptions = ['1학기', '2학기'];
   const examTypeOptions = ['중간고사', '기말고사', '수행평가', '단원평가', '모의고사'];
 
-  // 학교 성적 추가 함수
+  // 학교 성적 추가 함수 — 모든 객체/배열을 새로 생성해 다른 학생과 참조 공유 차단
   const addSchoolScore = (isEdit = false) => {
     if (!newScore.score) return;
+    // 점수 객체를 명시적으로 새로 생성 (newScore 스프레드만으로는 부족하지 않지만 안전장치)
     const score = {
-      id: Date.now(),
-      ...newScore
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      year: newScore.year,
+      semester: newScore.semester,
+      examType: newScore.examType,
+      subject: newScore.subject,
+      score: newScore.score,
+      average: newScore.average,
+      rank: newScore.rank,
+      totalStudents: newScore.totalStudents,
     };
     if (isEdit && editingStudent) {
-      setEditingStudent(prev => ({
-        ...prev,
-        schoolScores: [...(prev.schoolScores || []), score]
-      }));
+      setEditingStudent(prev => {
+        // ★ 이전 schoolScores 배열을 그대로 spread하면 그 배열이 다른 학생과 공유 중일 때
+        // 다른 학생에게도 영향을 줄 수 있음. 명시적으로 새 배열을 만들고 각 항목도 얕은 복사.
+        const existing = Array.isArray(prev.schoolScores) ? prev.schoolScores.map(x => ({ ...x })) : [];
+        return { ...prev, schoolScores: [...existing, score] };
+      });
     } else {
-      setNewStudent(prev => ({
-        ...prev,
-        schoolScores: [...(prev.schoolScores || []), score]
-      }));
+      setNewStudent(prev => {
+        const existing = Array.isArray(prev.schoolScores) ? prev.schoolScores.map(x => ({ ...x })) : [];
+        return { ...prev, schoolScores: [...existing, score] };
+      });
     }
     setNewScore({
       year: new Date().getFullYear().toString(),
@@ -35847,9 +35906,22 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
       alert('해당 학생을 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.');
       return;
     }
-    const newStudents = students.map(s =>
-      String(s.id) === targetId ? editingStudent : s
-    );
+    // ★ editingStudent를 깊은 복사하여 students 배열에 넣음 (참조 공유 완전 차단)
+    let cleanedEditing;
+    try {
+      cleanedEditing = JSON.parse(JSON.stringify(editingStudent));
+    } catch (e) {
+      cleanedEditing = { ...editingStudent, schoolScores: [...(editingStudent.schoolScores || [])] };
+    }
+    // 다른 학생들도 schoolScores 배열을 새 배열로 (참조 공유가 있던 경우 끊기 위해)
+    const newStudents = students.map(s => {
+      if (String(s.id) === targetId) return cleanedEditing;
+      // 다른 학생의 schoolScores도 독립된 배열로 복사 (이전 데이터에서 참조가 공유됐을 수 있음)
+      return {
+        ...s,
+        schoolScores: Array.isArray(s.schoolScores) ? s.schoolScores.map(x => ({ ...x })) : [],
+      };
+    });
     saveStudents(newStudents);
     setEditingStudent(null);
   };
