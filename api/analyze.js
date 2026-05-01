@@ -5,7 +5,7 @@ function callAnthropic(apiKey, model, prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model,
-      max_tokens: 1000,
+      max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -52,9 +52,10 @@ export default async function handler(req, res) {
   const { prompt, studentName } = req.body || {};
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
+  // 최신 모델 우선 → 구형 fallback (404면 자동으로 다음 모델 시도)
   const models = [
+    'claude-haiku-4-5',
     'claude-3-5-haiku-20241022',
-    'claude-haiku-4-5-20251001',
     'claude-3-haiku-20240307',
   ];
 

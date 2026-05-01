@@ -29715,14 +29715,45 @@ function WeaknessPatternAnalyzer({ student, wrongNotes }) {
   const conquered = wrongNotes.filter(n => n.conquered).length;
 
   const generateAIReport = async () => {
-    const apiKey = localStorage.getItem('anthropic_api_key') || '';
-    if (!apiKey.startsWith('sk-ant-')) { setError('API 키 미설정 (통계 탭 > AI 분석에서 설정)'); return; }
     if (totalWrong < 3) { setError('오답이 3개 이상일 때 분석 가능합니다.'); return; }
     setGenerating(true); setError('');
 
-    const prompt = `당신은 수학 교육 전문가입니다. 다음 학생의 오답 데이터를 분석하여 수업에 즉시 활용 가능한 진단 리포트를 작성하세요. [학생 정보] 이름: ${student.name}, 학년: ${student.grade || '미기록'} 총 오답: ${totalWrong}개 (정복: ${conquered}개, 미정복: ${totalWrong - conquered}개) [오답 유형별 빈도] ${sortedTypes.map(([t,c]) => `${t}: ${c}회 (${Math.round(c/totalWrong*100)}%)`).join('\n')} [취약 단원 TOP 5] ${sortedUnits.slice(0,5).map(([u,c]) => `${u}: ${c}회`).join('\n')} [최근 오답 샘플 10개] ${wrongNotes.slice(0,10).map(n => `- ${n.unit||'?'} / ${ET_LABELS[n.type||n.errorType]||n.type||'?'} / ${n.textbook||''} ${n.page?'p.'+n.page:''}`).join('\n')} 다음 JSON 형식으로만 답하세요 (마크다운 없이): { "corePattern": "핵심 취약 패턴 한 문장 요약", "rootCause": "근본 원인 분석 (2~3문장, 교육적 관점)", "topWeakness": [ { "type": "유형명", "count": 숫자, "teachingTip": "이 유형을 다루는 구체적 수업 전략 1~2문장" } ], "priorityUnits": ["단원1", "단원2", "단원3"], "immediateActions": ["이번 주 할 것 1", "이번 주 할 것 2", "이번 주 할 것 3"], "monthlyGoal": "한 달 목표 한 문장", "encouragement": "학생에게 전할 격려 메시지 (긍정적이고 따뜻하게)" }`;
+    const prompt = `당신은 수학 교육 전문가입니다. 다음 학생의 오답 데이터를 분석하여 수업에 즉시 활용 가능한 진단 리포트를 작성하세요.\n\n[학생 정보]\n이름: ${student.name}\n학년: ${student.grade || '미기록'}\n총 오답: ${totalWrong}개 (정복: ${conquered}개, 미정복: ${totalWrong - conquered}개)\n\n[오답 유형별 빈도]\n${sortedTypes.map(([t,c]) => `${t}: ${c}회 (${Math.round(c/totalWrong*100)}%)`).join('\n')}\n\n[취약 단원 TOP 5]\n${sortedUnits.slice(0,5).map(([u,c]) => `${u}: ${c}회`).join('\n')}\n\n[최근 오답 샘플 10개]\n${wrongNotes.slice(0,10).map(n => `- ${n.unit||'?'} / ${ET_LABELS[n.type||n.errorType]||n.type||'?'} / ${n.textbook||''} ${n.page?'p.'+n.page:''}`).join('\n')}\n\n다음 JSON 형식으로만 답하세요 (마크다운 코드블록 없이 순수 JSON):\n{\n  "corePattern": "핵심 취약 패턴 한 문장 요약",\n  "rootCause": "근본 원인 분석 (2~3문장, 교육적 관점)",\n  "topWeakness": [\n    { "type": "유형명", "count": 숫자, "teachingTip": "이 유형을 다루는 구체적 수업 전략 1~2문장" }\n  ],\n  "priorityUnits": ["단원1", "단원2", "단원3"],\n  "immediateActions": ["이번 주 할 것 1", "이번 주 할 것 2", "이번 주 할 것 3"],\n  "monthlyGoal": "한 달 목표 한 문장",\n  "encouragement": "학생에게 전할 격려 메시지 (긍정적이고 따뜻하게)"\n}`;
 
-    const models = ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-3-5-haiku-20241022'];
+    // ★ 1순위: 백엔드 프록시(/api/analyze) 사용 — 서버 환경변수 ANTHROPIC_API_KEY 사용
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, studentName: student.name })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.result) {
+        const match = data.result.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error('JSON 파싱 실패');
+        const report = JSON.parse(match[0]);
+        const today = new Date().toLocaleDateString('ko-KR');
+        setAiReport(report); setLastGenDate(today);
+        try { await window.storage.set(CACHE_KEY, JSON.stringify({ report, date: today })); } catch(e) {}
+        setGenerating(false);
+        return;
+      }
+      // 프록시가 응답했지만 에러 (API 키 미설정 등) → fallback으로 브라우저 직접 호출 시도
+      const proxyDetail = data.detail || data.error || `프록시 오류 ${res.status}`;
+      console.log('백엔드 프록시 실패, 브라우저 직접 호출로 fallback:', proxyDetail);
+    } catch (e) {
+      console.log('백엔드 프록시 호출 실패:', e.message);
+    }
+
+    // ★ 2순위: 브라우저에서 직접 호출 (사용자가 localStorage에 키를 저장한 경우)
+    const apiKey = localStorage.getItem('anthropic_api_key') || '';
+    if (!apiKey.startsWith('sk-ant-')) {
+      setError('AI 진단을 사용할 수 없습니다. 서버 측 ANTHROPIC_API_KEY가 설정되지 않았거나, 브라우저 localStorage에 anthropic_api_key를 추가해 주세요.');
+      setGenerating(false);
+      return;
+    }
+
+    const models = ['claude-3-5-haiku-20241022', 'claude-haiku-4-5-20251001', 'claude-3-haiku-20240307'];
     let lastErr = '';
     for (const model of models) {
       try {
@@ -29731,8 +29762,8 @@ function WeaknessPatternAnalyzer({ student, wrongNotes }) {
           headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
           body: JSON.stringify({ model, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] })
         });
-        if (res.status === 404) { lastErr = `모델 없음`; continue; }
-        if (!res.ok) { const e = await res.json().catch(()=>({})); lastErr = e.error?.message || `오류 ${res.status}`; if (res.status===401||res.status===429) break; continue; }
+        if (res.status === 404) { lastErr = '모델 ' + model + ' 없음'; continue; }
+        if (!res.ok) { const e = await res.json().catch(()=>({})); lastErr = e.error?.message || `오류 ${res.status}`; if (res.status===401||res.status===429||res.status===402) break; continue; }
         const data = await res.json();
         const raw = (data.content||[]).map(c=>c.text||'').join('');
         const match = raw.match(/\{[\s\S]*\}/);
@@ -29740,7 +29771,7 @@ function WeaknessPatternAnalyzer({ student, wrongNotes }) {
         const report = JSON.parse(match[0]);
         const today = new Date().toLocaleDateString('ko-KR');
         setAiReport(report); setLastGenDate(today);
-        await window.storage.set(CACHE_KEY, JSON.stringify({ report, date: today }));
+        try { await window.storage.set(CACHE_KEY, JSON.stringify({ report, date: today })); } catch(e) {}
         setGenerating(false); return;
       } catch(e) { lastErr = e.message; }
     }
