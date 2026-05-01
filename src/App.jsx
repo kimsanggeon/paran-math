@@ -703,13 +703,39 @@ export default function ParanMathSystem() {
     return cleaned;
   };
 
+  // localStorage의 schoolScores가 Firebase보다 더 많거나 최근일 때 보존하기 위한 병합 함수
+  const mergeWithLocalSchoolScores = (firebaseStudents) => {
+    try {
+      const local = JSON.parse(localStorage.getItem('paran:students') || '[]');
+      if (!Array.isArray(local) || local.length === 0) return firebaseStudents;
+      const localById = new Map(local.map(s => [String(s.id), s]));
+      const localByName = new Map(local.map(s => [s.name, s]));
+      return firebaseStudents.map(fb => {
+        const localMatch = localById.get(String(fb.id)) || localByName.get(fb.name);
+        if (!localMatch) return fb;
+        const localScores = Array.isArray(localMatch.schoolScores) ? localMatch.schoolScores : [];
+        const fbScores = Array.isArray(fb.schoolScores) ? fb.schoolScores : [];
+        // 로컬에 있는 점수가 Firebase에 없으면 추가 (id로 dedupe)
+        const seenIds = new Set(fbScores.map(s => s.id));
+        const additions = localScores.filter(s => s && s.id && !seenIds.has(s.id));
+        if (additions.length > 0) {
+          console.log('🔄 학교 성적 병합:', fb.name, 'Firebase', fbScores.length, '+ 로컬 보존', additions.length);
+          return { ...fb, schoolScores: [...fbScores, ...additions] };
+        }
+        return fb;
+      });
+    } catch (e) { console.log('schoolScores 병합 오류:', e); return firebaseStudents; }
+  };
+
   const loadStudents = async () => {
     try {
       // ★ 1순위: Firebase academies/default/students (개별 문서)
       if (isFirebaseConnected()) {
         const firebaseStudents = await loadStudentsFromFirebase();
         if (firebaseStudents && firebaseStudents.length > 0) {
-          const cleaned = sanitizeStudents(firebaseStudents);
+          // Firebase 데이터에 빠진 schoolScores를 localStorage에서 병합 (Firebase 저장 실패 대비)
+          const merged = mergeWithLocalSchoolScores(firebaseStudents);
+          const cleaned = sanitizeStudents(merged);
           setStudents(cleaned);
           window.__paranStudents = cleaned;
           try { localStorage.setItem('paran:students', JSON.stringify(cleaned)); } catch(e) {}
@@ -810,7 +836,8 @@ export default function ParanMathSystem() {
       localStorage.setItem('paran:students', JSON.stringify(newStudents));
     } catch (e) {}
 
-    // 3. ★ window.storage (Firestore storage 컬렉션) 저장 — 최소 필드만 (1MB 제한 방지)
+    // 3. ★ window.storage (Firestore storage 컬렉션) 저장 — 최소 필드 + schoolScores 포함
+    // (Firebase 저장이 실패해도 다음 로드에서 학교 성적이 사라지지 않도록 schoolScores를 포함)
     try {
       if (window.storage) {
         const minimal = newStudents.map(s => ({
@@ -822,6 +849,8 @@ export default function ParanMathSystem() {
           levelStage: s.levelStage || '', classSchedule: s.classSchedule || '',
           shortTermGoal: s.shortTermGoal || '', longTermGoal: s.longTermGoal || '',
           exp: s.exp || 0, streak: s.streak || 0, createdAt: s.createdAt || '',
+          // ★ 학교 성적은 학생 정보 수정에서 직접 입력하는 데이터라 minimal에도 반드시 포함
+          schoolScores: Array.isArray(s.schoolScores) ? s.schoolScores : [],
         }));
         await window.storage.set('paran:students', JSON.stringify(minimal));
       }
