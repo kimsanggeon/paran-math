@@ -35774,6 +35774,21 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
     totalStudents: ''
   });
 
+  // ★ 학생 편집/추가 모달이 열리거나 학생이 바뀔 때마다 점수 입력 폼을 빈 값으로 리셋
+  // (이전 학생에게 입력 중이던 점수가 다른 학생 모달에 그대로 남아있어 "같은 점수가 적용된 것처럼" 보이는 버그 방지)
+  useEffect(() => {
+    setNewScore({
+      year: new Date().getFullYear().toString(),
+      semester: '1학기',
+      examType: '중간고사',
+      subject: '수학',
+      score: '',
+      average: '',
+      rank: '',
+      totalStudents: ''
+    });
+  }, [editingStudent?.id, showAddModal]);
+
   const gradeOptions = ['초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3'];
   const classOptions = ['중등몰입A', '중등몰입B', '중등몰입C', '고등몰입A'];
   const levelStageOptions = [
