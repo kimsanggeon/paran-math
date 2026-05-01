@@ -29687,6 +29687,9 @@ function WeaknessPatternAnalyzer({ student, wrongNotes }) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [lastGenDate, setLastGenDate] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [hasApiKey, setHasApiKey] = useState(() => (localStorage.getItem('anthropic_api_key') || '').startsWith('sk-ant-'));
   const CACHE_KEY = `paran:weakness-report:${student.name}`;
 
   useEffect(() => {
@@ -29748,7 +29751,8 @@ function WeaknessPatternAnalyzer({ student, wrongNotes }) {
     // ★ 2순위: 브라우저에서 직접 호출 (사용자가 localStorage에 키를 저장한 경우)
     const apiKey = localStorage.getItem('anthropic_api_key') || '';
     if (!apiKey.startsWith('sk-ant-')) {
-      setError('AI 진단을 사용할 수 없습니다. 서버 측 ANTHROPIC_API_KEY가 설정되지 않았거나, 브라우저 localStorage에 anthropic_api_key를 추가해 주세요.');
+      setError('AI 진단을 사용하려면 Anthropic API 키가 필요합니다. 아래 입력란에 키를 붙여넣고 저장해 주세요.');
+      setShowApiKeyInput(true);
       setGenerating(false);
       return;
     }
@@ -29828,6 +29832,65 @@ function WeaknessPatternAnalyzer({ student, wrongNotes }) {
         )}
 
         {error && <p className="text-xs text-red-500 bg-red-50 p-2 rounded-lg">{error}</p>}
+
+        {/* ★ API 키 입력 UI: 키가 없거나 사용자가 변경하려 할 때 표시 */}
+        {showApiKeyInput && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+            <p className="text-xs font-bold text-blue-800">🔑 Anthropic API 키 설정</p>
+            <p className="text-[11px] text-blue-700 leading-relaxed">
+              <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="underline font-bold">console.anthropic.com</a>에서 API 키를 발급받아 아래에 붙여넣으세요.
+              키는 이 브라우저에만 저장되며 다른 사람이 볼 수 없습니다.
+            </p>
+            <input
+              type="password"
+              value={apiKeyDraft}
+              onChange={(e) => setApiKeyDraft(e.target.value)}
+              placeholder="sk-ant-..."
+              className="w-full p-2 border border-blue-300 rounded text-xs font-mono"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const trimmed = apiKeyDraft.trim();
+                  if (!trimmed.startsWith('sk-ant-')) {
+                    setError('API 키는 sk-ant- 로 시작해야 합니다.');
+                    return;
+                  }
+                  localStorage.setItem('anthropic_api_key', trimmed);
+                  setHasApiKey(true);
+                  setShowApiKeyInput(false);
+                  setApiKeyDraft('');
+                  setError('');
+                  // 키 저장 후 자동으로 다시 시도
+                  generateAIReport();
+                }}
+                disabled={!apiKeyDraft.trim().startsWith('sk-ant-')}
+                className={`flex-1 py-1.5 rounded text-xs font-bold ${apiKeyDraft.trim().startsWith('sk-ant-') ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                💾 키 저장하고 진단 시작
+              </button>
+              <button
+                onClick={() => { setShowApiKeyInput(false); setApiKeyDraft(''); setError(''); }}
+                className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-xs font-bold">
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* API 키가 이미 저장된 경우: 변경/삭제 링크 */}
+        {hasApiKey && !showApiKeyInput && (
+          <div className="flex items-center justify-between text-[11px] text-gray-400 bg-gray-50 px-2 py-1 rounded">
+            <span>✓ Anthropic API 키 저장됨</span>
+            <div className="flex gap-2">
+              <button onClick={() => { setShowApiKeyInput(true); setApiKeyDraft(''); }}
+                className="text-blue-500 hover:text-blue-700 underline">키 변경</button>
+              <button onClick={() => { localStorage.removeItem('anthropic_api_key'); setHasApiKey(false); }}
+                className="text-red-400 hover:text-red-600 underline">키 삭제</button>
+            </div>
+          </div>
+        )}
 
         {/* AI 진단 결과 */}
         {aiReport && (
