@@ -703,7 +703,7 @@ export default function ParanMathSystem() {
     return cleaned;
   };
 
-  // localStorage의 schoolScores가 Firebase보다 더 많거나 최근일 때 보존하기 위한 병합 함수
+  // localStorage가 Firebase보다 더 최신일 수 있는 필드들을 보존: schoolScores + tower 상태
   const mergeWithLocalSchoolScores = (firebaseStudents) => {
     try {
       const local = JSON.parse(localStorage.getItem('paran:students') || '[]');
@@ -713,18 +713,46 @@ export default function ParanMathSystem() {
       return firebaseStudents.map(fb => {
         const localMatch = localById.get(String(fb.id)) || localByName.get(fb.name);
         if (!localMatch) return fb;
+        let result = fb;
+
+        // 1) schoolScores 병합 (id로 dedupe)
         const localScores = Array.isArray(localMatch.schoolScores) ? localMatch.schoolScores : [];
         const fbScores = Array.isArray(fb.schoolScores) ? fb.schoolScores : [];
-        // 로컬에 있는 점수가 Firebase에 없으면 추가 (id로 dedupe)
         const seenIds = new Set(fbScores.map(s => s.id));
         const additions = localScores.filter(s => s && s.id && !seenIds.has(s.id));
         if (additions.length > 0) {
-          console.log('🔄 학교 성적 병합:', fb.name, 'Firebase', fbScores.length, '+ 로컬 보존', additions.length);
-          return { ...fb, schoolScores: [...fbScores, ...additions] };
+          console.log('🔄 학교 성적 병합:', fb.name, 'Firebase', fbScores.length, '+ 로컬', additions.length);
+          result = { ...result, schoolScores: [...fbScores, ...additions] };
         }
-        return fb;
+
+        // 2) ★ tower.claimedMilestones 병합: 로컬에서만 수령 처리된 마일스톤이 있으면 보존 (보상 중복 수령 방지)
+        const localClaimed = Array.isArray(localMatch.tower?.claimedMilestones) ? localMatch.tower.claimedMilestones : [];
+        const fbClaimed = Array.isArray(fb.tower?.claimedMilestones) ? fb.tower.claimedMilestones : [];
+        const claimedUnion = Array.from(new Set([...fbClaimed, ...localClaimed]));
+        const claimedAdded = claimedUnion.length - fbClaimed.length;
+        if (claimedAdded > 0) {
+          console.log('🔄 마일스톤 수령 기록 병합:', fb.name, 'Firebase', fbClaimed.length, '+ 로컬', claimedAdded);
+          result = { ...result, tower: { ...(fb.tower || {}), ...(localMatch.tower || {}), claimedMilestones: claimedUnion } };
+        }
+
+        // 3) tower.tickets 병합: 로컬 잔액이 Firebase보다 작으면(=학생이 더 사용한 상태) 로컬을 우선
+        const localTickets = localMatch.tower?.tickets || {};
+        const fbTickets = fb.tower?.tickets || {};
+        const localHomework = Number(localTickets.homework) || 0;
+        const fbHomework = Number(fbTickets.homework) || 0;
+        const localRetest = Number(localTickets.retest) || 0;
+        const fbRetest = Number(fbTickets.retest) || 0;
+        if (localHomework !== fbHomework || localRetest !== fbRetest) {
+          // 보수적으로 더 작은 값(사용한 흔적)을 채택해 중복 사용 방지
+          const merged = {
+            homework: Math.min(localHomework, fbHomework || localHomework),
+            retest: Math.min(localRetest, fbRetest || localRetest),
+          };
+          result = { ...result, tower: { ...(result.tower || fb.tower || {}), tickets: merged } };
+        }
+        return result;
       });
-    } catch (e) { console.log('schoolScores 병합 오류:', e); return firebaseStudents; }
+    } catch (e) { console.log('학생 병합 오류:', e); return firebaseStudents; }
   };
 
   const loadStudents = async () => {
@@ -836,8 +864,8 @@ export default function ParanMathSystem() {
       localStorage.setItem('paran:students', JSON.stringify(newStudents));
     } catch (e) {}
 
-    // 3. ★ window.storage (Firestore storage 컬렉션) 저장 — 최소 필드 + schoolScores 포함
-    // (Firebase 저장이 실패해도 다음 로드에서 학교 성적이 사라지지 않도록 schoolScores를 포함)
+    // 3. ★ window.storage (Firestore storage 컬렉션) 저장 — 최소 필드 + schoolScores + tower 포함
+    // (Firebase 저장이 실패해도 다음 로드에서 학교 성적/마일스톤 보상 수령 기록이 사라지지 않도록)
     try {
       if (window.storage) {
         const minimal = newStudents.map(s => ({
@@ -851,6 +879,8 @@ export default function ParanMathSystem() {
           exp: s.exp || 0, streak: s.streak || 0, createdAt: s.createdAt || '',
           // ★ 학교 성적은 학생 정보 수정에서 직접 입력하는 데이터라 minimal에도 반드시 포함
           schoolScores: Array.isArray(s.schoolScores) ? s.schoolScores : [],
+          // ★ 몰입의 탑 상태(claimedMilestones, tickets, rewardHistory 등)도 보존 — Firebase 저장 실패 시 보상 중복 수령 방지
+          tower: s.tower || {},
         }));
         await window.storage.set('paran:students', JSON.stringify(minimal));
       }
