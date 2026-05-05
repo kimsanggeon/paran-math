@@ -165,6 +165,9 @@ function calculateTowerFloor(reportData, student = {}) {
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   let consecutiveCorrect = 0;
   let consecutiveHwMiss = 0;
+  // ★ 학습 태도 방어 실패 누적 카운트 (방어 상태 최종 판정에 활용)
+  let recentLowAttitudeCount = 0;
+  let recentVeryLowAttitudeCount = 0;
 
   sessions.forEach(session => {
     const tests = [
@@ -225,7 +228,17 @@ function calculateTowerFloor(reportData, student = {}) {
       const avg = attScores.reduce((s, v) => s + v, 0) / attScores.length;
       if (avg >= 4.5) bd.attitude += 1;
       else if (avg >= 4) bd.attitude += 0.5;
-      else if (avg <= 3) bd.defense -= 1.5; // 패널티: 태도 평균 3 이하 (강화: -1 → -1.5)
+      // ★ 학습 태도 방어 실패 패널티 강화 (단계별)
+      else if (avg <= 2) {
+        bd.defense -= 3.5; // 매우 낮음 — 보상 자제 강력 신호
+        recentLowAttitudeCount++;
+        recentVeryLowAttitudeCount++;
+      } else if (avg <= 3) {
+        bd.defense -= 2.5; // 낮음 (강화: -1.5 → -2.5)
+        recentLowAttitudeCount++;
+      } else if (avg <= 3.5) {
+        bd.defense -= 1.0; // 보통 이하 (새 단계)
+      }
     }
 
     // ── 자습 시간 (인증 기반) ──
@@ -280,6 +293,13 @@ function calculateTowerFloor(reportData, student = {}) {
       result.defenseStatus = 'failed';
     }
   } else { result.defenseStatus = 'pending'; }
+
+  // ★ 학습 태도 누적 실패도 방어 실패에 반영 (테스트 통과 여부와 별개로)
+  // 매우 낮음(2 이하) 1회 이상 OR 낮음(3 이하) 2회 이상 → 방어 실패
+  if (recentVeryLowAttitudeCount >= 1 || recentLowAttitudeCount >= 2) {
+    result.defenseStatus = 'failed';
+    if (result.defenseStreak) result.defenseStreak = 0; // 연속 방어 카운트 초기화
+  }
 
   // ── 선생님 수동 몰입 포인트 ──
   bd.manualPoints = student.tower?.manualPoints || 0;
