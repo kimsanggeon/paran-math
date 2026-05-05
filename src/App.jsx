@@ -208,10 +208,8 @@ function calculateTowerFloor(reportData, student = {}) {
           if (test.difficulty === 'highest' || test.difficulty === 'high') { bd.test += 2; }
           else if (test.testType === '주간테스트') { bd.test += 1; }
           else { bd.test += 0.5; } // 일일테스트 등
-        } else {
-          // ── 패널티: 일일테스트 미통과 ──
-          if (test.testType === '일일테스트') { bd.defense -= 0.5; }
         }
+        // ★ 일일테스트 미통과 패널티는 아래 방어 체크에서 일괄 처리 (이중 차감 방지)
       }
 
       // ── 연속 정답 콤보 보너스 ──
@@ -227,7 +225,7 @@ function calculateTowerFloor(reportData, student = {}) {
       const avg = attScores.reduce((s, v) => s + v, 0) / attScores.length;
       if (avg >= 4.5) bd.attitude += 1;
       else if (avg >= 4) bd.attitude += 0.5;
-      else if (avg <= 3) bd.defense -= 1; // 패널티: 태도 평균 3 이하
+      else if (avg <= 3) bd.defense -= 1.5; // 패널티: 태도 평균 3 이하 (강화: -1 → -1.5)
     }
 
     // ── 자습 시간 (인증 기반) ──
@@ -243,36 +241,42 @@ function calculateTowerFloor(reportData, student = {}) {
       bd.homework += 0.3;
       consecutiveHwMiss = 0;
     } else {
-      bd.defense -= 0.3; // 숙제 1회 미완료 -0.3
+      bd.defense -= 0.5; // 숙제 1회 미완료 (강화: -0.3 → -0.5)
       consecutiveHwMiss++;
-      if (consecutiveHwMiss >= 2) { bd.defense -= 0.7; } // 연속 미완료 시 추가 -0.7 (합계 -1)
+      if (consecutiveHwMiss >= 2) { bd.defense -= 1.0; } // 연속 미완료 시 추가 -1.0 (합계 -1.5, 강화: -0.7 → -1.0)
     }
   });
   // 주간 숙제 전부 완료 보너스
   const recentHw = hw.filter(h => h.dueDate && new Date(h.dueDate) >= new Date(Date.now() - 7*86400000));
   if (recentHw.length >= 2 && recentHw.every(h => h.completed)) bd.homework += 1;
 
-  // ── 방어 체크 (최근 7일 주간테스트) ──
+  // ── 방어 체크 (최근 7일 일일/주간테스트) ──
+  // ★ 일일테스트도 주간테스트와 동일하게 방어 체크에 포함
   const today = new Date();
   const weekAgo = new Date(today.getTime() - 7*86400000).toISOString().split('T')[0];
-  const recentWeeklyTests = [];
+  const recentDefenseTests = [];
   sessions.filter(s => (s.date || '') >= weekAgo).forEach(s => {
-    const tt = [...(s.testType === '주간테스트' ? [s] : []), ...(s.tests || []).filter(t => t.testType === '주간테스트')];
+    const tt = [
+      ...(s.testType === '주간테스트' || s.testType === '일일테스트' ? [s] : []),
+      ...(s.tests || []).filter(t => t.testType === '주간테스트' || t.testType === '일일테스트'),
+    ];
     tt.forEach(t => {
       if (t.testAnswers?.length > 0) {
         const wrong = t.testAnswers.filter(a => a === false).length;
-        recentWeeklyTests.push({ passed: wrong <= passThreshold, date: s.date });
+        recentDefenseTests.push({ passed: wrong <= passThreshold, date: s.date, type: t.testType });
       }
     });
   });
-  if (recentWeeklyTests.length > 0) {
-    const anyPassed = recentWeeklyTests.some(t => t.passed);
+  if (recentDefenseTests.length > 0) {
+    const anyPassed = recentDefenseTests.some(t => t.passed);
     if (anyPassed) {
       result.defenseStatus = 'safe';
-      result.lastDefenseDate = recentWeeklyTests.filter(t => t.passed).pop()?.date;
+      result.lastDefenseDate = recentDefenseTests.filter(t => t.passed).pop()?.date;
       result.defenseStreak = (student.tower?.defenseStreak || 0) + 1;
     } else {
-      bd.defense -= 1; // 주간테스트 미통과 -1
+      // ★ 방어 실패 패널티 강화: -1 → -2.5
+      // (10층 마일스톤 보상이 너무 자주 발생하지 않도록 일일/주간테스트 모두 미통과 시 큰 손실)
+      bd.defense -= 2.5;
       result.defenseStatus = 'failed';
     }
   } else { result.defenseStatus = 'pending'; }
