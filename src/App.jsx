@@ -30729,22 +30729,30 @@ function SelfStudyTab({ student }) {
     if (activeTimer && timerStart) {
       timerRef.current = setInterval(() => {
         // 퀴즈 팝업 중에도 타이머는 계속 동작 (멈추지 않음)
-        const elapsed = Math.floor((Date.now() - timerStart) / 1000);
+        const now = Date.now();
+        const elapsed = Math.floor((now - timerStart) / 1000);
         setTimerElapsed(elapsed);
 
-        // 30분마다 확인 퀴즈 팝업 (퀴즈가 없을 때만)
-        if (!quizPopup && elapsed - lastQuizTimeRef.current >= QUIZ_INTERVAL && elapsed > 60) {
-          lastQuizTimeRef.current = elapsed;
-          setQuizPopup(generateQuiz());
-          setQuizInput('');
-          setQuizFailed(0);
+        // ★ 30분마다 확인 퀴즈 (절대 타임스탬프 기반 — stop/restart로 회피 불가)
+        if (!quizPopup && elapsed > 60) {
+          let lastQuizAt = 0;
+          try { lastQuizAt = parseInt(localStorage.getItem(LAST_QUIZ_KEY) || '0', 10); } catch(e) {}
+          // 첫 퀴즈는 시작 후 30분, 이후엔 마지막 퀴즈로부터 30분
+          const refTime = lastQuizAt > 0 ? lastQuizAt : timerStart;
+          if (now - refTime >= QUIZ_INTERVAL * 1000) {
+            try { localStorage.setItem(LAST_QUIZ_KEY, String(now)); } catch(e) {}
+            lastQuizTimeRef.current = elapsed;
+            setQuizPopup(generateQuiz());
+            setQuizInput('');
+            setQuizFailed(0);
+          }
         }
       }, 1000);
     } else {
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [activeTimer, timerStart, quizPopup]);
+  }, [activeTimer, timerStart, quizPopup, LAST_QUIZ_KEY]);
 
   // ★ 화면 꺼짐 방지 (Wake Lock + Canvas 애니메이션 fallback)
   const wakeLockRef = React.useRef(null);
@@ -30819,6 +30827,16 @@ function SelfStudyTab({ student }) {
   // 강제 타이머 종료 (퀴즈 실패/타임아웃)
   // ★ 타이머 상태를 localStorage에 영속화하기 위한 키 (학생별)
   const TIMER_STATE_KEY = `paran:studytime-timer:${student.name}`;
+  // ★ 절대 타임스탬프 기반 마지막 퀴즈 시각 (stop/restart로 회피 불가)
+  const LAST_QUIZ_KEY = `paran:studytime-lastquiz:${student.name}`;
+  // ★ 마지막 종료 시각 (stop/restart 사이 30초 쿨다운 강제)
+  const LAST_STOP_KEY = `paran:studytime-laststop:${student.name}`;
+  // ★ 악용 방지 파라미터
+  const ABUSE = {
+    minSessionSec: 180,           // 자동 저장 최소 3분 — 짧은 세션 스팸 방지
+    restartCooldownSec: 30,       // 종료 직후 30초간 재시작 차단
+    timerRecoveryMaxHours: 2,     // 마운트 시 2시간 이내 타이머만 복구 (기존 6시간 → 단축)
+  };
 
   // 종료 시 정확한 경과 시간을 계산 (state 의존 X — 항상 wall-clock 기반)
   const computeElapsedSec = (start) => {
@@ -30836,15 +30854,35 @@ function SelfStudyTab({ student }) {
     setTimerStart(null);
     setTimerElapsed(0);
     try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e) {}
+    try { localStorage.setItem(LAST_STOP_KEY, String(Date.now())); } catch(e) {}
     releaseWakeLock();
   };
 
   const startTimer = (type) => {
+    // ★ 종료 직후 짧은 시간 내 재시작 차단 (퀴즈 회피 + 분 단위 반올림 악용 방지)
+    try {
+      const lastStop = parseInt(localStorage.getItem(LAST_STOP_KEY) || '0', 10);
+      if (lastStop > 0) {
+        const sinceStop = (Date.now() - lastStop) / 1000;
+        if (sinceStop < ABUSE.restartCooldownSec) {
+          alert(`⏳ ${Math.ceil(ABUSE.restartCooldownSec - sinceStop)}초 후에 다시 시작할 수 있어요. (반복 시작 방지)`);
+          return;
+        }
+      }
+    } catch(e) {}
+
     const startedAt = Date.now();
     setActiveTimer(type);
     setTimerStart(startedAt);
     setTimerElapsed(0);
-    lastQuizTimeRef.current = 0;
+    // ★ 퀴즈 카운터는 절대 타임스탬프 기반이라 stop/restart로 회피 차단됨.
+    // 다만 1시간 이상 휴식 후 재시작 시에는 카운터를 리셋해 즉시 퀴즈가 뜨지 않도록.
+    try {
+      const lastQuizAt = parseInt(localStorage.getItem(LAST_QUIZ_KEY) || '0', 10);
+      if (lastQuizAt > 0 && (Date.now() - lastQuizAt) > 60 * 60 * 1000) {
+        localStorage.removeItem(LAST_QUIZ_KEY);
+      }
+    } catch(e) {}
     setQuizPopup(null);
     // ★ 새로고침/앱 종료 후에도 타이머가 살아있도록 영속화
     try {
@@ -30868,8 +30906,14 @@ function SelfStudyTab({ student }) {
     setTimerStart(null);
     setTimerElapsed(0);
     try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e) {}
+    try { localStorage.setItem(LAST_STOP_KEY, String(stoppedAt)); } catch(e) {}
     releaseWakeLock();
 
+    // ★ 최소 세션 길이(3분) 미만은 자동 저장 안 함 — 분 단위 반올림 악용(30초 스팸) 차단
+    if (elapsedSec < ABUSE.minSessionSec) {
+      alert(`⏳ ${Math.floor(ABUSE.minSessionSec / 60)}분 미만 학습은 기록되지 않습니다. (현재 ${Math.floor(elapsedSec / 60)}분 ${elapsedSec % 60}초)`);
+      return;
+    }
     // ★ 자동 저장 — 학생이 "저장" 버튼 누르는 걸 잊어도 시간이 보존됨
     if (mins > 0 && startedAt) {
       autoSaveLog({
@@ -30929,9 +30973,10 @@ function SelfStudyTab({ student }) {
       const { type, startedAt } = JSON.parse(saved);
       if (!type || !startedAt) return;
       const ageHours = (Date.now() - startedAt) / 3600000;
-      if (ageHours > 6) {
-        // 6시간 넘게 끄지 않은 타이머는 무효 처리 (잠자고 일어났을 때 등)
+      if (ageHours > ABUSE.timerRecoveryMaxHours) {
+        // ★ 2시간 넘게 끄지 않은 타이머는 무효 처리 (수면/방치 후 자동 시간 인플레이션 차단)
         localStorage.removeItem(TIMER_STATE_KEY);
+        console.log('⚠️ 자습 타이머 만료 (방치 시간 ' + Math.round(ageHours * 10) / 10 + '시간) — 무효 처리');
         return;
       }
       // 활성 타이머 복구
