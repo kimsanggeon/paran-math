@@ -30621,8 +30621,10 @@ function TextbookDailyAlertPanel({ tbEntries, tbMeta = {}, pickProblems, selecte
 
 // ========== ⏱ 자습 시간 기록 탭 (학생용) ==========
 function SelfStudyTab({ student }) {
-  const STORAGE_KEY = `paran:studytime:${student.name}`;
-  const REVIEW_KEY = `paran:studytime-review:${student.name}`;
+  // student.name 안전 처리 (학생이 비어있어도 hooks 순서는 유지)
+  const studentName = student?.name || '__unknown__';
+  const STORAGE_KEY = `paran:studytime:${studentName}`;
+  const REVIEW_KEY = `paran:studytime-review:${studentName}`;
   const [logs, setLogs] = useState([]);
   const [reviews, setReviews] = useState({});
   const [quizAnswerDraft, setQuizAnswerDraft] = useState({});
@@ -30726,9 +30728,9 @@ function SelfStudyTab({ student }) {
   const totalPausedRef = React.useRef(0);
 
   // ★ 타이머 관련 상수 — useEffect보다 먼저 선언해야 TDZ 회피 (의존성 배열에서 참조하기 때문)
-  const TIMER_STATE_KEY = `paran:studytime-timer:${student.name}`;
-  const LAST_QUIZ_KEY = `paran:studytime-lastquiz:${student.name}`;
-  const LAST_STOP_KEY = `paran:studytime-laststop:${student.name}`;
+  const TIMER_STATE_KEY = `paran:studytime-timer:${studentName}`;
+  const LAST_QUIZ_KEY = `paran:studytime-lastquiz:${studentName}`;
+  const LAST_STOP_KEY = `paran:studytime-laststop:${studentName}`;
   const ABUSE = {
     minSessionSec: 60,
     restartCooldownSec: 10,
