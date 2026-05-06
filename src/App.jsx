@@ -30725,6 +30725,16 @@ function SelfStudyTab({ student }) {
   // ★ 타이머 tick (단순화 — 안정성 최우선)
   const totalPausedRef = React.useRef(0);
 
+  // ★ 타이머 관련 상수 — useEffect보다 먼저 선언해야 TDZ 회피 (의존성 배열에서 참조하기 때문)
+  const TIMER_STATE_KEY = `paran:studytime-timer:${student.name}`;
+  const LAST_QUIZ_KEY = `paran:studytime-lastquiz:${student.name}`;
+  const LAST_STOP_KEY = `paran:studytime-laststop:${student.name}`;
+  const ABUSE = {
+    minSessionSec: 60,
+    restartCooldownSec: 10,
+    timerRecoveryMaxHours: 2,
+  };
+
   useEffect(() => {
     if (activeTimer && timerStart) {
       timerRef.current = setInterval(() => {
@@ -30871,18 +30881,7 @@ function SelfStudyTab({ student }) {
   };
 
   // 강제 타이머 종료 (퀴즈 실패/타임아웃)
-  // ★ 타이머 상태를 localStorage에 영속화하기 위한 키 (학생별)
-  const TIMER_STATE_KEY = `paran:studytime-timer:${student.name}`;
-  // ★ 절대 타임스탬프 기반 마지막 퀴즈 시각 (stop/restart로 회피 불가)
-  const LAST_QUIZ_KEY = `paran:studytime-lastquiz:${student.name}`;
-  // ★ 마지막 종료 시각 (stop/restart 사이 30초 쿨다운 강제)
-  const LAST_STOP_KEY = `paran:studytime-laststop:${student.name}`;
-  // ★ 악용 방지 파라미터
-  const ABUSE = {
-    minSessionSec: 60,            // 자동 저장 최소 1분 — 너무 짧은 세션 스팸 방지 (정상 학습 방해 안 하도록 완화)
-    restartCooldownSec: 10,       // 종료 직후 10초간 재시작 차단 (기존 30초 → 완화)
-    timerRecoveryMaxHours: 2,     // 마운트 시 2시간 이내 타이머만 복구
-  };
+  // (위 useEffect 블록에서 이미 선언된 TIMER_STATE_KEY/LAST_QUIZ_KEY/LAST_STOP_KEY/ABUSE 사용)
 
   // 종료 시 정확한 경과 시간을 계산 (state 의존 X — 항상 wall-clock 기반)
   const computeElapsedSec = (start) => {
