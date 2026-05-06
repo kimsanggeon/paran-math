@@ -42473,6 +42473,9 @@ function PerformanceAnalysis({ student }) {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+
+          {/* ★ 자동 추세 분석 + AI 심층 분석 */}
+          <TrendInsightPanel student={student} testScores={testScores} overallAvg={overallAvg} recentAvg={recentAvg} typeAverages={typeAverages} />
         </div>
       )}
 
@@ -42547,6 +42550,293 @@ function PerformanceAnalysis({ student }) {
           📥 워드 다운로드
         </button>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 📈 성적 추이 분석 + 예측 패널 (규칙 기반 + AI 심층)
+// ============================================================
+function TrendInsightPanel({ student, testScores, overallAvg, recentAvg, typeAverages }) {
+  const [aiInsight, setAiInsight] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+
+  // ===== 규칙 기반 자동 분석 =====
+  const insight = (() => {
+    if (testScores.length < 2) return null;
+    const pcts = testScores.map(t => t.percent);
+    const n = pcts.length;
+    // 선형 회귀 기울기 (시험당 변화량 %p)
+    const xs = pcts.map((_, i) => i);
+    const meanX = xs.reduce((a, b) => a + b, 0) / n;
+    const meanY = pcts.reduce((a, b) => a + b, 0) / n;
+    const num = xs.reduce((s, x, i) => s + (x - meanX) * (pcts[i] - meanY), 0);
+    const den = xs.reduce((s, x) => s + (x - meanX) ** 2, 0) || 1;
+    const slope = num / den; // 시험당 평균 변화량 (%p)
+    const intercept = meanY - slope * meanX;
+    // 변동성 (표준편차)
+    const variance = pcts.reduce((s, v) => s + (v - meanY) ** 2, 0) / n;
+    const stdev = Math.sqrt(variance);
+    // 최근 3회 vs 처음 3회
+    const firstThree = pcts.slice(0, 3);
+    const lastThree = pcts.slice(-3);
+    const firstAvg = firstThree.reduce((a, b) => a + b, 0) / firstThree.length;
+    const lastAvg = lastThree.reduce((a, b) => a + b, 0) / lastThree.length;
+    const blockChange = Math.round(lastAvg - firstAvg);
+    // 4주 후 예측 (시험이 주 1~2회 가정 → 5회 후 예측)
+    const futureTests = 5;
+    const predicted = Math.max(0, Math.min(100, Math.round(intercept + slope * (n - 1 + futureTests))));
+    // 추세 분류
+    let trendLabel, trendColor, trendEmoji;
+    if (slope >= 1.5) { trendLabel = '뚜렷한 상승'; trendColor = 'green'; trendEmoji = '📈'; }
+    else if (slope >= 0.5) { trendLabel = '완만한 상승'; trendColor = 'emerald'; trendEmoji = '↗️'; }
+    else if (slope > -0.5) { trendLabel = '안정 / 정체'; trendColor = 'blue'; trendEmoji = '➡️'; }
+    else if (slope > -1.5) { trendLabel = '완만한 하락'; trendColor = 'amber'; trendEmoji = '↘️'; }
+    else { trendLabel = '뚜렷한 하락'; trendColor = 'red'; trendEmoji = '📉'; }
+    // 변동성 분류
+    const stable = stdev < 8 ? '매우 안정적' : stdev < 15 ? '안정적' : stdev < 22 ? '들쭉날쭉' : '변동 심함';
+    // 메시지 생성
+    const messages = [];
+    messages.push(`최근 ${n}회 시험에서 ${trendLabel} 추세 (시험당 ${slope >= 0 ? '+' : ''}${slope.toFixed(1)}%p).`);
+    if (Math.abs(blockChange) >= 5) {
+      messages.push(`처음 3회 평균(${Math.round(firstAvg)}%) → 최근 3회 평균(${Math.round(lastAvg)}%)으로 ${blockChange > 0 ? '+' : ''}${blockChange}%p 변화.`);
+    }
+    messages.push(`성적 변동성: ${stable} (표준편차 ${stdev.toFixed(1)}%p).`);
+    if (recentAvg !== overallAvg) {
+      messages.push(`전체 평균 ${overallAvg}% / 최근 3회 평균 ${recentAvg}%.`);
+    }
+    if (typeAverages && typeAverages.length > 1) {
+      const sorted = [...typeAverages].sort((a, b) => b.avg - a.avg);
+      const best = sorted[0];
+      const worst = sorted[sorted.length - 1];
+      if (best.avg - worst.avg >= 15) {
+        messages.push(`강점 시험: ${best.name} (${best.avg}%) / 약점 시험: ${worst.name} (${worst.avg}%).`);
+      }
+    }
+
+    // 예측 메시지
+    let predictionMsg;
+    if (slope >= 0.5) {
+      predictionMsg = `현재 추세대로면 약 5회 후 ${predicted}%대 도달이 기대됩니다.`;
+    } else if (slope <= -0.5) {
+      predictionMsg = `현재 추세가 이어지면 약 5회 후 ${predicted}%까지 떨어질 수 있어 보완이 필요합니다.`;
+    } else {
+      predictionMsg = `현재 흐름이 유지되면 약 5회 후에도 ${predicted}% 내외로 큰 변화가 없을 것으로 예상됩니다.`;
+    }
+
+    return { slope, stdev, predicted, trendLabel, trendColor, trendEmoji, stable, messages, predictionMsg, n };
+  })();
+
+  // ===== AI 심층 분석 =====
+  const generateAIInsight = async () => {
+    setAiLoading(true);
+    setAiError('');
+    setAiInsight(null);
+
+    const prompt = `당신은 수학 교육 전문가입니다. 한 학생의 시험 성적 추이를 보고 학부모/선생님이 바로 활용할 수 있는 분석과 예측을 작성하세요.
+
+[학생 정보]
+이름: ${student.name}
+학년: ${student.grade || '미기록'}
+
+[최근 ${testScores.length}회 시험 점수 (오래된 순)]
+${testScores.slice(-15).map((t, i) => `${i + 1}. ${t.date || '-'} | ${t.name} | ${t.score}/${t.total} (${t.percent}%)`).join('\n')}
+
+[통계 요약]
+- 전체 평균: ${overallAvg}%
+- 최근 3회 평균: ${recentAvg}%
+- 회귀 기울기: ${insight ? insight.slope.toFixed(2) : '-'}%p/시험
+- 추세 분류: ${insight ? insight.trendLabel : '-'}
+- 안정성: ${insight ? insight.stable : '-'}
+
+다음 JSON 형식으로만 답하세요 (마크다운 없이 순수 JSON):
+{
+  "summary": "현재 성적 흐름을 한 문장으로 요약 (학부모가 이해하기 쉽게)",
+  "analysis": "성적 추이 분석 — 무엇이 잘 되고 있고 무엇이 우려되는지 (3~4문장)",
+  "prediction": "현재 추세가 이어진다면 앞으로 어떻게 될 것 같은지 구체적 점수대로 예측 (2~3문장)",
+  "actions": ["이번 달 실행할 것 1", "이번 달 실행할 것 2", "이번 달 실행할 것 3"],
+  "parentNote": "학부모님께 한 마디 — 따뜻하고 구체적으로 (2문장)"
+}`;
+
+    // 1순위: 백엔드 프록시
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, studentName: student.name })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.result) {
+        const match = data.result.match(/\{[\s\S]*\}/);
+        if (match) {
+          setAiInsight(JSON.parse(match[0]));
+          setAiLoading(false);
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // 2순위: 브라우저 직접 호출
+    const apiKey = localStorage.getItem('anthropic_api_key') || '';
+    if (!apiKey.startsWith('sk-ant-')) {
+      setAiError('AI 분석을 사용하려면 API 키가 필요합니다.');
+      setShowApiKey(true);
+      setAiLoading(false);
+      return;
+    }
+    const models = ['claude-3-5-haiku-20241022', 'claude-haiku-4-5-20251001', 'claude-3-haiku-20240307'];
+    let lastErr = '';
+    for (const model of models) {
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+          body: JSON.stringify({ model, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] })
+        });
+        if (res.status === 404) { lastErr = '모델 ' + model + ' 없음'; continue; }
+        if (!res.ok) { const e = await res.json().catch(() => ({})); lastErr = e.error?.message || `오류 ${res.status}`; if ([401, 402, 429].includes(res.status)) break; continue; }
+        const data = await res.json();
+        const raw = (data.content || []).map(c => c.text || '').join('');
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (!match) { lastErr = 'JSON 파싱 실패'; continue; }
+        setAiInsight(JSON.parse(match[0]));
+        setAiLoading(false);
+        return;
+      } catch (e) { lastErr = e.message; }
+    }
+    setAiError('AI 분석 실패: ' + lastErr);
+    setAiLoading(false);
+  };
+
+  if (!insight) {
+    return (
+      <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-500 text-center">
+        시험이 2회 이상 누적되면 추세 분석이 표시됩니다. (현재 {testScores.length}회)
+      </div>
+    );
+  }
+
+  const colorMap = {
+    green:   { bg: 'bg-green-50',   border: 'border-green-200',   text: 'text-green-800',   accent: 'text-green-600' },
+    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800', accent: 'text-emerald-600' },
+    blue:    { bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-800',    accent: 'text-blue-600' },
+    amber:   { bg: 'bg-amber-50',   border: 'border-amber-200',   text: 'text-amber-800',   accent: 'text-amber-600' },
+    red:     { bg: 'bg-red-50',     border: 'border-red-200',     text: 'text-red-800',     accent: 'text-red-600' },
+  };
+  const c = colorMap[insight.trendColor] || colorMap.blue;
+
+  return (
+    <div className="mt-5 space-y-3">
+      {/* 자동 추세 분석 카드 */}
+      <div className={`p-4 rounded-xl border-2 ${c.bg} ${c.border}`}>
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <p className={`font-bold flex items-center gap-2 ${c.text}`}>
+            <span className="text-lg">{insight.trendEmoji}</span>
+            추세 분석: {insight.trendLabel} · {insight.stable}
+          </p>
+          <span className={`text-xs ${c.accent} font-semibold bg-white/60 px-2 py-0.5 rounded-full`}>
+            기울기 {insight.slope >= 0 ? '+' : ''}{insight.slope.toFixed(1)}%p/회
+          </span>
+        </div>
+        <ul className={`text-sm space-y-1 ${c.text} ml-1`}>
+          {insight.messages.map((m, i) => (
+            <li key={i} className="flex items-start gap-2"><span className={c.accent}>•</span>{m}</li>
+          ))}
+        </ul>
+        <div className={`mt-3 p-3 bg-white/70 rounded-lg border ${c.border}`}>
+          <p className={`text-xs font-bold ${c.accent} mb-1`}>🔮 예측</p>
+          <p className={`text-sm font-medium ${c.text}`}>{insight.predictionMsg}</p>
+        </div>
+      </div>
+
+      {/* AI 심층 분석 버튼 */}
+      <div className="flex items-center justify-between p-3 bg-violet-50 border border-violet-200 rounded-xl flex-wrap gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-violet-800">🧠 AI 심층 분석 + 학부모용 코멘트</p>
+          <p className="text-xs text-violet-600 mt-0.5">자연스러운 문장으로 학부모께 바로 보낼 수 있는 분석을 받아 보세요.</p>
+        </div>
+        <button
+          onClick={generateAIInsight}
+          disabled={aiLoading}
+          className={`px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${aiLoading ? 'bg-gray-300 text-gray-500 cursor-wait' : 'bg-violet-600 text-white hover:bg-violet-700'}`}>
+          {aiLoading ? '⏳ 분석 중...' : '✨ AI 분석 받기'}
+        </button>
+      </div>
+
+      {aiError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+          {aiError}
+        </div>
+      )}
+
+      {showApiKey && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+          <p className="text-xs font-bold text-blue-800">🔑 Anthropic API 키 설정</p>
+          <p className="text-[11px] text-blue-700">
+            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="underline font-bold">console.anthropic.com</a>에서 발급받아 붙여넣으세요. 이 브라우저에만 저장됩니다.
+          </p>
+          <input type="password" value={apiKeyDraft} onChange={e => setApiKeyDraft(e.target.value)} placeholder="sk-ant-..."
+            className="w-full p-2 border border-blue-300 rounded text-xs font-mono" autoComplete="off" spellCheck={false} />
+          <div className="flex gap-2">
+            <button
+              disabled={!apiKeyDraft.trim().startsWith('sk-ant-')}
+              onClick={() => {
+                localStorage.setItem('anthropic_api_key', apiKeyDraft.trim());
+                setShowApiKey(false);
+                setApiKeyDraft('');
+                setAiError('');
+                generateAIInsight();
+              }}
+              className={`flex-1 py-1.5 rounded text-xs font-bold ${apiKeyDraft.trim().startsWith('sk-ant-') ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
+              💾 저장하고 분석 시작
+            </button>
+            <button onClick={() => { setShowApiKey(false); setApiKeyDraft(''); }} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-xs">취소</button>
+          </div>
+        </div>
+      )}
+
+      {aiInsight && (
+        <div className="space-y-2">
+          <div className="p-4 rounded-xl border-2 border-violet-200 bg-violet-50">
+            <p className="text-xs font-bold text-violet-600 mb-1">💡 한 줄 요약</p>
+            <p className="text-sm font-bold text-gray-800">{aiInsight.summary}</p>
+          </div>
+          <div className="p-4 rounded-xl border border-blue-200 bg-blue-50">
+            <p className="text-xs font-bold text-blue-600 mb-1">📊 성적 추이 분석</p>
+            <p className="text-sm text-gray-700 leading-relaxed">{aiInsight.analysis}</p>
+          </div>
+          <div className="p-4 rounded-xl border border-amber-200 bg-amber-50">
+            <p className="text-xs font-bold text-amber-700 mb-1">🔮 추세 예측</p>
+            <p className="text-sm text-gray-700 leading-relaxed">{aiInsight.prediction}</p>
+          </div>
+          {aiInsight.actions?.length > 0 && (
+            <div className="p-4 rounded-xl border border-green-200 bg-green-50">
+              <p className="text-xs font-bold text-green-700 mb-2">⚡ 이번 달 실행 계획</p>
+              <ul className="space-y-1">
+                {aiInsight.actions.map((a, i) => (
+                  <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                    <span className="text-green-600 font-bold flex-shrink-0">{i + 1}.</span>{a}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {aiInsight.parentNote && (
+            <div className="p-4 rounded-xl border border-pink-200 bg-pink-50">
+              <p className="text-xs font-bold text-pink-700 mb-1">💌 학부모님께</p>
+              <p className="text-sm text-gray-700 italic leading-relaxed">"{aiInsight.parentNote}"</p>
+              <button
+                onClick={() => navigator.clipboard?.writeText(aiInsight.parentNote)}
+                className="mt-2 px-2 py-1 bg-white text-pink-700 rounded text-xs font-bold hover:bg-pink-100 border border-pink-300">
+                📋 학부모 코멘트 복사
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
