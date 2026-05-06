@@ -41838,6 +41838,226 @@ function downloadDiagnosisDoc({ student, type, data }) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ==========================================================
+// 📝 학생 종이 체크용 진단지 다운로드 (빈 칸 + 체크박스 형태)
+// ==========================================================
+// 수학 불안 측정 / 학습 유형 진단을 워드(.doc)로 저장하여 인쇄 후
+// 학생이 직접 종이에 체크할 수 있는 형식. 선생님이 결과를 읽고
+// 손으로 디지털 화면에 옮겨 입력하기 쉽도록 우측에 점수 합산 표 포함.
+function downloadDiagnosisQuestionnaire({ student, type, questions, scaleLabels }) {
+  const today = new Date().toLocaleDateString('ko-KR');
+  const isAnxiety = type === 'anxiety';
+  const title = isAnxiety ? '😰 수학 불안 측정' : '📚 학습 유형 진단';
+  const subtitle = isAnxiety
+    ? '수학 학습에서 느끼는 감정과 어려움을 솔직하게 표시해 주세요.'
+    : '평소 자신의 학습 방식을 떠올리며 가장 잘 맞는 정도를 표시해 주세요.';
+
+  // 1~5점 라벨 (수학 불안: 강도 / 학습 유형: 동의 정도)
+  const labels = scaleLabels || (isAnxiety
+    ? ['전혀 아니다', '거의 아니다', '보통이다', '그런 편이다', '매우 그렇다']
+    : ['전혀 아니다', '별로 아니다', '보통이다', '조금 그렇다', '매우 그렇다']);
+
+  const STYLE = `
+    @page { margin: 1.5cm 1.4cm; }
+    body {
+      font-family: 'Pretendard', 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif;
+      color: #111827;
+      line-height: 1.6;
+      letter-spacing: -0.1pt;
+      font-size: 10.5pt;
+    }
+    h1 {
+      color: #1e1b4b;
+      font-size: 22pt;
+      font-weight: 800;
+      letter-spacing: -0.5pt;
+      padding-bottom: 6pt;
+      margin: 0 0 4pt;
+      border-bottom: 0.5pt solid #312e81;
+    }
+    .subtitle { color: #6b7280; font-size: 10pt; margin: 4pt 0 14pt; }
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14pt;
+      border: 0.5pt solid #d1d5db;
+    }
+    .info-table td {
+      padding: 8pt 12pt;
+      border: 0.5pt solid #d1d5db;
+      font-size: 10pt;
+      vertical-align: middle;
+    }
+    .info-label {
+      width: 14%;
+      font-weight: 700;
+      color: #374151;
+    }
+    .info-blank { width: 36%; }
+    .instruction {
+      border-left: 2pt solid #4f46e5;
+      padding: 8pt 12pt;
+      margin: 0 0 14pt;
+      font-size: 10pt;
+      color: #1f2937;
+    }
+    .instruction strong { color: #312e81; }
+    .scale-key {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6pt 0 12pt;
+      border: 0.5pt solid #d1d5db;
+    }
+    .scale-key td {
+      padding: 6pt 4pt;
+      border: 0.5pt solid #d1d5db;
+      text-align: center;
+      font-size: 9.5pt;
+      width: 20%;
+    }
+    .scale-key .num {
+      font-weight: 800;
+      font-size: 11pt;
+      color: #312e81;
+      width: 24pt;
+    }
+    .questions {
+      width: 100%;
+      border-collapse: collapse;
+      border: 0.5pt solid #6b7280;
+    }
+    .questions th {
+      padding: 7pt 4pt;
+      border: 0.5pt solid #6b7280;
+      background: transparent;
+      font-size: 9.5pt;
+      font-weight: 700;
+      color: #111827;
+      text-align: center;
+      letter-spacing: 0.1pt;
+      border-bottom: 1pt solid #1f2937;
+    }
+    .questions td {
+      padding: 8pt 6pt;
+      border: 0.5pt solid #9ca3af;
+      font-size: 10.5pt;
+      vertical-align: middle;
+    }
+    .questions td.no {
+      width: 22pt;
+      text-align: center;
+      font-weight: 700;
+      color: #6b7280;
+    }
+    .questions td.q { line-height: 1.55; }
+    .questions td.opt {
+      width: 26pt;
+      text-align: center;
+      font-size: 14pt;
+      color: #6b7280;
+    }
+    .scoring {
+      margin-top: 18pt;
+      border-left: 2pt solid #d97706;
+      padding: 8pt 12pt;
+      font-size: 10pt;
+      color: #78350f;
+    }
+    .scoring strong { color: #92400e; }
+    .footer {
+      text-align: center;
+      color: #9ca3af;
+      font-size: 8.5pt;
+      margin-top: 24pt;
+      padding-top: 8pt;
+      border-top: 0.5pt solid #d1d5db;
+    }
+  `;
+
+  // 척도 키 (1~5 라벨)
+  const scaleKeyHtml = `
+    <table class="scale-key"><tr>
+      ${labels.map((l, i) => `<td><span class="num">${i + 1}</span><div style="margin-top:2pt;">${l}</div></td>`).join('')}
+    </tr></table>`;
+
+  // 질문 표 (체크박스 ○ × 형태로 표시)
+  const questionRows = questions.map((q, i) => `
+    <tr>
+      <td class="no">${i + 1}</td>
+      <td class="q">${q.text}</td>
+      ${[1,2,3,4,5].map(() => `<td class="opt">○</td>`).join('')}
+    </tr>`).join('');
+
+  const questionsTable = `
+    <table class="questions">
+      <thead>
+        <tr>
+          <th style="width:24pt">번호</th>
+          <th style="text-align:left;padding-left:8pt">문항</th>
+          <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${questionRows}
+      </tbody>
+    </table>`;
+
+  const scoringInfo = isAnxiety ? `
+    <div class="scoring">
+      <p style="margin:0 0 4pt;"><strong>📊 채점 방법 (선생님 안내용):</strong></p>
+      <p style="margin:0;">각 문항 점수의 합계를 50점 만점으로 환산하면 불안 지수입니다 (합 ÷ 50 × 100).
+      <strong>20 이하</strong>: 매우 낮음 / <strong>21~40</strong>: 낮음 / <strong>41~60</strong>: 보통 /
+      <strong>61~80</strong>: 높음 / <strong>81~100</strong>: 매우 높음</p>
+    </div>` : `
+    <div class="scoring">
+      <p style="margin:0 0 4pt;"><strong>📊 채점 방법 (선생님 안내용):</strong></p>
+      <p style="margin:0;">문항별로 표시된 학습 유형(시각/청각/체험/논리/사회/독립)에 따라 점수를 합산하여
+      가장 높은 합계가 학생의 <strong>주 학습 유형</strong>, 두 번째가 <strong>보조 학습 유형</strong>입니다.
+      디지털 화면(진단/분석 → 학습 유형 진단)에 같은 점수를 입력하시면 자동 분석됩니다.</p>
+    </div>`;
+
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${title} 진단지</title><style>${STYLE}</style></head><body>
+    <h1>${title} 진단지</h1>
+    <p class="subtitle">파란수학학원 몰입관 · 학생용 종이 체크 진단지</p>
+
+    <table class="info-table"><tr>
+      <td class="info-label">학생 이름</td>
+      <td class="info-blank">${student?.name || ''}</td>
+      <td class="info-label">학년 / 반</td>
+      <td class="info-blank">${student ? ((student.grade || '') + (student.className ? ' / ' + student.className : '')) : ''}</td>
+    </tr><tr>
+      <td class="info-label">작성 일자</td>
+      <td colspan="3">${today}</td>
+    </tr></table>
+
+    <div class="instruction">
+      <p style="margin:0 0 4pt;"><strong>📝 작성 방법</strong></p>
+      <p style="margin:0;">${subtitle} 각 문항을 읽고 <strong>나에게 가장 잘 맞는 번호 하나에 ○ 표시</strong>해 주세요.
+      답이 없는 문항이 없도록 모든 문항을 빠짐없이 답해 주세요.</p>
+    </div>
+
+    <p style="margin:0 0 4pt;font-weight:700;color:#312e81;font-size:10pt;">📐 점수 의미</p>
+    ${scaleKeyHtml}
+
+    ${questionsTable}
+
+    ${scoringInfo}
+
+    <div class="footer">© 파란수학학원 몰입관 — 본 진단지는 학습 지도 참고용입니다.</div>
+  </body></html>`;
+
+  const filename = `${student?.name || '학생'}_${isAnxiety ? '수학불안측정' : '학습유형진단'}_진단지_${today.replace(/[^\d]/g, '')}.doc`;
+  const blob = new Blob(['﻿', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function DiagnosisTab({ students, saveStudents }) {
   const [viewMode, setViewMode] = useState('anxiety'); // anxiety, learning, analysis, report
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -42138,11 +42358,19 @@ function AnxietyAssessment({ student, questions, diagnosisData, saveDiagnosisDat
 
   return (
     <div className="bg-white rounded-xl shadow-lg border p-6">
-      <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
-        <Heart className="text-red-500" />
-        수학 불안 측정 - {student.name}
-      </h3>
-      <p className="text-gray-500 mb-6">각 문항에 대해 1(전혀 아니다) ~ 5(매우 그렇다)로 응답해주세요.</p>
+      <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+        <h3 className="text-xl font-bold flex items-center gap-2">
+          <Heart className="text-red-500" />
+          수학 불안 측정 - {student.name}
+        </h3>
+        <button
+          onClick={() => downloadDiagnosisQuestionnaire({ student, type: 'anxiety', questions })}
+          className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-bold text-sm hover:shadow-md whitespace-nowrap"
+          title="학생이 종이에 직접 체크할 수 있는 인쇄용 진단지를 워드 파일로 다운로드합니다.">
+          📄 종이 진단지 다운로드
+        </button>
+      </div>
+      <p className="text-gray-500 mb-6">각 문항에 대해 1(전혀 아니다) ~ 5(매우 그렇다)로 응답해주세요. 또는 위 버튼으로 종이 진단지를 받아 학생이 직접 표시한 뒤 결과를 입력하실 수 있어요.</p>
 
       <div className="space-y-4">
         {questions.map((q, idx) => (
@@ -42282,11 +42510,19 @@ function LearningStyleAssessment({ student, questions, diagnosisData, saveDiagno
 
   return (
     <div className="bg-white rounded-xl shadow-lg border p-6">
-      <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
-        <BookOpen className="text-blue-500" />
-        학습 유형 진단 - {student.name}
-      </h3>
-      <p className="text-gray-500 mb-6">각 문항에 대해 1(전혀 아니다) ~ 5(매우 그렇다)로 응답해주세요.</p>
+      <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+        <h3 className="text-xl font-bold flex items-center gap-2">
+          <BookOpen className="text-blue-500" />
+          학습 유형 진단 - {student.name}
+        </h3>
+        <button
+          onClick={() => downloadDiagnosisQuestionnaire({ student, type: 'learning', questions })}
+          className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-bold text-sm hover:shadow-md whitespace-nowrap"
+          title="학생이 종이에 직접 체크할 수 있는 인쇄용 진단지를 워드 파일로 다운로드합니다.">
+          📄 종이 진단지 다운로드
+        </button>
+      </div>
+      <p className="text-gray-500 mb-6">각 문항에 대해 1(전혀 아니다) ~ 5(매우 그렇다)로 응답해주세요. 또는 위 버튼으로 종이 진단지를 받아 학생이 직접 표시한 뒤 결과를 입력하실 수 있어요.</p>
 
       <div className="space-y-4">
         {questions.map((q, idx) => (
