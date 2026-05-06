@@ -41218,10 +41218,9 @@ function downloadDiagnosisDoc({ student, type, data }) {
       margin: 4pt 0 22pt;
     }
 
-    /* ── 메타 박스 (학생 정보) ────────────────────────── */
+    /* ── 메타 박스 (학생 정보) — 바탕색 제거, 테두리만 ── */
     .meta {
-      background: #f9fafb;
-      border: 0.5pt solid #e5e7eb;
+      border: 0.5pt solid #d1d5db;
       padding: 12pt 16pt;
       margin-bottom: 20pt;
     }
@@ -41230,28 +41229,46 @@ function downloadDiagnosisDoc({ student, type, data }) {
     .meta-label { color: #6b7280; font-weight: 500; margin-right: 4pt; letter-spacing: 0.1pt; }
     .meta-val { color: #111827; font-weight: 700; }
 
-    /* ── 통계 카드 (4 컬러) ───────────────────────────── */
-    .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8pt;
+    /* ── 통계 카드 (테이블 기반 가로 배치, 바탕색 없음) ─ */
+    table.stat-grid {
+      width: 100%;
+      border-collapse: collapse;
       margin: 12pt 0 16pt;
+      border: none;
     }
-    .stat-card {
-      background: #4338ca;
-      color: white;
-      padding: 12pt 16pt;
-      border: 0.5pt solid #312e81;
-      border-radius: 4pt;
+    table.stat-grid > tbody > tr > td {
+      width: 25%;
+      padding: 12pt 14pt;
+      border: 0.5pt solid #d1d5db;
+      vertical-align: top;
+      background: transparent !important;
     }
-    .stat-card.green { background: #047857; border-color: #065f46; }
-    .stat-card.amber { background: #b45309; border-color: #92400e; }
-    .stat-card.rose  { background: #be123c; border-color: #9f1239; }
-    .stat-label { font-size: 9pt; opacity: 0.85; margin-bottom: 3pt; letter-spacing: 0.2pt; text-transform: uppercase; }
-    .stat-value { font-size: 20pt; font-weight: 800; letter-spacing: -0.5pt; line-height: 1.1; }
-    .stat-sub { font-size: 9pt; opacity: 0.82; margin-top: 4pt; letter-spacing: 0.1pt; }
+    .stat-card .stat-label {
+      font-size: 9pt;
+      color: #6b7280;
+      margin-bottom: 4pt;
+      letter-spacing: 0.2pt;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .stat-card .stat-value {
+      font-size: 20pt;
+      font-weight: 800;
+      letter-spacing: -0.5pt;
+      line-height: 1.15;
+      color: #312e81;
+    }
+    .stat-card .stat-sub {
+      font-size: 9pt;
+      color: #6b7280;
+      margin-top: 5pt;
+      letter-spacing: 0.1pt;
+    }
+    .stat-card.green .stat-value { color: #065f46; }
+    .stat-card.amber .stat-value { color: #92400e; }
+    .stat-card.rose  .stat-value { color: #9f1239; }
 
-    /* ── 테이블 (얇고 선명한 테두리) ──────────────────── */
+    /* ── 테이블 (얇고 선명한 테두리, 바탕색 없음) ──────── */
     table {
       width: 100%;
       border-collapse: collapse;
@@ -41259,70 +41276,67 @@ function downloadDiagnosisDoc({ student, type, data }) {
       border: 0.5pt solid #d1d5db;
     }
     th {
-      background: #1f2937;
-      color: white;
       padding: 7pt 10pt;
       text-align: left;
       font-size: 9.5pt;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: 0.15pt;
-      border: 0.5pt solid #111827;
+      border: 0.5pt solid #d1d5db;
+      color: #111827;
+      background: transparent;
+      border-bottom: 1pt solid #1f2937;
     }
     td {
       padding: 7pt 10pt;
       border: 0.5pt solid #e5e7eb;
       font-size: 10pt;
       vertical-align: middle;
+      background: transparent;
     }
-    tr:nth-child(even) td { background: #fafafa; }
 
-    /* ── 레벨 배지 ─────────────────────────────────────── */
+    /* ── 레벨 배지 (테두리만, 바탕색 없음) ──────────── */
     .level-badge {
       display: inline-block;
-      padding: 2.5pt 10pt;
+      padding: 2pt 8pt;
       border-radius: 10pt;
       font-size: 9.5pt;
       font-weight: 700;
       letter-spacing: 0.1pt;
-      border: 0.5pt solid transparent;
+      border: 0.5pt solid;
+      background: transparent;
     }
-    .level-green  { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
-    .level-yellow { background: #fffbeb; color: #b45309; border-color: #fde68a; }
-    .level-red    { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
-    .level-blue   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .level-green  { color: #047857; border-color: #047857; }
+    .level-yellow { color: #b45309; border-color: #b45309; }
+    .level-red    { color: #b91c1c; border-color: #b91c1c; }
+    .level-blue   { color: #1d4ed8; border-color: #1d4ed8; }
 
-    /* ── 인용/강조 박스 ────────────────────────────────── */
+    /* ── 인용 박스 (좌측 라인만) ──────────────────────── */
     .quote {
-      background: #fffbeb;
-      border: 0.5pt solid #fde68a;
       border-left: 2pt solid #d97706;
-      padding: 11pt 14pt;
+      padding: 8pt 14pt;
       margin: 12pt 0;
       color: #78350f;
       font-size: 10pt;
       line-height: 1.7;
     }
-    .quote p { margin: 0 0 6pt; }
+    .quote p { margin: 0 0 6pt; color: #4b5563; }
     .quote p:last-child { margin-bottom: 0; }
-    .quote strong { color: #92400e; }
+    .quote strong { color: #1f2937; }
 
-    /* ── 강점/보완점 2단 박스 (얇은 테두리) ──────────── */
+    /* ── 강점/보완점 2단 박스 (테두리만) ──────────────── */
     .insight-row { width: 100%; border-collapse: collapse; margin: 8pt 0; }
     .insight-row td {
       vertical-align: top;
       width: 50%;
       padding: 12pt 16pt;
       border: 0.5pt solid #d1d5db;
+      background: transparent;
     }
-    .insight-row td.strength { background: #f0fdf4; }
-    .insight-row td.weakness { background: #fff7ed; }
     .insight-title { margin: 0 0 6pt; font-weight: 700; font-size: 10.5pt; letter-spacing: 0.1pt; }
-    .insight-title.strength { color: #166534; }
-    .insight-title.weakness { color: #9a3412; }
+    .insight-title.strength { color: #047857; }
+    .insight-title.weakness { color: #b45309; }
     .insight-row ul { margin: 0; padding-left: 16pt; }
-    .insight-row li { font-size: 10pt; margin: 3pt 0; line-height: 1.55; }
-    .insight-row .strength li { color: #166534; }
-    .insight-row .weakness li { color: #9a3412; }
+    .insight-row li { font-size: 10pt; margin: 3pt 0; line-height: 1.55; color: #1f2937; }
 
     /* ── 푸터 ──────────────────────────────────────────── */
     .footer {
@@ -41341,26 +41355,23 @@ function downloadDiagnosisDoc({ student, type, data }) {
     p { margin: 6pt 0; }
 
     .highlight {
-      background: #fef9c3;
-      padding: 1pt 5pt;
-      border: 0.5pt solid #fde047;
-      border-radius: 2pt;
+      padding: 0 4pt;
+      border-bottom: 1.25pt solid #d97706;
       font-weight: 700;
+      color: #92400e;
     }
 
-    /* ── 막대 그래프 (월별 추이용) ───────────────────── */
+    /* ── 막대 그래프 (월별 추이용, 바탕색 없음) ──────── */
     .bar-track {
       display: inline-block;
       width: 55%;
-      height: 10pt;
-      background: #f3f4f6;
-      border: 0.5pt solid #e5e7eb;
-      border-radius: 5pt;
+      height: 9pt;
+      border: 0.5pt solid #d1d5db;
       vertical-align: middle;
       margin-right: 6pt;
       overflow: hidden;
     }
-    .bar-fill { height: 100%; border-radius: 4pt; }
+    .bar-fill { height: 100%; }
   `;
 
   let title = '';
@@ -41371,12 +41382,13 @@ function downloadDiagnosisDoc({ student, type, data }) {
     const score = data.score ?? 0;
     const level = data.level || {};
     const lvlClass = level.color === 'green' || level.color === 'teal' ? 'level-green' : level.color === 'yellow' ? 'level-yellow' : level.color === 'orange' || level.color === 'red' ? 'level-red' : 'level-blue';
+    const colorClass = score <= 40 ? 'green' : score <= 60 ? 'amber' : 'rose';
     body = `
       <h2>📊 측정 결과</h2>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">불안 지수</div><div class="stat-value">${score}<span style="font-size:14pt;font-weight:normal;">점</span></div><div class="stat-sub">100점 만점</div></div>
-        <div class="stat-card ${score <= 40 ? 'green' : score <= 60 ? 'amber' : 'rose'}"><div class="stat-label">수준</div><div class="stat-value" style="font-size:18pt">${level.level || '미측정'}</div><div class="stat-sub">${level.desc || ''}</div></div>
-      </div>
+      <table class="stat-grid"><tbody><tr>
+        <td class="stat-card"><div class="stat-label">불안 지수</div><div class="stat-value">${score}<span style="font-size:14pt;font-weight:normal;">점</span></div><div class="stat-sub">100점 만점</div></td>
+        <td class="stat-card ${colorClass}"><div class="stat-label">수준</div><div class="stat-value" style="font-size:18pt">${level.level || '미측정'}</div><div class="stat-sub">${level.desc || ''}</div></td>
+      </tr></tbody></table>
       <h2>📝 문항별 응답</h2>
       <table>
         <thead><tr><th style="width:8%">번호</th><th>문항</th><th style="width:14%;text-align:center">응답</th></tr></thead>
@@ -41399,10 +41411,10 @@ function downloadDiagnosisDoc({ student, type, data }) {
     const secondary = labels[result.secondary] || {};
     body = `
       <h2>🎯 진단 결과</h2>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">주 학습 유형</div><div class="stat-value" style="font-size:20pt">${primary.name || '-'}</div><div class="stat-sub">${primary.desc || ''}</div></div>
-        <div class="stat-card green"><div class="stat-label">보조 학습 유형</div><div class="stat-value" style="font-size:20pt">${secondary.name || '-'}</div><div class="stat-sub">${secondary.desc || ''}</div></div>
-      </div>
+      <table class="stat-grid"><tbody><tr>
+        <td class="stat-card"><div class="stat-label">주 학습 유형</div><div class="stat-value" style="font-size:18pt">${primary.name || '-'}</div><div class="stat-sub">${primary.desc || ''}</div></td>
+        <td class="stat-card green"><div class="stat-label">보조 학습 유형</div><div class="stat-value" style="font-size:18pt">${secondary.name || '-'}</div><div class="stat-sub">${secondary.desc || ''}</div></td>
+      </tr></tbody></table>
       <h2>📊 6가지 유형별 점수</h2>
       <table>
         <thead><tr><th>유형</th><th>점수</th><th>비율</th><th>특징</th></tr></thead>
@@ -41429,12 +41441,12 @@ function downloadDiagnosisDoc({ student, type, data }) {
     const { overallAvg, recentAvg, trend, testScores = [], typeAverages = [], unitAnalysis = {}, wrongNoteCount, conqueredCount } = data;
     body = `
       <h2>📊 핵심 지표</h2>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">전체 평균</div><div class="stat-value">${overallAvg}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">시험 ${testScores.length}회</div></div>
-        <div class="stat-card green"><div class="stat-label">최근 3회 평균</div><div class="stat-value">${recentAvg}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">${recentAvg >= overallAvg ? '↑ 상승 추세' : '↓ 보완 필요'}</div></div>
-        <div class="stat-card ${trend >= 0 ? 'amber' : 'rose'}"><div class="stat-label">추세</div><div class="stat-value">${trend > 0 ? '+' : ''}${trend}<span style="font-size:14pt;font-weight:normal;">%p</span></div><div class="stat-sub">시작 대비</div></div>
-        <div class="stat-card"><div class="stat-label">오답 누적</div><div class="stat-value">${wrongNoteCount}<span style="font-size:14pt;font-weight:normal;">개</span></div><div class="stat-sub">정복 ${conqueredCount}개</div></div>
-      </div>
+      <table class="stat-grid"><tbody><tr>
+        <td class="stat-card"><div class="stat-label">전체 평균</div><div class="stat-value">${overallAvg}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">시험 ${testScores.length}회</div></td>
+        <td class="stat-card green"><div class="stat-label">최근 3회 평균</div><div class="stat-value">${recentAvg}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">${recentAvg >= overallAvg ? '↑ 상승 추세' : '↓ 보완 필요'}</div></td>
+        <td class="stat-card ${trend >= 0 ? 'amber' : 'rose'}"><div class="stat-label">추세</div><div class="stat-value">${trend > 0 ? '+' : ''}${trend}<span style="font-size:14pt;font-weight:normal;">%p</span></div><div class="stat-sub">시작 대비</div></td>
+        <td class="stat-card"><div class="stat-label">오답 누적</div><div class="stat-value">${wrongNoteCount}<span style="font-size:14pt;font-weight:normal;">개</span></div><div class="stat-sub">정복 ${conqueredCount}개</div></td>
+      </tr></tbody></table>
       <h2>📝 시험 종류별 평균</h2>
       <table>
         <thead><tr><th>시험 종류</th><th style="text-align:center;width:14%">응시</th><th style="text-align:center;width:14%">평균</th><th style="text-align:center;width:14%">최근</th></tr></thead>
@@ -41470,12 +41482,12 @@ function downloadDiagnosisDoc({ student, type, data }) {
     // 누적 학습 데이터 섹션 (학생 등록 이후 모든 학습 보고서 분석)
     const cumulativeSection = c.totalSessions > 0 ? `
       <h2>📚 누적 학습 데이터 분석 <span style="font-size:11pt;color:#6b7280;font-weight:normal;">(${c.enrollDate || '-'} 등록 ~ 현재)</span></h2>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">총 수업 횟수</div><div class="stat-value">${c.totalSessions}<span style="font-size:14pt;font-weight:normal;">회</span></div><div class="stat-sub">${c.firstDate || '-'} ~ ${c.lastDate || '-'}</div></div>
-        <div class="stat-card green"><div class="stat-label">출석률</div><div class="stat-value">${c.attendanceRate}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">결석 ${c.absentCnt} · 지각 ${c.lateCnt}</div></div>
-        <div class="stat-card amber"><div class="stat-label">숙제 완료율</div><div class="stat-value">${c.hwRate ?? '-'}${c.hwRate !== null ? '<span style="font-size:14pt;font-weight:normal;">%</span>' : ''}</div><div class="stat-sub">${c.hwDone}/${c.hwTotal} 완료</div></div>
-        <div class="stat-card rose"><div class="stat-label">자습 누적</div><div class="stat-value">${c.studyHours}<span style="font-size:12pt;font-weight:normal;">h</span> ${c.studyMins}<span style="font-size:12pt;font-weight:normal;">m</span></div><div class="stat-sub">총 ${c.totalStudyMin}분</div></div>
-      </div>
+      <table class="stat-grid"><tbody><tr>
+        <td class="stat-card"><div class="stat-label">총 수업 횟수</div><div class="stat-value">${c.totalSessions}<span style="font-size:14pt;font-weight:normal;">회</span></div><div class="stat-sub">${c.firstDate || '-'} ~ ${c.lastDate || '-'}</div></td>
+        <td class="stat-card green"><div class="stat-label">출석률</div><div class="stat-value">${c.attendanceRate}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">결석 ${c.absentCnt} · 지각 ${c.lateCnt}</div></td>
+        <td class="stat-card amber"><div class="stat-label">숙제 완료율</div><div class="stat-value">${c.hwRate ?? '-'}${c.hwRate !== null ? '<span style="font-size:14pt;font-weight:normal;">%</span>' : ''}</div><div class="stat-sub">${c.hwDone}/${c.hwTotal} 완료</div></td>
+        <td class="stat-card rose"><div class="stat-label">자습 누적</div><div class="stat-value">${c.studyHours}<span style="font-size:12pt;font-weight:normal;">h</span> ${c.studyMins}<span style="font-size:12pt;font-weight:normal;">m</span></div><div class="stat-sub">총 ${c.totalStudyMin}분</div></td>
+      </tr></tbody></table>
 
       <h3>💪 학습 태도 평균 (5점 만점)</h3>
       <table>
@@ -41535,12 +41547,12 @@ function downloadDiagnosisDoc({ student, type, data }) {
 
     body = `
       <h2>📊 한눈에 보는 종합 진단</h2>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">😰 수학 불안 지수</div><div class="stat-value">${anxietyScore != null ? anxietyScore : '미측정'}${anxietyScore != null ? '<span style="font-size:14pt;font-weight:normal;">점</span>' : ''}</div><div class="stat-sub">${anxietyLevel?.level || '진단 전'}</div></div>
-        <div class="stat-card green"><div class="stat-label">📚 주 학습 유형</div><div class="stat-value" style="font-size:18pt">${primaryStyle.name || '미측정'}</div><div class="stat-sub">${primaryStyle.desc?.slice(0, 30) || '진단 전'}</div></div>
-        <div class="stat-card amber"><div class="stat-label">📈 시험 평균</div><div class="stat-value">${overallAvg ?? 0}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">최근 ${recentAvg ?? 0}%</div></div>
-        <div class="stat-card rose"><div class="stat-label">📝 누적 오답</div><div class="stat-value">${wrongNoteCount ?? 0}<span style="font-size:14pt;font-weight:normal;">개</span></div></div>
-      </div>
+      <table class="stat-grid"><tbody><tr>
+        <td class="stat-card"><div class="stat-label">😰 수학 불안 지수</div><div class="stat-value">${anxietyScore != null ? anxietyScore : '미측정'}${anxietyScore != null ? '<span style="font-size:14pt;font-weight:normal;">점</span>' : ''}</div><div class="stat-sub">${anxietyLevel?.level || '진단 전'}</div></td>
+        <td class="stat-card green"><div class="stat-label">📚 주 학습 유형</div><div class="stat-value" style="font-size:14pt">${primaryStyle.name || '미측정'}</div><div class="stat-sub">${primaryStyle.desc?.slice(0, 30) || '진단 전'}</div></td>
+        <td class="stat-card amber"><div class="stat-label">📈 시험 평균</div><div class="stat-value">${overallAvg ?? 0}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">최근 ${recentAvg ?? 0}%</div></td>
+        <td class="stat-card rose"><div class="stat-label">📝 누적 오답</div><div class="stat-value">${wrongNoteCount ?? 0}<span style="font-size:14pt;font-weight:normal;">개</span></div><div class="stat-sub">&nbsp;</div></td>
+      </tr></tbody></table>
 
       ${cumulativeSection}
 
