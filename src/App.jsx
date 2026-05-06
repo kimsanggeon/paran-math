@@ -41310,8 +41310,77 @@ function downloadDiagnosisDoc({ student, type, data }) {
       </table>`;
   } else if (type === 'report') {
     title = '📋 종합 진단 리포트';
-    const { anxietyScore, anxietyLevel, learningResult, learningLabels, overallAvg, recentAvg, wrongNoteCount } = data;
+    const { anxietyScore, anxietyLevel, learningResult, learningLabels, overallAvg, recentAvg, wrongNoteCount, cumulative } = data;
     const primaryStyle = learningLabels && learningResult ? (learningLabels[learningResult.primary] || {}) : {};
+    const c = cumulative || {};
+    const attL = (k) => k && c.attitudeStats ? c.attitudeStats[k] : null;
+
+    // 누적 학습 데이터 섹션 (학생 등록 이후 모든 학습 보고서 분석)
+    const cumulativeSection = c.totalSessions > 0 ? `
+      <h2>📚 누적 학습 데이터 분석 <span style="font-size:11pt;color:#6b7280;font-weight:normal;">(${c.enrollDate || '-'} 등록 ~ 현재)</span></h2>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">총 수업 횟수</div><div class="stat-value">${c.totalSessions}<span style="font-size:14pt;font-weight:normal;">회</span></div><div class="stat-sub">${c.firstDate || '-'} ~ ${c.lastDate || '-'}</div></div>
+        <div class="stat-card green"><div class="stat-label">출석률</div><div class="stat-value">${c.attendanceRate}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">결석 ${c.absentCnt} · 지각 ${c.lateCnt}</div></div>
+        <div class="stat-card amber"><div class="stat-label">숙제 완료율</div><div class="stat-value">${c.hwRate ?? '-'}${c.hwRate !== null ? '<span style="font-size:14pt;font-weight:normal;">%</span>' : ''}</div><div class="stat-sub">${c.hwDone}/${c.hwTotal} 완료</div></div>
+        <div class="stat-card rose"><div class="stat-label">자습 누적</div><div class="stat-value">${c.studyHours}<span style="font-size:12pt;font-weight:normal;">h</span> ${c.studyMins}<span style="font-size:12pt;font-weight:normal;">m</span></div><div class="stat-sub">총 ${c.totalStudyMin}분</div></div>
+      </div>
+
+      <h3>💪 학습 태도 평균 (5점 만점)</h3>
+      <table>
+        <thead><tr><th>이해도</th><th>참여도</th><th>집중도</th><th>태도</th><th>끈기</th></tr></thead>
+        <tbody>
+          <tr>
+            <td style="text-align:center;font-size:14pt;font-weight:bold;color:${attL('understanding') >= 4.3 ? '#16a34a' : attL('understanding') >= 3.5 ? '#ca8a04' : '#dc2626'}">${attL('understanding') ?? '-'}</td>
+            <td style="text-align:center;font-size:14pt;font-weight:bold;color:${attL('participation') >= 4.3 ? '#16a34a' : attL('participation') >= 3.5 ? '#ca8a04' : '#dc2626'}">${attL('participation') ?? '-'}</td>
+            <td style="text-align:center;font-size:14pt;font-weight:bold;color:${attL('concentration') >= 4.3 ? '#16a34a' : attL('concentration') >= 3.5 ? '#ca8a04' : '#dc2626'}">${attL('concentration') ?? '-'}</td>
+            <td style="text-align:center;font-size:14pt;font-weight:bold;color:${attL('attitude') >= 4.3 ? '#16a34a' : attL('attitude') >= 3.5 ? '#ca8a04' : '#dc2626'}">${attL('attitude') ?? '-'}</td>
+            <td style="text-align:center;font-size:14pt;font-weight:bold;color:${attL('persistence') >= 4.3 ? '#16a34a' : attL('persistence') >= 3.5 ? '#ca8a04' : '#dc2626'}">${attL('persistence') ?? '-'}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      ${(c.monthlyTrend || []).length > 0 ? `
+      <h3>📈 월별 시험 평균 추이</h3>
+      <table>
+        <thead><tr><th style="width:25%">월</th><th style="width:25%;text-align:center">응시 횟수</th><th>평균 정답률</th></tr></thead>
+        <tbody>
+          ${c.monthlyTrend.map(m => `<tr><td><strong>${m.month}</strong></td><td style="text-align:center">${m.count}회</td><td><div style="display:inline-block;width:60%;height:10pt;background:#e5e7eb;border-radius:5pt;vertical-align:middle;margin-right:6pt;"><div style="width:${m.avg}%;height:100%;background:${m.avg >= 80 ? '#10b981' : m.avg >= 60 ? '#f59e0b' : '#ef4444'};border-radius:5pt;"></div></div><span class="level-badge ${m.avg >= 80 ? 'level-green' : m.avg >= 60 ? 'level-yellow' : 'level-red'}">${m.avg}%</span></td></tr>`).join('')}
+        </tbody>
+      </table>` : ''}
+
+      ${(c.topUnits || []).length > 0 ? `
+      <h3>📖 가장 많이 학습한 단원 TOP 5</h3>
+      <table>
+        <thead><tr><th style="width:8%">순위</th><th>단원</th><th style="width:18%;text-align:center">학습 횟수</th></tr></thead>
+        <tbody>
+          ${c.topUnits.map(([u, cnt], i) => `<tr><td style="text-align:center"><strong>${i + 1}</strong></td><td>${u}</td><td style="text-align:center"><span class="level-badge level-blue">${cnt}회</span></td></tr>`).join('')}
+        </tbody>
+      </table>` : ''}
+
+      ${(c.topTextbooks || []).length > 0 ? `
+      <h3>📚 주력 교재 TOP 3</h3>
+      <table>
+        <thead><tr><th style="width:8%">순위</th><th>교재</th><th style="width:18%;text-align:center">사용 횟수</th></tr></thead>
+        <tbody>
+          ${c.topTextbooks.map(([t, cnt], i) => `<tr><td style="text-align:center"><strong>${i + 1}</strong></td><td>${t}</td><td style="text-align:center"><span class="level-badge level-green">${cnt}회</span></td></tr>`).join('')}
+        </tbody>
+      </table>` : ''}
+
+      <h3>📊 강점 / 보완할 점 자동 분석</h3>
+      <table style="margin-top:6pt">
+        <tr>
+          <td style="vertical-align:top;width:50%;background:#d1fae5;padding:14pt 18pt;">
+            <p style="margin:0 0 8pt 0;font-weight:bold;color:#065f46;font-size:12pt;">✅ 강점</p>
+            ${(c.strengths || []).length > 0 ? `<ul style="margin:0;padding-left:18pt;">${c.strengths.map(s => `<li style="color:#065f46;">${s}</li>`).join('')}</ul>` : '<p style="margin:0;color:#6b7280;">아직 분석할 데이터가 부족합니다.</p>'}
+          </td>
+          <td style="vertical-align:top;width:50%;background:#fed7aa;padding:14pt 18pt;">
+            <p style="margin:0 0 8pt 0;font-weight:bold;color:#9a3412;font-size:12pt;">📌 보완할 점</p>
+            ${(c.weaknesses || []).length > 0 ? `<ul style="margin:0;padding-left:18pt;">${c.weaknesses.map(w => `<li style="color:#9a3412;">${w}</li>`).join('')}</ul>` : '<p style="margin:0;color:#6b7280;">특별히 보완할 점이 없습니다. 잘 하고 있어요!</p>'}
+          </td>
+        </tr>
+      </table>
+    ` : '';
+
     body = `
       <h2>📊 한눈에 보는 종합 진단</h2>
       <div class="stat-grid">
@@ -41320,12 +41389,17 @@ function downloadDiagnosisDoc({ student, type, data }) {
         <div class="stat-card amber"><div class="stat-label">📈 시험 평균</div><div class="stat-value">${overallAvg ?? 0}<span style="font-size:14pt;font-weight:normal;">%</span></div><div class="stat-sub">최근 ${recentAvg ?? 0}%</div></div>
         <div class="stat-card rose"><div class="stat-label">📝 누적 오답</div><div class="stat-value">${wrongNoteCount ?? 0}<span style="font-size:14pt;font-weight:normal;">개</span></div></div>
       </div>
+
+      ${cumulativeSection}
+
       <h2>🎯 종합 의견 및 지도 방향</h2>
       <div class="quote">
         ${anxietyScore != null && anxietyScore >= 60 ? '<p><strong>1) 정서적 지원 우선:</strong> 불안 지수가 높습니다. 시험 전 안정 루틴, 작은 성취 확인, 긍정 피드백을 우선 지도하세요.</p>' : ''}
         ${overallAvg != null && overallAvg < 60 ? '<p><strong>2) 기본기 보강:</strong> 평균이 60% 미만 — 단원별 개념 재학습과 기본 유형 반복이 필요합니다.</p>' : ''}
         ${primaryStyle.name ? `<p><strong>3) 맞춤 학습:</strong> ${primaryStyle.name} 유형 — ${primaryStyle.desc || ''}. 이 방식으로 수업·과제를 구성하세요.</p>` : ''}
-        ${wrongNoteCount > 20 ? '<p><strong>4) 오답 정복:</strong> 오답 누적이 많습니다. 매주 오답노트 정복 시간을 정례화하세요.</p>' : ''}
+        ${c.attendanceRate != null && c.attendanceRate < 80 ? '<p><strong>4) 출석 관리:</strong> 출석률이 낮습니다. 학부모 상담을 통해 출석 의지를 다잡아 주세요.</p>' : ''}
+        ${c.hwRate != null && c.hwRate < 60 ? '<p><strong>5) 숙제 관리:</strong> 숙제 완료율이 낮습니다. 분량 조절과 동기 부여가 필요합니다.</p>' : ''}
+        ${wrongNoteCount > 20 ? '<p><strong>6) 오답 정복:</strong> 오답 누적이 많습니다. 매주 오답노트 정복 시간을 정례화하세요.</p>' : ''}
       </div>
       <h2>💡 다음 4주 실행 계획 제안</h2>
       <ul>
@@ -42118,6 +42192,99 @@ function ComprehensiveReport({ student, diagnosisData, calculateAnxietyScore, ge
   const recentAvg = allScores.slice(-3).length > 0 ? Math.round(allScores.slice(-3).reduce((s, v) => s + v.pct, 0) / allScores.slice(-3).length) : 0;
   const latestReport = allScores[allScores.length - 1] || null;
 
+  // ========== 학생 등록부터 쌓인 누적 학습 데이터 분석 ==========
+  const sortedSessions = [...sessions].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const firstSession = sortedSessions[0];
+  const lastSession = sortedSessions[sortedSessions.length - 1];
+  const enrollDate = student.createdAt ? student.createdAt.slice(0, 10) : (firstSession?.date || '-');
+
+  // 출결 통계
+  let presentCnt = 0, absentCnt = 0, lateCnt = 0;
+  sessions.forEach(s => {
+    if (s.attendanceStatus === 'present' || s.attendanceStatus === '출석') presentCnt++;
+    else if (s.attendanceStatus === 'absent' || s.attendanceStatus === '결석') absentCnt++;
+    else if (s.attendanceStatus === 'late' || s.attendanceStatus === '지각') lateCnt++;
+    else presentCnt++; // 명시되지 않으면 출석으로 간주
+  });
+  const attendanceRate = sessions.length > 0 ? Math.round(presentCnt / sessions.length * 100) : 0;
+
+  // 숙제 완료율
+  let hwTotal = 0, hwDone = 0;
+  sessions.forEach(s => {
+    (s.assignments || []).forEach(a => {
+      hwTotal++;
+      if (a.completed || a.status === 'completed') hwDone++;
+    });
+  });
+  const hwRate = hwTotal > 0 ? Math.round(hwDone / hwTotal * 100) : null;
+
+  // 학습 태도 평균 (1-5 scale)
+  const attitudeFields = ['understanding', 'participation', 'concentration', 'attitude', 'persistence'];
+  const attitudeStats = {};
+  attitudeFields.forEach(f => {
+    const vals = sessions.filter(s => s[f] && s[f] > 0).map(s => s[f]);
+    attitudeStats[f] = vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null;
+  });
+
+  // 자습 시간 누적
+  const totalStudyMin = sessions.reduce((sum, s) => sum + (parseInt(s.studyTime) || 0), 0);
+  const studyHours = Math.floor(totalStudyMin / 60);
+  const studyMins = totalStudyMin % 60;
+
+  // 학습한 단원/교재 분석
+  const unitMap = {};
+  const textbookMap = {};
+  sessions.forEach(s => {
+    (s.lessonContents || []).forEach(c => {
+      const u = c.detailUnit || c.subUnit || c.mainUnit;
+      if (u) unitMap[u] = (unitMap[u] || 0) + 1;
+      const tb = c.textbook === '기타' ? c.customTextbook : c.textbook;
+      if (tb) textbookMap[tb] = (textbookMap[tb] || 0) + 1;
+    });
+  });
+  const topUnits = Object.entries(unitMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topTextbooks = Object.entries(textbookMap).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+  // 월별 평균 점수 추이
+  const monthlyScores = {};
+  allScores.forEach(s => {
+    if (!s.date) return;
+    const m = s.date.slice(0, 7);
+    if (!monthlyScores[m]) monthlyScores[m] = [];
+    monthlyScores[m].push(s.pct);
+  });
+  const monthlyTrend = Object.entries(monthlyScores).sort((a, b) => a[0].localeCompare(b[0])).map(([m, arr]) => ({
+    month: m,
+    avg: Math.round(arr.reduce((s, v) => s + v, 0) / arr.length),
+    count: arr.length,
+  }));
+
+  // 강점 / 약점 자동 분석
+  const strengths = [];
+  const weaknesses = [];
+  if (attendanceRate >= 95) strengths.push('출석이 매우 모범적입니다 (' + attendanceRate + '%)');
+  else if (attendanceRate < 80) weaknesses.push('출석률이 낮습니다 (' + attendanceRate + '%)');
+  if (hwRate !== null && hwRate >= 90) strengths.push('숙제를 성실히 수행합니다 (' + hwRate + '%)');
+  else if (hwRate !== null && hwRate < 60) weaknesses.push('숙제 완료율이 낮습니다 (' + hwRate + '%)');
+  if (overallAvg >= 85) strengths.push('시험 평균이 우수합니다 (' + overallAvg + '%)');
+  else if (overallAvg < 60 && allScores.length > 0) weaknesses.push('시험 평균 점수가 부족합니다 (' + overallAvg + '%)');
+  if (attitudeStats.understanding && attitudeStats.understanding >= 4.3) strengths.push('이해도가 매우 높습니다');
+  else if (attitudeStats.understanding && attitudeStats.understanding < 3) weaknesses.push('개념 이해에 어려움이 보입니다');
+  if (attitudeStats.participation && attitudeStats.participation >= 4.3) strengths.push('수업 참여도가 우수합니다');
+  if (recentAvg > overallAvg + 5) strengths.push('최근 성적이 상승 추세입니다 (' + (recentAvg - overallAvg) + '%p↑)');
+  else if (recentAvg < overallAvg - 5 && allScores.length >= 3) weaknesses.push('최근 성적이 하락 추세입니다 (' + (overallAvg - recentAvg) + '%p↓)');
+
+  const cumulativeData = {
+    enrollDate, totalSessions: sessions.length, firstDate: firstSession?.date, lastDate: lastSession?.date,
+    attendanceRate, presentCnt, absentCnt, lateCnt,
+    hwRate, hwTotal, hwDone,
+    attitudeStats, totalStudyMin, studyHours, studyMins,
+    topUnits, topTextbooks, monthlyTrend,
+    strengths, weaknesses,
+    wrongNoteCount: (student.wrongNotes || []).length,
+    conqueredCount: (student.wrongNotes || []).filter(n => n.conquered || n.isReviewed).length,
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-lg border p-6">
@@ -42140,6 +42307,7 @@ function ComprehensiveReport({ student, diagnosisData, calculateAnxietyScore, ge
                 learningResult, learningLabels: learningTypeLabels,
                 overallAvg, recentAvg,
                 wrongNoteCount: (student.wrongNotes || []).length,
+                cumulative: cumulativeData,
               }
             })}
             className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-lg font-bold text-sm hover:shadow-lg whitespace-nowrap">
@@ -42185,12 +42353,164 @@ function ComprehensiveReport({ student, diagnosisData, calculateAnxietyScore, ge
           </div>
         </div>
 
+        {/* ========== 등록 이후 누적 학습 데이터 ========== */}
+        {sessions.length > 0 && (
+          <div className="border-t pt-6 mb-6">
+            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+              📚 누적 학습 데이터
+              <span className="text-xs text-gray-500 font-normal">({cumulativeData.enrollDate} 등록 ~ 현재)</span>
+            </h3>
+
+            {/* 학습 기간 요약 4개 카드 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-3 text-white shadow">
+                <p className="text-xs opacity-90 mb-1">총 수업</p>
+                <p className="text-2xl font-black">{cumulativeData.totalSessions}<span className="text-sm font-normal">회</span></p>
+                <p className="text-[10px] opacity-80 mt-1">최근: {cumulativeData.lastDate || '-'}</p>
+              </div>
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-3 text-white shadow">
+                <p className="text-xs opacity-90 mb-1">출석률</p>
+                <p className="text-2xl font-black">{cumulativeData.attendanceRate}<span className="text-sm font-normal">%</span></p>
+                <p className="text-[10px] opacity-80 mt-1">결석 {cumulativeData.absentCnt} · 지각 {cumulativeData.lateCnt}</p>
+              </div>
+              <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-3 text-white shadow">
+                <p className="text-xs opacity-90 mb-1">숙제 완료</p>
+                <p className="text-2xl font-black">{cumulativeData.hwRate ?? '-'}<span className="text-sm font-normal">%</span></p>
+                <p className="text-[10px] opacity-80 mt-1">{cumulativeData.hwDone}/{cumulativeData.hwTotal}</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl p-3 text-white shadow">
+                <p className="text-xs opacity-90 mb-1">자습 누적</p>
+                <p className="text-2xl font-black">{cumulativeData.studyHours}<span className="text-sm font-normal">h</span> {cumulativeData.studyMins}<span className="text-sm font-normal">m</span></p>
+                <p className="text-[10px] opacity-80 mt-1">총 {cumulativeData.totalStudyMin}분</p>
+              </div>
+            </div>
+
+            {/* 학습 태도 5축 */}
+            {Object.values(cumulativeData.attitudeStats).some(v => v !== null) && (
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 mb-4 border border-indigo-200">
+                <p className="font-bold text-sm text-indigo-800 mb-3">💪 학습 태도 평균 (5점 만점)</p>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  {[
+                    ['understanding', '이해도', '🧠'],
+                    ['participation', '참여도', '🙋'],
+                    ['concentration', '집중도', '🎯'],
+                    ['attitude', '태도', '✨'],
+                    ['persistence', '끈기', '💪']
+                  ].map(([key, label, emoji]) => {
+                    const v = cumulativeData.attitudeStats[key];
+                    if (v === null) return (
+                      <div key={key} className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-2xl mb-1">{emoji}</p>
+                        <p className="text-[11px] text-gray-500">{label}</p>
+                        <p className="text-sm text-gray-300">-</p>
+                      </div>
+                    );
+                    const color = v >= 4.3 ? 'text-green-600' : v >= 3.5 ? 'text-yellow-600' : 'text-red-600';
+                    return (
+                      <div key={key} className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-2xl mb-1">{emoji}</p>
+                        <p className="text-[11px] text-gray-500">{label}</p>
+                        <p className={`text-lg font-bold ${color}`}>{v}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 월별 점수 추이 */}
+            {cumulativeData.monthlyTrend.length > 0 && (
+              <div className="bg-white border rounded-xl p-4 mb-4">
+                <p className="font-bold text-sm text-gray-800 mb-3">📈 월별 시험 평균 추이</p>
+                <div className="space-y-2">
+                  {cumulativeData.monthlyTrend.map(m => (
+                    <div key={m.month} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500 w-16 flex-shrink-0">{m.month}</span>
+                      <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full flex items-center justify-end pr-2 text-xs text-white font-bold ${m.avg >= 80 ? 'bg-green-500' : m.avg >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                          style={{ width: `${m.avg}%` }}>
+                          {m.avg}%
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-500 w-12 text-right">{m.count}회</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 가장 많이 다룬 단원/교재 */}
+            <div className="grid md:grid-cols-2 gap-3 mb-4">
+              {cumulativeData.topUnits.length > 0 && (
+                <div className="bg-white border rounded-xl p-3">
+                  <p className="font-bold text-sm text-gray-800 mb-2">📖 가장 많이 다룬 단원 TOP 5</p>
+                  <div className="space-y-1.5">
+                    {cumulativeData.topUnits.map(([u, c], i) => (
+                      <div key={u} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-700">
+                          <span className="text-xs text-gray-400 mr-1">{i + 1}.</span>
+                          {u}
+                        </span>
+                        <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded">{c}회</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {cumulativeData.topTextbooks.length > 0 && (
+                <div className="bg-white border rounded-xl p-3">
+                  <p className="font-bold text-sm text-gray-800 mb-2">📚 주력 교재 TOP 3</p>
+                  <div className="space-y-1.5">
+                    {cumulativeData.topTextbooks.map(([t, c], i) => (
+                      <div key={t} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-700">
+                          <span className="text-xs text-gray-400 mr-1">{i + 1}.</span>
+                          {t}
+                        </span>
+                        <span className="text-xs text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded">{c}회</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 강점 / 약점 자동 분석 */}
+            <div className="grid md:grid-cols-2 gap-3">
+              {cumulativeData.strengths.length > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+                  <p className="font-bold text-sm text-green-800 mb-2">✅ 학생의 강점</p>
+                  <ul className="space-y-1">
+                    {cumulativeData.strengths.map((s, i) => (
+                      <li key={i} className="text-sm text-green-700 flex items-start gap-1">
+                        <span className="flex-shrink-0">•</span>{s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {cumulativeData.weaknesses.length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                  <p className="font-bold text-sm text-orange-800 mb-2">📌 보완할 점</p>
+                  <ul className="space-y-1">
+                    {cumulativeData.weaknesses.map((w, i) => (
+                      <li key={i} className="text-sm text-orange-700 flex items-start gap-1">
+                        <span className="flex-shrink-0">•</span>{w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="border-t pt-6">
           <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
             <Sparkles className="text-yellow-500" />
             맞춤 학습 권장사항
           </h3>
-          
+
           <div className="space-y-3">
             {anxietyScore !== null && anxietyScore > 60 && (
               <div className="flex items-start gap-3 p-4 bg-red-50 rounded-xl">
@@ -42201,7 +42521,7 @@ function ComprehensiveReport({ student, diagnosisData, calculateAnxietyScore, ge
                 </div>
               </div>
             )}
-            
+
             {learningResult && (
               <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl">
                 <BookOpen className="text-blue-500 flex-shrink-0 mt-0.5" size={20} />
@@ -42211,7 +42531,7 @@ function ComprehensiveReport({ student, diagnosisData, calculateAnxietyScore, ge
                 </div>
               </div>
             )}
-            
+
             {student.wrongNotes && student.wrongNotes.length > 5 && (
               <div className="flex items-start gap-3 p-4 bg-orange-50 rounded-xl">
                 <Target className="text-orange-500 flex-shrink-0 mt-0.5" size={20} />
