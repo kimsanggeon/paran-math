@@ -41177,38 +41177,190 @@ function PaymentModal({ student, month, fee, payment, onSave, onClose }) {
 function downloadDiagnosisDoc({ student, type, data }) {
   const today = new Date().toLocaleDateString('ko-KR');
   const STYLE = `
-    body { font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif; color: #1f2937; line-height: 1.7; }
-    h1 { color: #4f46e5; border-bottom: 4px solid #4f46e5; padding-bottom: 10px; margin-bottom: 8px; font-size: 28pt; }
-    h2 { color: #6d28d9; border-left: 6px solid #6d28d9; padding-left: 12px; margin: 24pt 0 10pt; font-size: 16pt; }
-    h3 { color: #4338ca; font-size: 13pt; margin: 14pt 0 6pt; }
-    .subtitle { color: #6b7280; font-size: 11pt; margin-bottom: 24pt; }
-    .meta { background: linear-gradient(90deg, #eef2ff, #f5f3ff); padding: 14pt 18pt; border-radius: 8pt; margin-bottom: 18pt; }
-    .meta-row { display: flex; gap: 28pt; }
-    .meta-item { font-size: 10.5pt; }
-    .meta-label { color: #6b7280; font-weight: 600; margin-right: 6pt; }
-    .meta-val { color: #1f2937; font-weight: 700; }
-    .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10pt; margin: 14pt 0; }
-    .stat-card { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 14pt 18pt; border-radius: 10pt; }
-    .stat-card.green { background: linear-gradient(135deg, #10b981, #059669); }
-    .stat-card.amber { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .stat-card.rose { background: linear-gradient(135deg, #f43f5e, #e11d48); }
-    .stat-label { font-size: 10pt; opacity: 0.85; margin-bottom: 4pt; }
-    .stat-value { font-size: 22pt; font-weight: 900; }
-    .stat-sub { font-size: 9.5pt; opacity: 0.8; margin-top: 4pt; }
-    table { width: 100%; border-collapse: collapse; margin: 8pt 0; }
-    th { background: #4f46e5; color: white; padding: 8pt 10pt; text-align: left; font-size: 10.5pt; font-weight: 700; }
-    td { padding: 7pt 10pt; border-bottom: 1pt solid #e5e7eb; font-size: 10.5pt; }
-    tr:nth-child(even) td { background: #f9fafb; }
-    .level-badge { display: inline-block; padding: 4pt 12pt; border-radius: 14pt; font-size: 11pt; font-weight: 700; }
-    .level-green { background: #d1fae5; color: #065f46; }
-    .level-yellow { background: #fef3c7; color: #92400e; }
-    .level-red { background: #fee2e2; color: #991b1b; }
-    .level-blue { background: #dbeafe; color: #1e40af; }
-    .quote { background: #fef3c7; border-left: 4pt solid #f59e0b; padding: 10pt 14pt; margin: 10pt 0; font-style: italic; color: #78350f; }
-    .footer { text-align: center; color: #9ca3af; font-size: 9pt; margin-top: 36pt; padding-top: 14pt; border-top: 1pt solid #e5e7eb; }
-    ul { padding-left: 20pt; }
-    li { margin: 4pt 0; font-size: 10.5pt; }
-    .highlight { background: #fef9c3; padding: 2pt 6pt; border-radius: 4pt; font-weight: 700; }
+    @page { margin: 1.6cm 1.4cm; }
+    body {
+      font-family: 'Pretendard', 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif;
+      color: #111827;
+      line-height: 1.65;
+      letter-spacing: -0.1pt;
+      font-size: 10.5pt;
+    }
+    /* ── 타이틀 / 헤더 ─────────────────────────────────── */
+    h1 {
+      color: #1e1b4b;
+      font-size: 24pt;
+      font-weight: 800;
+      letter-spacing: -0.6pt;
+      padding-bottom: 8pt;
+      margin: 0 0 4pt;
+      border-bottom: 0.5pt solid #312e81;
+    }
+    h2 {
+      color: #312e81;
+      font-size: 14pt;
+      font-weight: 700;
+      letter-spacing: -0.3pt;
+      padding: 0 0 4pt 10pt;
+      margin: 26pt 0 10pt;
+      border-left: 2.25pt solid #4f46e5;
+    }
+    h3 {
+      color: #3730a3;
+      font-size: 11.5pt;
+      font-weight: 700;
+      letter-spacing: -0.2pt;
+      margin: 16pt 0 6pt;
+    }
+    .subtitle {
+      color: #6b7280;
+      font-size: 10pt;
+      letter-spacing: 0.2pt;
+      margin: 4pt 0 22pt;
+    }
+
+    /* ── 메타 박스 (학생 정보) ────────────────────────── */
+    .meta {
+      background: #f9fafb;
+      border: 0.5pt solid #e5e7eb;
+      padding: 12pt 16pt;
+      margin-bottom: 20pt;
+    }
+    .meta-row { display: flex; gap: 24pt; flex-wrap: wrap; }
+    .meta-item { font-size: 10pt; }
+    .meta-label { color: #6b7280; font-weight: 500; margin-right: 4pt; letter-spacing: 0.1pt; }
+    .meta-val { color: #111827; font-weight: 700; }
+
+    /* ── 통계 카드 (4 컬러) ───────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8pt;
+      margin: 12pt 0 16pt;
+    }
+    .stat-card {
+      background: #4338ca;
+      color: white;
+      padding: 12pt 16pt;
+      border: 0.5pt solid #312e81;
+      border-radius: 4pt;
+    }
+    .stat-card.green { background: #047857; border-color: #065f46; }
+    .stat-card.amber { background: #b45309; border-color: #92400e; }
+    .stat-card.rose  { background: #be123c; border-color: #9f1239; }
+    .stat-label { font-size: 9pt; opacity: 0.85; margin-bottom: 3pt; letter-spacing: 0.2pt; text-transform: uppercase; }
+    .stat-value { font-size: 20pt; font-weight: 800; letter-spacing: -0.5pt; line-height: 1.1; }
+    .stat-sub { font-size: 9pt; opacity: 0.82; margin-top: 4pt; letter-spacing: 0.1pt; }
+
+    /* ── 테이블 (얇고 선명한 테두리) ──────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6pt 0 10pt;
+      border: 0.5pt solid #d1d5db;
+    }
+    th {
+      background: #1f2937;
+      color: white;
+      padding: 7pt 10pt;
+      text-align: left;
+      font-size: 9.5pt;
+      font-weight: 600;
+      letter-spacing: 0.15pt;
+      border: 0.5pt solid #111827;
+    }
+    td {
+      padding: 7pt 10pt;
+      border: 0.5pt solid #e5e7eb;
+      font-size: 10pt;
+      vertical-align: middle;
+    }
+    tr:nth-child(even) td { background: #fafafa; }
+
+    /* ── 레벨 배지 ─────────────────────────────────────── */
+    .level-badge {
+      display: inline-block;
+      padding: 2.5pt 10pt;
+      border-radius: 10pt;
+      font-size: 9.5pt;
+      font-weight: 700;
+      letter-spacing: 0.1pt;
+      border: 0.5pt solid transparent;
+    }
+    .level-green  { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+    .level-yellow { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+    .level-red    { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    .level-blue   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+
+    /* ── 인용/강조 박스 ────────────────────────────────── */
+    .quote {
+      background: #fffbeb;
+      border: 0.5pt solid #fde68a;
+      border-left: 2pt solid #d97706;
+      padding: 11pt 14pt;
+      margin: 12pt 0;
+      color: #78350f;
+      font-size: 10pt;
+      line-height: 1.7;
+    }
+    .quote p { margin: 0 0 6pt; }
+    .quote p:last-child { margin-bottom: 0; }
+    .quote strong { color: #92400e; }
+
+    /* ── 강점/보완점 2단 박스 (얇은 테두리) ──────────── */
+    .insight-row { width: 100%; border-collapse: collapse; margin: 8pt 0; }
+    .insight-row td {
+      vertical-align: top;
+      width: 50%;
+      padding: 12pt 16pt;
+      border: 0.5pt solid #d1d5db;
+    }
+    .insight-row td.strength { background: #f0fdf4; }
+    .insight-row td.weakness { background: #fff7ed; }
+    .insight-title { margin: 0 0 6pt; font-weight: 700; font-size: 10.5pt; letter-spacing: 0.1pt; }
+    .insight-title.strength { color: #166534; }
+    .insight-title.weakness { color: #9a3412; }
+    .insight-row ul { margin: 0; padding-left: 16pt; }
+    .insight-row li { font-size: 10pt; margin: 3pt 0; line-height: 1.55; }
+    .insight-row .strength li { color: #166534; }
+    .insight-row .weakness li { color: #9a3412; }
+
+    /* ── 푸터 ──────────────────────────────────────────── */
+    .footer {
+      text-align: center;
+      color: #9ca3af;
+      font-size: 8.5pt;
+      letter-spacing: 0.3pt;
+      margin-top: 32pt;
+      padding-top: 10pt;
+      border-top: 0.5pt solid #d1d5db;
+    }
+
+    /* ── 일반 리스트 ───────────────────────────────────── */
+    ul { padding-left: 18pt; margin: 6pt 0; }
+    li { margin: 3pt 0; font-size: 10pt; line-height: 1.6; }
+    p { margin: 6pt 0; }
+
+    .highlight {
+      background: #fef9c3;
+      padding: 1pt 5pt;
+      border: 0.5pt solid #fde047;
+      border-radius: 2pt;
+      font-weight: 700;
+    }
+
+    /* ── 막대 그래프 (월별 추이용) ───────────────────── */
+    .bar-track {
+      display: inline-block;
+      width: 55%;
+      height: 10pt;
+      background: #f3f4f6;
+      border: 0.5pt solid #e5e7eb;
+      border-radius: 5pt;
+      vertical-align: middle;
+      margin-right: 6pt;
+      overflow: hidden;
+    }
+    .bar-fill { height: 100%; border-radius: 4pt; }
   `;
 
   let title = '';
@@ -41342,9 +41494,9 @@ function downloadDiagnosisDoc({ student, type, data }) {
       ${(c.monthlyTrend || []).length > 0 ? `
       <h3>📈 월별 시험 평균 추이</h3>
       <table>
-        <thead><tr><th style="width:25%">월</th><th style="width:25%;text-align:center">응시 횟수</th><th>평균 정답률</th></tr></thead>
+        <thead><tr><th style="width:18%">월</th><th style="width:18%;text-align:center">응시 횟수</th><th>평균 정답률</th></tr></thead>
         <tbody>
-          ${c.monthlyTrend.map(m => `<tr><td><strong>${m.month}</strong></td><td style="text-align:center">${m.count}회</td><td><div style="display:inline-block;width:60%;height:10pt;background:#e5e7eb;border-radius:5pt;vertical-align:middle;margin-right:6pt;"><div style="width:${m.avg}%;height:100%;background:${m.avg >= 80 ? '#10b981' : m.avg >= 60 ? '#f59e0b' : '#ef4444'};border-radius:5pt;"></div></div><span class="level-badge ${m.avg >= 80 ? 'level-green' : m.avg >= 60 ? 'level-yellow' : 'level-red'}">${m.avg}%</span></td></tr>`).join('')}
+          ${c.monthlyTrend.map(m => `<tr><td><strong>${m.month}</strong></td><td style="text-align:center">${m.count}회</td><td><div class="bar-track"><div class="bar-fill" style="width:${m.avg}%;background:${m.avg >= 80 ? '#10b981' : m.avg >= 60 ? '#f59e0b' : '#ef4444'};"></div></div><span class="level-badge ${m.avg >= 80 ? 'level-green' : m.avg >= 60 ? 'level-yellow' : 'level-red'}">${m.avg}%</span></td></tr>`).join('')}
         </tbody>
       </table>` : ''}
 
@@ -41367,15 +41519,15 @@ function downloadDiagnosisDoc({ student, type, data }) {
       </table>` : ''}
 
       <h3>📊 강점 / 보완할 점 자동 분석</h3>
-      <table style="margin-top:6pt">
+      <table class="insight-row">
         <tr>
-          <td style="vertical-align:top;width:50%;background:#d1fae5;padding:14pt 18pt;">
-            <p style="margin:0 0 8pt 0;font-weight:bold;color:#065f46;font-size:12pt;">✅ 강점</p>
-            ${(c.strengths || []).length > 0 ? `<ul style="margin:0;padding-left:18pt;">${c.strengths.map(s => `<li style="color:#065f46;">${s}</li>`).join('')}</ul>` : '<p style="margin:0;color:#6b7280;">아직 분석할 데이터가 부족합니다.</p>'}
+          <td class="strength">
+            <p class="insight-title strength">✅ 강점</p>
+            ${(c.strengths || []).length > 0 ? `<ul class="strength">${c.strengths.map(s => `<li>${s}</li>`).join('')}</ul>` : '<p style="margin:0;color:#6b7280;font-size:9.5pt;">아직 분석할 데이터가 부족합니다.</p>'}
           </td>
-          <td style="vertical-align:top;width:50%;background:#fed7aa;padding:14pt 18pt;">
-            <p style="margin:0 0 8pt 0;font-weight:bold;color:#9a3412;font-size:12pt;">📌 보완할 점</p>
-            ${(c.weaknesses || []).length > 0 ? `<ul style="margin:0;padding-left:18pt;">${c.weaknesses.map(w => `<li style="color:#9a3412;">${w}</li>`).join('')}</ul>` : '<p style="margin:0;color:#6b7280;">특별히 보완할 점이 없습니다. 잘 하고 있어요!</p>'}
+          <td class="weakness">
+            <p class="insight-title weakness">📌 보완할 점</p>
+            ${(c.weaknesses || []).length > 0 ? `<ul class="weakness">${c.weaknesses.map(w => `<li>${w}</li>`).join('')}</ul>` : '<p style="margin:0;color:#6b7280;font-size:9.5pt;">특별히 보완할 점이 없습니다. 잘 하고 있어요!</p>'}
           </td>
         </tr>
       </table>
