@@ -30754,42 +30754,108 @@ function SelfStudyTab({ student }) {
     return () => clearInterval(timerRef.current);
   }, [activeTimer, timerStart, quizPopup, LAST_QUIZ_KEY]);
 
-  // ★ 화면 꺼짐 방지 (Wake Lock + Canvas 애니메이션 fallback)
+  // ★ 화면 꺼짐 방지 (Wake Lock + Canvas 애니메이션 fallback) + 상태 추적
   const wakeLockRef = React.useRef(null);
   const keepAliveRef = React.useRef(null);
+  // 'locked' = Wake Lock API 활성 / 'fallback' = 폴백 동작 중 / 'unsupported' = 둘 다 실패 / 'idle' = 비활성
+  const [wakeLockStatus, setWakeLockStatus] = useState('idle');
 
   const requestWakeLock = async () => {
-    // 방법 1: Wake Lock API
+    // 방법 1: Wake Lock API (HTTPS 환경, Chrome 84+, Safari 16.4+, Edge, Firefox 126+ 지원)
     try {
       if ('wakeLock' in navigator) {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
-        wakeLockRef.current.addEventListener('release', () => { wakeLockRef.current = null; });
-        return; // 성공하면 fallback 불필요
+        wakeLockRef.current.addEventListener('release', () => {
+          wakeLockRef.current = null;
+          // 활성 타이머 중에 OS가 강제 해제했으면 status를 폴백으로 표시
+          if (activeTimer) setWakeLockStatus('fallback');
+        });
+        setWakeLockStatus('locked');
+        console.log('🔒 Wake Lock 활성화 — 화면이 꺼지지 않습니다.');
+        return;
       }
-    } catch (e) {}
+    } catch (e) {
+      console.log('⚠️ Wake Lock API 사용 불가:', e.message);
+    }
 
-    // 방법 2: 화면 활성 유지 (1분마다 미세한 DOM 업데이트)
+    // 방법 2: 화면 활성 유지 (30초마다 document.title 미세 업데이트)
     if (!keepAliveRef.current) {
       keepAliveRef.current = setInterval(() => {
         document.title = document.title.endsWith(' ') ? document.title.trimEnd() : document.title + ' ';
       }, 30000);
     }
+    setWakeLockStatus('wakeLock' in navigator ? 'fallback' : 'unsupported');
+    console.log('🔄 Wake Lock 폴백 모드 — 브라우저별 화면 절전 정책에 따라 꺼질 수 있습니다.');
   };
 
   const releaseWakeLock = () => {
     try { wakeLockRef.current?.release(); } catch(e) {}
     wakeLockRef.current = null;
     if (keepAliveRef.current) { clearInterval(keepAliveRef.current); keepAliveRef.current = null; }
+    setWakeLockStatus('idle');
   };
 
-  // 탭이 다시 보이면 Wake Lock 재요청
+  // ★ 화면 이탈 시 자습 타이머 무효 처리 (악용 방지)
+  // 학생이 자습 화면을 벗어나면(다른 탭, 다른 앱, 화면 잠금 등) 진행 중이던 타이머 기록을
+  // 사라지게 함. 30분 퀴즈가 못 막는 '백그라운드 방치' 패턴을 차단.
+  const invalidateActiveTimer = (reason) => {
+    if (!activeTimer) return;
+    setActiveTimer(null);
+    setTimerStart(null);
+    setTimerElapsed(0);
+    setForm(p => ({ ...p, hwMinutes: '', extraMinutes: '' }));
+    try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e) {}
+    try { localStorage.setItem(LAST_STOP_KEY, String(Date.now())); } catch(e) {}
+    releaseWakeLock();
+    console.log('🚫 자습 타이머 무효 — 사유:', reason);
+  };
+
+  // visibilitychange 통합 핸들러: 보일 때 wake lock 재요청, 숨길 때 타이머 무효
   useEffect(() => {
-    const reacquire = () => {
-      if (activeTimer && document.visibilityState === 'visible') requestWakeLock();
+    const onVisChange = () => {
+      if (!activeTimer) return;
+      if (document.visibilityState === 'hidden') {
+        invalidateActiveTimer('화면 이탈 (visibilityState=hidden)');
+      } else if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
     };
-    document.addEventListener('visibilitychange', reacquire);
-    return () => document.removeEventListener('visibilitychange', reacquire);
-  }, [activeTimer]);
+    document.addEventListener('visibilitychange', onVisChange);
+
+    // 페이지 떠나기 직전 (모바일/PWA 포함)
+    const onPageHide = () => { if (activeTimer) invalidateActiveTimer('pagehide'); };
+    window.addEventListener('pagehide', onPageHide);
+
+    // 데스크톱: 페이지 unload 직전 경고
+    const onBeforeUnload = (e) => {
+      if (activeTimer) {
+        invalidateActiveTimer('beforeunload');
+        e.preventDefault();
+        e.returnValue = '자습 타이머가 진행 중입니다. 페이지를 벗어나면 기록이 사라집니다.';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+
+    // 윈도우 포커스 잃음 (다른 앱으로 전환 등 - visibilitychange만으로 못 잡는 케이스 보강)
+    const onBlur = () => {
+      // window blur는 약간의 지연 후에도 visibilityState가 visible이면 (단순 클릭 손실)
+      // 무효화하지 않도록 짧은 후 검사
+      setTimeout(() => {
+        if (activeTimer && document.hidden) {
+          invalidateActiveTimer('window blur + hidden');
+        }
+      }, 500);
+    };
+    window.addEventListener('blur', onBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [activeTimer]); // eslint-disable-line
 
   // ★ 퀴즈 타임아웃 감시
   useEffect(() => {
@@ -31216,6 +31282,39 @@ function SelfStudyTab({ student }) {
           <label className="text-xs text-gray-500 block mb-1">날짜</label>
           <input type="date" value={form.date} readOnly title="학생은 오늘 날짜만 기록할 수 있습니다"
             className="w-full p-2 border rounded-xl text-sm" />
+        </div>
+
+        {/* ★ 화면 이탈 시 기록 무효 안내 배너 (타이머 동작 중 더 강조) */}
+        <div className={`rounded-xl p-3 border-2 ${activeTimer ? 'bg-amber-50 border-amber-400' : 'bg-blue-50 border-blue-200'}`}>
+          <div className="flex items-start gap-2">
+            <span className="text-lg">{activeTimer ? '🚨' : '⚠️'}</span>
+            <div className="flex-1 text-xs leading-relaxed">
+              <p className={`font-bold ${activeTimer ? 'text-amber-800' : 'text-blue-800'}`}>
+                {activeTimer ? '⏱ 자습 진행 중 — 이 화면을 벗어나지 마세요!' : '자습 시작 전 꼭 확인하세요'}
+              </p>
+              <ul className={`mt-1 space-y-0.5 list-disc pl-4 ${activeTimer ? 'text-amber-700' : 'text-blue-700'}`}>
+                <li>다른 탭/앱으로 전환하면 <strong>타이머가 즉시 무효</strong>됩니다.</li>
+                <li>화면 잠금/뒤로가기/페이지 새로고침도 마찬가지입니다.</li>
+                <li>30분마다 수학 퀴즈 출제 (60초 내 미응답 시 종료)</li>
+                <li>자습 화면을 켜둔 채로 공부에 집중하세요.</li>
+              </ul>
+              <div className="mt-1.5 flex items-center gap-2 text-[11px]">
+                <span className={`px-2 py-0.5 rounded-full font-bold ${
+                  wakeLockStatus === 'locked' ? 'bg-green-100 text-green-700' :
+                  wakeLockStatus === 'fallback' ? 'bg-yellow-100 text-yellow-700' :
+                  wakeLockStatus === 'unsupported' ? 'bg-red-100 text-red-700' :
+                  'bg-gray-100 text-gray-500'
+                }`}>
+                  화면 꺼짐 방지: {
+                    wakeLockStatus === 'locked' ? '🔒 활성' :
+                    wakeLockStatus === 'fallback' ? '🔄 폴백 모드' :
+                    wakeLockStatus === 'unsupported' ? '❌ 미지원 브라우저' :
+                    '⏸ 대기'
+                  }
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* 숙제 시간 / 자습 시간 — 분리 입력 */}
