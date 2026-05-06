@@ -30817,33 +30817,132 @@ function SelfStudyTab({ student }) {
   };
 
   // 강제 타이머 종료 (퀴즈 실패/타임아웃)
+  // ★ 타이머 상태를 localStorage에 영속화하기 위한 키 (학생별)
+  const TIMER_STATE_KEY = `paran:studytime-timer:${student.name}`;
+
+  // 종료 시 정확한 경과 시간을 계산 (state 의존 X — 항상 wall-clock 기반)
+  const computeElapsedSec = (start) => {
+    if (!start) return 0;
+    return Math.max(0, Math.floor((Date.now() - start) / 1000));
+  };
+
   const stopTimerForced = () => {
-    const mins = Math.round(timerElapsed / 60);
+    const elapsedSec = computeElapsedSec(timerStart);
+    const mins = Math.round(elapsedSec / 60);
     const safeMins = String(Math.min(240, mins || 0));
     if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
     else if (activeTimer === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
     setActiveTimer(null);
+    setTimerStart(null);
     setTimerElapsed(0);
+    try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e) {}
     releaseWakeLock();
   };
 
   const startTimer = (type) => {
+    const startedAt = Date.now();
     setActiveTimer(type);
-    setTimerStart(Date.now());
+    setTimerStart(startedAt);
     setTimerElapsed(0);
     lastQuizTimeRef.current = 0;
     setQuizPopup(null);
+    // ★ 새로고침/앱 종료 후에도 타이머가 살아있도록 영속화
+    try {
+      localStorage.setItem(TIMER_STATE_KEY, JSON.stringify({ type, startedAt }));
+    } catch(e) {}
     requestWakeLock();
   };
+
   const stopTimer = () => {
-    const mins = Math.round(timerElapsed / 60);
+    // ★ Date.now() 기반으로 직접 계산 (state stale 방지) — 1~2초 차이도 없앰
+    const elapsedSec = computeElapsedSec(timerStart);
+    const mins = Math.round(elapsedSec / 60);
     const safeMins = String(Math.min(240, mins || 0));
-    if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
-    else if (activeTimer === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
+    const stoppedAt = Date.now();
+    const startedAt = timerStart;
+    const stoppedType = activeTimer;
+
+    if (stoppedType === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
+    else if (stoppedType === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
     setActiveTimer(null);
+    setTimerStart(null);
     setTimerElapsed(0);
+    try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e) {}
     releaseWakeLock();
+
+    // ★ 자동 저장 — 학생이 "저장" 버튼 누르는 걸 잊어도 시간이 보존됨
+    if (mins > 0 && startedAt) {
+      autoSaveLog({
+        type: stoppedType,
+        minutes: mins,
+        startedAt,
+        stoppedAt,
+        elapsedSec,
+      });
+    }
   };
+
+  // ★ 타이머 종료 시 자동 저장 (사용자 입력 없이 즉시 영구 보존)
+  const autoSaveLog = async ({ type, minutes, startedAt, stoppedAt, elapsedSec }) => {
+    const todayDate = new Date(startedAt).toISOString().split('T')[0];
+    // 하루 6시간 제한 검증
+    const todayLogs = logs.filter(l => l.date === todayDate);
+    const todayTotalMin = todayLogs.reduce((s, l) => s + (l.hwMinutes || 0) + (l.extraMinutes || 0), 0);
+    const finalMins = Math.min(minutes, Math.max(0, 360 - todayTotalMin), 240);
+    if (finalMins <= 0) {
+      console.log('자동 저장 스킵: 일일 한도 초과');
+      return;
+    }
+
+    const newLog = {
+      id: Date.now(),
+      date: todayDate,
+      hwMinutes: type === 'hw' ? finalMins : 0,
+      hwWhat: type === 'hw' ? (form.hwWhat || '') : '',
+      extraMinutes: type === 'extra' ? finalMins : 0,
+      extraWhat: type === 'extra' ? (form.extraWhat || '') : '',
+      duration: finalMins,
+      mood: form.mood,
+      createdAt: new Date().toISOString(),
+      // ★ 정밀 메타데이터 — 사후 검증/감사용
+      startedAt: new Date(startedAt).toISOString(),
+      stoppedAt: new Date(stoppedAt).toISOString(),
+      elapsedSec,
+      recordedBy: 'student-timer-auto',
+      trustLevel: 1,
+      pausedSeconds: 0,
+    };
+    const updated = [newLog, ...logs];
+    const str = JSON.stringify(updated);
+    setLogs(updated);
+    try { localStorage.setItem(STORAGE_KEY, str); } catch(e) {}
+    try { if (window.storage) await window.storage.set(STORAGE_KEY, str); } catch(e) { console.log('자동 저장 Firestore 실패 (로컬에 보관):', e.message); }
+    // 자동 저장 후 폼은 클리어 (혼동 방지)
+    setForm(p => ({ ...p, hwMinutes: type === 'hw' ? '' : p.hwMinutes, extraMinutes: type === 'extra' ? '' : p.extraMinutes }));
+  };
+
+  // ★ 마운트 시 진행 중이던 타이머 복구 (새로고침/앱 종료 후에도 시간 살아남음)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TIMER_STATE_KEY);
+      if (!saved) return;
+      const { type, startedAt } = JSON.parse(saved);
+      if (!type || !startedAt) return;
+      const ageHours = (Date.now() - startedAt) / 3600000;
+      if (ageHours > 6) {
+        // 6시간 넘게 끄지 않은 타이머는 무효 처리 (잠자고 일어났을 때 등)
+        localStorage.removeItem(TIMER_STATE_KEY);
+        return;
+      }
+      // 활성 타이머 복구
+      setActiveTimer(type);
+      setTimerStart(startedAt);
+      setTimerElapsed(computeElapsedSec(startedAt));
+      requestWakeLock();
+      console.log('🔄 자습 타이머 복구:', type, '경과', Math.floor((Date.now() - startedAt) / 60000), '분');
+    } catch(e) { try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e2) {} }
+    // eslint-disable-next-line
+  }, []);
 
   const fmtTime = (sec) =>
     `${String(Math.floor(sec / 3600)).padStart(2,'0')}:${String(Math.floor((sec % 3600) / 60)).padStart(2,'0')}:${String(sec % 60).padStart(2,'0')}`;
@@ -30871,9 +30970,10 @@ function SelfStudyTab({ student }) {
       duration: hw + ex,
       mood: form.mood,
       createdAt: new Date().toISOString(),
-      recordedBy: 'student-timer',
+      recordedBy: 'student-timer-manual',
       trustLevel: 1, // ★ 신뢰도: 1=미인증, 2=학부모확인, 3=학원자습(선생님확인)
-      pausedSeconds: 0
+      pausedSeconds: 0,
+      // 수동 저장은 시작/종료 시각이 모호하므로 createdAt만 정확히 기록
     };
     const updated = [newLog, ...logs];
     const str = JSON.stringify(updated);
@@ -30950,7 +31050,7 @@ function SelfStudyTab({ student }) {
         </div>
         <div className="space-y-1.5">
           <div>
-            <label className="text-xs text-gray-400 block mb-0.5">시간 (분) — 타이머로만 기록됩니다</label>
+            <label className="text-xs text-gray-400 block mb-0.5">시간 (분) — 타이머 종료 시 자동 저장됩니다</label>
             <input type="number" value={form[field]} min="0" max="480"
               readOnly
               className={`w-full p-2 border-2 rounded-lg text-sm font-bold bg-gray-100 cursor-not-allowed ${isActive || form[field] ? colors.border + ' ' + colors.bg : 'border-gray-200'}`}
