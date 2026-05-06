@@ -41737,9 +41737,14 @@ function DiagnosisTab({ students, saveStudents }) {
             className="px-4 py-2 border rounded-lg min-w-[200px]"
           >
             <option value="">학생 선택...</option>
-            {students.map(s => (
-              <option key={s.id} value={s.id}>{s.name} ({s.class || '미지정'})</option>
-            ))}
+            {students.map(s => {
+              const cls = s.className || s.class;
+              const grade = s.grade;
+              const meta = [cls, grade].filter(Boolean).join(' · ') || '반 미지정';
+              return (
+                <option key={s.id} value={s.id}>{s.name} ({meta})</option>
+              );
+            })}
           </select>
         </div>
       </div>
