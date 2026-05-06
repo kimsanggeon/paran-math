@@ -30795,65 +30795,45 @@ function SelfStudyTab({ student }) {
     setWakeLockStatus('idle');
   };
 
-  // ★ 화면 이탈 시 자습 타이머 무효 처리 (악용 방지)
-  // 학생이 자습 화면을 벗어나면(다른 탭, 다른 앱, 화면 잠금 등) 진행 중이던 타이머 기록을
-  // 사라지게 함. 30분 퀴즈가 못 막는 '백그라운드 방치' 패턴을 차단.
-  const invalidateActiveTimer = (reason) => {
-    if (!activeTimer) return;
-    setActiveTimer(null);
-    setTimerStart(null);
-    setTimerElapsed(0);
-    setForm(p => ({ ...p, hwMinutes: '', extraMinutes: '' }));
-    try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e) {}
-    try { localStorage.setItem(LAST_STOP_KEY, String(Date.now())); } catch(e) {}
-    releaseWakeLock();
-    console.log('🚫 자습 타이머 무효 — 사유:', reason);
-  };
+  // ★ 백그라운드 누적 시간 추적 (악용 방지: 화면을 벗어난 시간은 elapsedSec에서 차감)
+  // 즉시 무효 처리는 너무 공격적이라(모바일 알림·키보드 팝업 등에서도 무효화됨) 백그라운드
+  // 시간만 추적해서 '화면을 본 시간'만 기록되도록 정책 변경.
+  const hiddenStartRef = React.useRef(null);
+  const hiddenAccumRef = React.useRef(0); // 누적 백그라운드 초
 
-  // visibilitychange 통합 핸들러: 보일 때 wake lock 재요청, 숨길 때 타이머 무효
+  // visibilitychange 통합 핸들러: 보일 때 wake lock 재요청, 숨김 시 누적 시간 측정
   useEffect(() => {
     const onVisChange = () => {
       if (!activeTimer) return;
       if (document.visibilityState === 'hidden') {
-        invalidateActiveTimer('화면 이탈 (visibilityState=hidden)');
+        hiddenStartRef.current = Date.now();
       } else if (document.visibilityState === 'visible') {
+        if (hiddenStartRef.current) {
+          const hiddenSec = Math.floor((Date.now() - hiddenStartRef.current) / 1000);
+          hiddenAccumRef.current += hiddenSec;
+          hiddenStartRef.current = null;
+          if (hiddenSec > 5) {
+            console.log('🌙 백그라운드 ' + hiddenSec + '초 (누적 ' + hiddenAccumRef.current + '초) — 기록에서 차감됩니다');
+          }
+        }
         requestWakeLock();
       }
     };
     document.addEventListener('visibilitychange', onVisChange);
 
-    // 페이지 떠나기 직전 (모바일/PWA 포함)
-    const onPageHide = () => { if (activeTimer) invalidateActiveTimer('pagehide'); };
-    window.addEventListener('pagehide', onPageHide);
-
-    // 데스크톱: 페이지 unload 직전 경고
+    // 데스크톱: 페이지 unload 직전 경고만 표시 (자동 저장된 로그는 그대로 보존)
     const onBeforeUnload = (e) => {
       if (activeTimer) {
-        invalidateActiveTimer('beforeunload');
         e.preventDefault();
-        e.returnValue = '자습 타이머가 진행 중입니다. 페이지를 벗어나면 기록이 사라집니다.';
+        e.returnValue = '자습 타이머가 진행 중입니다. 페이지를 벗어나면 종료 시 자동 저장되지 않을 수 있어요.';
         return e.returnValue;
       }
     };
     window.addEventListener('beforeunload', onBeforeUnload);
 
-    // 윈도우 포커스 잃음 (다른 앱으로 전환 등 - visibilitychange만으로 못 잡는 케이스 보강)
-    const onBlur = () => {
-      // window blur는 약간의 지연 후에도 visibilityState가 visible이면 (단순 클릭 손실)
-      // 무효화하지 않도록 짧은 후 검사
-      setTimeout(() => {
-        if (activeTimer && document.hidden) {
-          invalidateActiveTimer('window blur + hidden');
-        }
-      }, 500);
-    };
-    window.addEventListener('blur', onBlur);
-
     return () => {
       document.removeEventListener('visibilitychange', onVisChange);
-      window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('beforeunload', onBeforeUnload);
-      window.removeEventListener('blur', onBlur);
     };
   }, [activeTimer]); // eslint-disable-line
 
@@ -30899,9 +30879,9 @@ function SelfStudyTab({ student }) {
   const LAST_STOP_KEY = `paran:studytime-laststop:${student.name}`;
   // ★ 악용 방지 파라미터
   const ABUSE = {
-    minSessionSec: 180,           // 자동 저장 최소 3분 — 짧은 세션 스팸 방지
-    restartCooldownSec: 30,       // 종료 직후 30초간 재시작 차단
-    timerRecoveryMaxHours: 2,     // 마운트 시 2시간 이내 타이머만 복구 (기존 6시간 → 단축)
+    minSessionSec: 60,            // 자동 저장 최소 1분 — 너무 짧은 세션 스팸 방지 (정상 학습 방해 안 하도록 완화)
+    restartCooldownSec: 10,       // 종료 직후 10초간 재시작 차단 (기존 30초 → 완화)
+    timerRecoveryMaxHours: 2,     // 마운트 시 2시간 이내 타이머만 복구
   };
 
   // 종료 시 정확한 경과 시간을 계산 (state 의존 X — 항상 wall-clock 기반)
@@ -30911,7 +30891,10 @@ function SelfStudyTab({ student }) {
   };
 
   const stopTimerForced = () => {
-    const elapsedSec = computeElapsedSec(timerStart);
+    const rawElapsed = computeElapsedSec(timerStart);
+    const currentHidden = hiddenStartRef.current ? Math.floor((Date.now() - hiddenStartRef.current) / 1000) : 0;
+    const totalHidden = hiddenAccumRef.current + currentHidden;
+    const elapsedSec = Math.max(0, rawElapsed - totalHidden);
     const mins = Math.round(elapsedSec / 60);
     const safeMins = String(Math.min(240, mins || 0));
     if (activeTimer === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
@@ -30919,6 +30902,8 @@ function SelfStudyTab({ student }) {
     setActiveTimer(null);
     setTimerStart(null);
     setTimerElapsed(0);
+    hiddenStartRef.current = null;
+    hiddenAccumRef.current = 0;
     try { localStorage.removeItem(TIMER_STATE_KEY); } catch(e) {}
     try { localStorage.setItem(LAST_STOP_KEY, String(Date.now())); } catch(e) {}
     releaseWakeLock();
@@ -30941,6 +30926,9 @@ function SelfStudyTab({ student }) {
     setActiveTimer(type);
     setTimerStart(startedAt);
     setTimerElapsed(0);
+    // ★ 백그라운드 누적 시간 초기화
+    hiddenStartRef.current = null;
+    hiddenAccumRef.current = 0;
     // ★ 퀴즈 카운터는 절대 타임스탬프 기반이라 stop/restart로 회피 차단됨.
     // 다만 1시간 이상 휴식 후 재시작 시에는 카운터를 리셋해 즉시 퀴즈가 뜨지 않도록.
     try {
@@ -30959,12 +30947,17 @@ function SelfStudyTab({ student }) {
 
   const stopTimer = () => {
     // ★ Date.now() 기반으로 직접 계산 (state stale 방지) — 1~2초 차이도 없앰
-    const elapsedSec = computeElapsedSec(timerStart);
+    const rawElapsed = computeElapsedSec(timerStart);
+    // ★ 백그라운드(화면 비활성) 시간을 차감 — 학생이 화면을 본 시간만 기록
+    const currentHidden = hiddenStartRef.current ? Math.floor((Date.now() - hiddenStartRef.current) / 1000) : 0;
+    const totalHidden = hiddenAccumRef.current + currentHidden;
+    const elapsedSec = Math.max(0, rawElapsed - totalHidden);
     const mins = Math.round(elapsedSec / 60);
     const safeMins = String(Math.min(240, mins || 0));
     const stoppedAt = Date.now();
     const startedAt = timerStart;
     const stoppedType = activeTimer;
+    if (totalHidden > 0) console.log('⏱ 종료: 총 ' + rawElapsed + '초 - 백그라운드 ' + totalHidden + '초 = 기록 ' + elapsedSec + '초');
 
     if (stoppedType === 'hw') setForm(p => ({ ...p, hwMinutes: safeMins }));
     else if (stoppedType === 'extra') setForm(p => ({ ...p, extraMinutes: safeMins }));
@@ -31284,19 +31277,19 @@ function SelfStudyTab({ student }) {
             className="w-full p-2 border rounded-xl text-sm" />
         </div>
 
-        {/* ★ 화면 이탈 시 기록 무효 안내 배너 (타이머 동작 중 더 강조) */}
+        {/* ★ 자습 정책 안내 배너 — 백그라운드 시간은 기록되지 않음 */}
         <div className={`rounded-xl p-3 border-2 ${activeTimer ? 'bg-amber-50 border-amber-400' : 'bg-blue-50 border-blue-200'}`}>
           <div className="flex items-start gap-2">
-            <span className="text-lg">{activeTimer ? '🚨' : '⚠️'}</span>
+            <span className="text-lg">{activeTimer ? '⏱' : '⚠️'}</span>
             <div className="flex-1 text-xs leading-relaxed">
               <p className={`font-bold ${activeTimer ? 'text-amber-800' : 'text-blue-800'}`}>
-                {activeTimer ? '⏱ 자습 진행 중 — 이 화면을 벗어나지 마세요!' : '자습 시작 전 꼭 확인하세요'}
+                {activeTimer ? '자습 진행 중 — 이 화면에 머무르세요!' : '자습 시작 전 꼭 확인하세요'}
               </p>
               <ul className={`mt-1 space-y-0.5 list-disc pl-4 ${activeTimer ? 'text-amber-700' : 'text-blue-700'}`}>
-                <li>다른 탭/앱으로 전환하면 <strong>타이머가 즉시 무효</strong>됩니다.</li>
-                <li>화면 잠금/뒤로가기/페이지 새로고침도 마찬가지입니다.</li>
-                <li>30분마다 수학 퀴즈 출제 (60초 내 미응답 시 종료)</li>
-                <li>자습 화면을 켜둔 채로 공부에 집중하세요.</li>
+                <li>다른 탭/앱으로 가 있는 동안의 시간은 <strong>기록에서 차감</strong>됩니다.</li>
+                <li>30분마다 수학 퀴즈 (60초 내 미응답 시 자동 종료).</li>
+                <li>1분 미만 세션은 저장되지 않습니다.</li>
+                <li>종료 버튼을 누르면 자동으로 저장됩니다.</li>
               </ul>
               <div className="mt-1.5 flex items-center gap-2 text-[11px]">
                 <span className={`px-2 py-0.5 rounded-full font-bold ${
