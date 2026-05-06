@@ -42564,18 +42564,18 @@ function TrendInsightPanel({ student, testScores, overallAvg, recentAvg, typeAve
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKeyDraft, setApiKeyDraft] = useState('');
 
-  // ===== 규칙 기반 자동 분석 =====
+  // ===== 규칙 기반 자동 분석 (선생님이 학생·학부모와 대화하듯 읽을 수 있는 문장) =====
   const insight = (() => {
     if (testScores.length < 2) return null;
     const pcts = testScores.map(t => t.percent);
     const n = pcts.length;
-    // 선형 회귀 기울기 (시험당 변화량 %p)
+    // 선형 회귀 기울기 (시험당 변화량)
     const xs = pcts.map((_, i) => i);
     const meanX = xs.reduce((a, b) => a + b, 0) / n;
     const meanY = pcts.reduce((a, b) => a + b, 0) / n;
     const num = xs.reduce((s, x, i) => s + (x - meanX) * (pcts[i] - meanY), 0);
     const den = xs.reduce((s, x) => s + (x - meanX) ** 2, 0) || 1;
-    const slope = num / den; // 시험당 평균 변화량 (%p)
+    const slope = num / den;
     const intercept = meanY - slope * meanX;
     // 변동성 (표준편차)
     const variance = pcts.reduce((s, v) => s + (v - meanY) ** 2, 0) / n;
@@ -42583,51 +42583,87 @@ function TrendInsightPanel({ student, testScores, overallAvg, recentAvg, typeAve
     // 최근 3회 vs 처음 3회
     const firstThree = pcts.slice(0, 3);
     const lastThree = pcts.slice(-3);
-    const firstAvg = firstThree.reduce((a, b) => a + b, 0) / firstThree.length;
-    const lastAvg = lastThree.reduce((a, b) => a + b, 0) / lastThree.length;
-    const blockChange = Math.round(lastAvg - firstAvg);
-    // 4주 후 예측 (시험이 주 1~2회 가정 → 5회 후 예측)
+    const firstAvg = Math.round(firstThree.reduce((a, b) => a + b, 0) / firstThree.length);
+    const lastAvg = Math.round(lastThree.reduce((a, b) => a + b, 0) / lastThree.length);
+    const blockChange = lastAvg - firstAvg;
+    // 5회 후 예측
     const futureTests = 5;
     const predicted = Math.max(0, Math.min(100, Math.round(intercept + slope * (n - 1 + futureTests))));
-    // 추세 분류
-    let trendLabel, trendColor, trendEmoji;
-    if (slope >= 1.5) { trendLabel = '뚜렷한 상승'; trendColor = 'green'; trendEmoji = '📈'; }
-    else if (slope >= 0.5) { trendLabel = '완만한 상승'; trendColor = 'emerald'; trendEmoji = '↗️'; }
-    else if (slope > -0.5) { trendLabel = '안정 / 정체'; trendColor = 'blue'; trendEmoji = '➡️'; }
-    else if (slope > -1.5) { trendLabel = '완만한 하락'; trendColor = 'amber'; trendEmoji = '↘️'; }
-    else { trendLabel = '뚜렷한 하락'; trendColor = 'red'; trendEmoji = '📉'; }
-    // 변동성 분류
-    const stable = stdev < 8 ? '매우 안정적' : stdev < 15 ? '안정적' : stdev < 22 ? '들쭉날쭉' : '변동 심함';
-    // 메시지 생성
+    // ★ 추세 분류 — 쉬운 한국어 라벨
+    let trendLabel, trendColor, trendEmoji, headline;
+    if (slope >= 1.5) {
+      trendLabel = '꾸준히 잘 올라가고 있어요'; trendColor = 'green'; trendEmoji = '📈';
+      headline = '아주 좋은 흐름입니다';
+    } else if (slope >= 0.5) {
+      trendLabel = '조금씩 좋아지고 있어요'; trendColor = 'emerald'; trendEmoji = '↗️';
+      headline = '긍정적인 흐름이에요';
+    } else if (slope > -0.5) {
+      trendLabel = '비슷한 점수를 유지하고 있어요'; trendColor = 'blue'; trendEmoji = '➡️';
+      headline = '안정적이지만 변화는 작아요';
+    } else if (slope > -1.5) {
+      trendLabel = '조금씩 떨어지고 있어요'; trendColor = 'amber'; trendEmoji = '↘️';
+      headline = '주의가 필요한 흐름이에요';
+    } else {
+      trendLabel = '최근 점수가 많이 떨어지고 있어요'; trendColor = 'red'; trendEmoji = '📉';
+      headline = '바로 도움을 줘야 해요';
+    }
+    // ★ 변동성 — 친근한 표현
+    let stable;
+    if (stdev < 8) stable = '점수가 거의 일정해요';
+    else if (stdev < 15) stable = '점수가 비교적 일정해요';
+    else if (stdev < 22) stable = '시험마다 점수 차이가 좀 있어요';
+    else stable = '시험마다 점수 차이가 매우 큽니다';
+
+    // ★ 메시지 — 자연어 문장
     const messages = [];
-    messages.push(`최근 ${n}회 시험에서 ${trendLabel} 추세 (시험당 ${slope >= 0 ? '+' : ''}${slope.toFixed(1)}%p).`);
+    // 1) 한 줄 요약
+    const slopeAbs = Math.abs(slope).toFixed(1);
+    if (slope >= 0.5) {
+      messages.push(`최근 ${n}번 본 시험을 보면, 한 번 시험을 볼 때마다 평균 약 ${slopeAbs}점씩 오르고 있어요.`);
+    } else if (slope <= -0.5) {
+      messages.push(`최근 ${n}번 본 시험을 보면, 한 번 시험을 볼 때마다 평균 약 ${slopeAbs}점씩 떨어지고 있어요.`);
+    } else {
+      messages.push(`최근 ${n}번 시험 결과를 보면, 점수가 거의 같은 수준에서 머무르고 있어요.`);
+    }
+    // 2) 처음 vs 최근 비교
     if (Math.abs(blockChange) >= 5) {
-      messages.push(`처음 3회 평균(${Math.round(firstAvg)}%) → 최근 3회 평균(${Math.round(lastAvg)}%)으로 ${blockChange > 0 ? '+' : ''}${blockChange}%p 변화.`);
+      const dir = blockChange > 0 ? '올랐습니다' : '떨어졌습니다';
+      messages.push(`처음 3번 시험 평균은 ${firstAvg}점이었는데, 최근 3번 평균은 ${lastAvg}점이에요. 그동안 ${Math.abs(blockChange)}점 ${dir}.`);
+    } else if (n >= 6) {
+      messages.push(`처음 3번 평균(${firstAvg}점)과 최근 3번 평균(${lastAvg}점)이 거의 같아요. 큰 변화 없이 유지되고 있어요.`);
     }
-    messages.push(`성적 변동성: ${stable} (표준편차 ${stdev.toFixed(1)}%p).`);
-    if (recentAvg !== overallAvg) {
-      messages.push(`전체 평균 ${overallAvg}% / 최근 3회 평균 ${recentAvg}%.`);
+    // 3) 변동성
+    messages.push(`${stable} (시험 사이 점수 차이는 보통 ${Math.round(stdev)}점 정도예요).`);
+    // 4) 전체 vs 최근
+    if (Math.abs(recentAvg - overallAvg) >= 3) {
+      const dir = recentAvg > overallAvg ? '높아요' : '낮아요';
+      messages.push(`전체 시험 평균은 ${overallAvg}점이지만, 최근 3번 평균은 ${recentAvg}점으로 ${Math.abs(recentAvg - overallAvg)}점 ${dir}.`);
     }
+    // 5) 강점/약점 시험
     if (typeAverages && typeAverages.length > 1) {
       const sorted = [...typeAverages].sort((a, b) => b.avg - a.avg);
       const best = sorted[0];
       const worst = sorted[sorted.length - 1];
       if (best.avg - worst.avg >= 15) {
-        messages.push(`강점 시험: ${best.name} (${best.avg}%) / 약점 시험: ${worst.name} (${worst.avg}%).`);
+        messages.push(`잘 보는 시험은 「${best.name}」(${best.avg}점), 어려워하는 시험은 「${worst.name}」(${worst.avg}점)이에요. 차이가 ${best.avg - worst.avg}점이나 나서 「${worst.name}」 보강이 필요해요.`);
       }
     }
 
-    // 예측 메시지
+    // ★ 예측 — 자연스러운 권고 문장
     let predictionMsg;
-    if (slope >= 0.5) {
-      predictionMsg = `현재 추세대로면 약 5회 후 ${predicted}%대 도달이 기대됩니다.`;
-    } else if (slope <= -0.5) {
-      predictionMsg = `현재 추세가 이어지면 약 5회 후 ${predicted}%까지 떨어질 수 있어 보완이 필요합니다.`;
+    if (slope >= 1.5) {
+      predictionMsg = `이 흐름을 유지하면 다음 5번 시험 후엔 약 ${predicted}점까지 올라갈 수 있어요. 학생이 잘 따라오고 있으니 칭찬과 격려를 해주시면 더욱 좋습니다.`;
+    } else if (slope >= 0.5) {
+      predictionMsg = `지금처럼 꾸준히 공부하면 다음 5번 시험 후엔 약 ${predicted}점 정도가 기대돼요. 더 빠른 향상을 원한다면 약점 단원에 시간을 좀 더 투자하는 것이 좋겠습니다.`;
+    } else if (slope > -0.5) {
+      predictionMsg = `이대로면 다음 5번 시험에서도 ${predicted}점 정도로 비슷한 점수가 예상됩니다. 한 단계 올라가려면 새로운 학습 방법이나 더 어려운 문제 도전이 필요해 보여요.`;
+    } else if (slope > -1.5) {
+      predictionMsg = `지금 흐름이 이어지면 다음 5번 시험 후엔 ${predicted}점까지 떨어질 수 있어요. 한 번 학생과 대화해서 무엇이 어려운지 파악하고 보강 계획을 세워주세요.`;
     } else {
-      predictionMsg = `현재 흐름이 유지되면 약 5회 후에도 ${predicted}% 내외로 큰 변화가 없을 것으로 예상됩니다.`;
+      predictionMsg = `이대로 두면 다음 5번 시험 후 ${predicted}점까지 떨어질 수 있어 빨리 도움이 필요해요. 기초부터 다시 점검하고 학부모님과 상담을 잡는 것이 좋겠습니다.`;
     }
 
-    return { slope, stdev, predicted, trendLabel, trendColor, trendEmoji, stable, messages, predictionMsg, n };
+    return { slope, stdev, predicted, trendLabel, trendColor, trendEmoji, headline, stable, messages, predictionMsg, n };
   })();
 
   // ===== AI 심층 분석 =====
@@ -42732,23 +42768,24 @@ ${testScores.slice(-15).map((t, i) => `${i + 1}. ${t.date || '-'} | ${t.name} | 
     <div className="mt-5 space-y-3">
       {/* 자동 추세 분석 카드 */}
       <div className={`p-4 rounded-xl border-2 ${c.bg} ${c.border}`}>
-        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <p className={`font-bold flex items-center gap-2 ${c.text}`}>
-            <span className="text-lg">{insight.trendEmoji}</span>
-            추세 분석: {insight.trendLabel} · {insight.stable}
+        <div className="mb-3">
+          <p className={`font-black text-lg flex items-center gap-2 ${c.text}`}>
+            <span className="text-2xl">{insight.trendEmoji}</span>
+            {insight.headline}
           </p>
-          <span className={`text-xs ${c.accent} font-semibold bg-white/60 px-2 py-0.5 rounded-full`}>
-            기울기 {insight.slope >= 0 ? '+' : ''}{insight.slope.toFixed(1)}%p/회
-          </span>
+          <p className={`text-sm font-semibold mt-1 ${c.accent}`}>{insight.trendLabel}</p>
         </div>
-        <ul className={`text-sm space-y-1 ${c.text} ml-1`}>
+        <ul className={`text-sm space-y-2 ${c.text}`}>
           {insight.messages.map((m, i) => (
-            <li key={i} className="flex items-start gap-2"><span className={c.accent}>•</span>{m}</li>
+            <li key={i} className="flex items-start gap-2 leading-relaxed">
+              <span className={`${c.accent} flex-shrink-0 font-bold`}>•</span>
+              <span>{m}</span>
+            </li>
           ))}
         </ul>
         <div className={`mt-3 p-3 bg-white/70 rounded-lg border ${c.border}`}>
-          <p className={`text-xs font-bold ${c.accent} mb-1`}>🔮 예측</p>
-          <p className={`text-sm font-medium ${c.text}`}>{insight.predictionMsg}</p>
+          <p className={`text-xs font-bold ${c.accent} mb-1`}>🔮 앞으로의 예측</p>
+          <p className={`text-sm font-medium ${c.text} leading-relaxed`}>{insight.predictionMsg}</p>
         </div>
       </div>
 
