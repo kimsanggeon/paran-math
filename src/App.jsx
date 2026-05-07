@@ -39325,28 +39325,30 @@ function downloadLessonPrepDoc({ student, summary, activeDate }) {
     body { font-family:'Pretendard','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',sans-serif; color:#111827; line-height:1.55; letter-spacing:-0.1pt; font-size:10.5pt; }
     h1 { color:#065f46; font-size:20pt; font-weight:800; letter-spacing:-0.5pt; padding-bottom:6pt; margin:0 0 4pt; border-bottom:0.5pt solid #047857; }
     .subtitle { color:#6b7280; font-size:10pt; margin:4pt 0 12pt; }
-    .info-table { width:100%; border-collapse:collapse; margin-bottom:12pt; border:0.5pt solid #d1d5db; }
-    .info-table td { padding:7pt 10pt; border:0.5pt solid #d1d5db; font-size:10pt; vertical-align:middle; }
-    .info-label { width:14%; font-weight:700; color:#374151; background:#f9fafb; }
+    /* 워드(.doc)에서 0.5pt 보더가 흐릿하게 보이지 않도록 진한 회색을 사용. border-radius는 워드가 잘 못 그려서 제거. */
+    .info-table { width:100%; border-collapse:collapse; margin-bottom:12pt; border:0.5pt solid #1f2937; }
+    .info-table td { padding:7pt 10pt; border:0.5pt solid #6b7280; font-size:10pt; vertical-align:middle; }
+    .info-label { width:14%; font-weight:700; color:#111827; background:#f9fafb; }
     .info-blank { width:36%; }
-    .summary-box { border:0.5pt solid #93c5fd; background:#eff6ff; padding:8pt 10pt; margin:0 0 10pt; font-size:9.5pt; color:#1e3a8a; border-radius:4pt; }
+    .summary-box { border:0.5pt solid #1d4ed8; background:#eff6ff; padding:8pt 10pt; margin:0 0 10pt; font-size:9.5pt; color:#1e3a8a; }
     .summary-box .lbl { font-weight:700; color:#1d4ed8; margin-right:4pt; }
     .summary-box ul { margin:2pt 0 0; padding-left:14pt; }
     .summary-box li { margin:1pt 0; }
-    .weak-box { border-left:2pt solid #f97316; background:#fff7ed; padding:6pt 10pt; margin:0 0 10pt; font-size:9.5pt; color:#9a3412; }
+    .weak-box { border:0.5pt solid #c2410c; border-left:2pt solid #ea580c; background:#fff7ed; padding:6pt 10pt; margin:0 0 10pt; font-size:9.5pt; color:#9a3412; }
     .weak-box strong { color:#c2410c; }
-    .section { margin:10pt 0 6pt; border:0.5pt solid #d1d5db; border-radius:4pt; overflow:hidden; }
-    .section-head { padding:6pt 10pt; font-weight:800; font-size:11pt; }
+    .section { margin:10pt 0 6pt; border:0.5pt solid #1f2937; }
+    .section-head { padding:6pt 10pt; font-weight:800; font-size:11pt; border-bottom:0.5pt solid #1f2937; }
     .check-table { width:100%; border-collapse:collapse; }
-    .check-table td { padding:7pt 8pt; border-top:0.5pt solid #e5e7eb; font-size:10pt; vertical-align:middle; }
-    .check-table td.lbl { width:30%; font-weight:700; color:#374151; background:#fafafa; }
+    .check-table td { padding:7pt 8pt; border-top:0.5pt solid #6b7280; font-size:10pt; vertical-align:middle; }
+    .check-table tr:first-child td { border-top:none; }
+    .check-table td.lbl { width:30%; font-weight:700; color:#111827; background:#fafafa; border-right:0.5pt solid #6b7280; }
     .check-table td.opts { width:70%; }
     .opt-pill { display:inline-block; margin-right:14pt; font-size:11pt; }
-    .opt-pill .o { color:#6b7280; font-size:14pt; vertical-align:-1pt; margin-right:4pt; }
-    .memo-box { margin-top:10pt; border:0.5pt solid #d1d5db; border-radius:4pt; padding:8pt 10pt; }
-    .memo-box .lbl { font-weight:700; color:#374151; font-size:10pt; margin-bottom:4pt; }
-    .memo-line { border-bottom:0.4pt solid #cbd5e1; height:18pt; }
-    .footer { text-align:center; color:#9ca3af; font-size:8.5pt; margin-top:18pt; padding-top:6pt; border-top:0.5pt solid #d1d5db; }
+    .opt-pill .o { color:#374151; font-size:14pt; vertical-align:-1pt; margin-right:4pt; }
+    .memo-box { margin-top:10pt; border:0.5pt solid #1f2937; padding:8pt 10pt; }
+    .memo-box .lbl { font-weight:700; color:#111827; font-size:10pt; margin-bottom:4pt; }
+    .memo-line { border-bottom:0.5pt solid #6b7280; height:18pt; }
+    .footer { text-align:center; color:#6b7280; font-size:8.5pt; margin-top:18pt; padding-top:6pt; border-top:0.5pt solid #6b7280; }
   `;
 
   const fmtHomework = summary.lastHomework.length > 0
