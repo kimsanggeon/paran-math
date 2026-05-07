@@ -39277,6 +39277,154 @@ function ClassDashboardTab({ students, saveStudents, teachers = [] }) {
   );
 }
 
+// ──────────────────────────────────────────────────────────
+// 오답 유형 코드 → 한글 라벨 (LessonPrepTab 취약 유형 표시용)
+// ──────────────────────────────────────────────────────────
+const WEAK_TYPE_KOR = {
+  '개념':'개념', '계산':'계산', '해석':'해석', '전략':'전략',
+  '조건':'조건', '시간':'시간', '단위':'단위', '기타':'기타',
+  careless:'계산', concept:'개념', understanding:'해석', formula:'개념',
+  process:'전략', time:'시간', blank:'기타', reading:'조건'
+};
+const WEAK_TYPE_ICON = {
+  '개념':'📚','계산':'🧮','해석':'🤔','전략':'🎯','조건':'🔍','시간':'⏰','단위':'📏','기타':'📌'
+};
+const toKorWeakType = (t) => WEAK_TYPE_KOR[t] || t || '기타';
+
+// ──────────────────────────────────────────────────────────
+// 📝 학생별 수업 준비 노트 — 종이 기록용 워드 다운로드
+// 빈 ○ 옵션을 인쇄해 선생님이 손으로 체크/메모할 수 있도록 함.
+// ──────────────────────────────────────────────────────────
+function downloadLessonPrepDoc({ student, summary, activeDate }) {
+  const today = new Date().toLocaleDateString('ko-KR');
+  const dow = (() => { try { return ['일','월','화','수','목','금','토'][new Date(activeDate).getDay()]; } catch(e){ return ''; } })();
+
+  const sections = [
+    { title:'📚 숙제 검사', color:'#16a34a', bg:'#f0fdf4', items:[
+      { label:'완료 여부',       icon:'📌', options:['✅ 완료','🔶 약간 미완','❌ 미완료'] },
+      { label:'풀이 과정',       icon:'📝', options:['👍 충분','👎 미흡'] },
+      { label:'틀린 문제 수정',  icon:'✏️', options:['✅ 완료','❌ 미완료'] },
+      { label:'숙제 성실도',     icon:'⭐', options:['😊 확실히 했음','😑 대충 했음'] },
+    ]},
+    { title:'🧠 수업 태도 점검', color:'#2563eb', bg:'#eff6ff', items:[
+      { label:'졸음·무기력', icon:'😴', options:['😊 괜찮음','😪 약간 졸림','😴 많이 졸림'] },
+      { label:'집중·산만',   icon:'🎯', options:['🎯 집중함','🙂 약간 산만','😵 많이 산만'] },
+      { label:'학습 의욕',   icon:'💪', options:['🔥 높음','😐 보통','😞 낮음'] },
+    ]},
+    { title:'📋 행정', color:'#d97706', bg:'#fffbeb', items:[
+      { label:'부모님 사인', icon:'✍️', options:['✅ 받음','❌ 미확인'] },
+      { label:'오답노트',    icon:'📓', options:['✅ 작성','❌ 미작성'] },
+    ]},
+    { title:'🎯 수업 계획', color:'#7c3aed', bg:'#faf5ff', items:[
+      { label:'재시험', icon:'🔄', options:['✅ 통과','🔄 재시험'] },
+    ]},
+  ];
+
+  const STYLE = `
+    @page { margin: 1.4cm 1.3cm; }
+    body { font-family:'Pretendard','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',sans-serif; color:#111827; line-height:1.55; letter-spacing:-0.1pt; font-size:10.5pt; }
+    h1 { color:#065f46; font-size:20pt; font-weight:800; letter-spacing:-0.5pt; padding-bottom:6pt; margin:0 0 4pt; border-bottom:0.5pt solid #047857; }
+    .subtitle { color:#6b7280; font-size:10pt; margin:4pt 0 12pt; }
+    .info-table { width:100%; border-collapse:collapse; margin-bottom:12pt; border:0.5pt solid #d1d5db; }
+    .info-table td { padding:7pt 10pt; border:0.5pt solid #d1d5db; font-size:10pt; vertical-align:middle; }
+    .info-label { width:14%; font-weight:700; color:#374151; background:#f9fafb; }
+    .info-blank { width:36%; }
+    .summary-box { border:0.5pt solid #93c5fd; background:#eff6ff; padding:8pt 10pt; margin:0 0 10pt; font-size:9.5pt; color:#1e3a8a; border-radius:4pt; }
+    .summary-box .lbl { font-weight:700; color:#1d4ed8; margin-right:4pt; }
+    .summary-box ul { margin:2pt 0 0; padding-left:14pt; }
+    .summary-box li { margin:1pt 0; }
+    .weak-box { border-left:2pt solid #f97316; background:#fff7ed; padding:6pt 10pt; margin:0 0 10pt; font-size:9.5pt; color:#9a3412; }
+    .weak-box strong { color:#c2410c; }
+    .section { margin:10pt 0 6pt; border:0.5pt solid #d1d5db; border-radius:4pt; overflow:hidden; }
+    .section-head { padding:6pt 10pt; font-weight:800; font-size:11pt; }
+    .check-table { width:100%; border-collapse:collapse; }
+    .check-table td { padding:7pt 8pt; border-top:0.5pt solid #e5e7eb; font-size:10pt; vertical-align:middle; }
+    .check-table td.lbl { width:30%; font-weight:700; color:#374151; background:#fafafa; }
+    .check-table td.opts { width:70%; }
+    .opt-pill { display:inline-block; margin-right:14pt; font-size:11pt; }
+    .opt-pill .o { color:#6b7280; font-size:14pt; vertical-align:-1pt; margin-right:4pt; }
+    .memo-box { margin-top:10pt; border:0.5pt solid #d1d5db; border-radius:4pt; padding:8pt 10pt; }
+    .memo-box .lbl { font-weight:700; color:#374151; font-size:10pt; margin-bottom:4pt; }
+    .memo-line { border-bottom:0.4pt solid #cbd5e1; height:18pt; }
+    .footer { text-align:center; color:#9ca3af; font-size:8.5pt; margin-top:18pt; padding-top:6pt; border-top:0.5pt solid #d1d5db; }
+  `;
+
+  const fmtHomework = summary.lastHomework.length > 0
+    ? summary.lastHomework.map(hw => `<li>${hw.label}${hw.completed?' <span style="color:#059669;">(완료)</span>':''}</li>`).join('')
+    : '<li style="color:#9ca3af;">기록 없음</li>';
+
+  const fmtContents = summary.lastSessionContents.length > 0
+    ? summary.lastSessionContents.map(c => {
+        const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
+        const parts = [tb, c.grade, c.pages?`p.${c.pages}`:'', c.detailUnit?`— ${c.detailUnit}`:''].filter(Boolean);
+        return `<li>${parts.join(' ')}</li>`;
+      }).join('')
+    : '<li style="color:#9ca3af;">기록 없음</li>';
+
+  const weakHtml = summary.weakTypes.length > 0
+    ? `<div class="weak-box"><strong>⚠️ 취약 유형:</strong> ${summary.weakTypes.map(([t,c]) => `${WEAK_TYPE_ICON[toKorWeakType(t)]||''} ${toKorWeakType(t)} (${c}개)`).join(' · ')}</div>`
+    : '';
+
+  const sectionsHtml = sections.map(sec => `
+    <div class="section">
+      <div class="section-head" style="background:${sec.bg};color:${sec.color};">${sec.title}</div>
+      <table class="check-table">
+        ${sec.items.map(it => `
+          <tr>
+            <td class="lbl">${it.icon} ${it.label}</td>
+            <td class="opts">
+              ${it.options.map(o => `<span class="opt-pill"><span class="o">○</span>${o}</span>`).join('')}
+            </td>
+          </tr>`).join('')}
+      </table>
+    </div>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${student?.name||'학생'} 수업 준비 노트</title><style>${STYLE}</style></head><body>
+    <h1>📝 수업 준비 노트 (학생별)</h1>
+    <p class="subtitle">파란수학학원 몰입관 · 종이 기록용 — 가장 잘 맞는 항목 ○ 위에 ✔ 또는 동그라미 표시</p>
+
+    <table class="info-table"><tr>
+      <td class="info-label">학생 이름</td><td class="info-blank">${student?.name||''}</td>
+      <td class="info-label">학년 / 반</td><td class="info-blank">${(student?.grade||'') + (student?.className?' / '+student.className:'')}</td>
+    </tr><tr>
+      <td class="info-label">수업 일자</td><td>${activeDate}${dow?` (${dow})`:''}</td>
+      <td class="info-label">출력 일자</td><td>${today}</td>
+    </tr></table>
+
+    <div class="summary-box">
+      <div><span class="lbl">📖 직전 수업${summary.lastDate?` (${summary.lastDate})`:''}</span></div>
+      <ul>${fmtContents}</ul>
+      ${summary.lastTest?`<div style="margin-top:4pt;"><span class="lbl">📊 최근 시험</span>${summary.lastTest.name} ${summary.lastTest.score}/${summary.lastTest.total}점${summary.lastTest.date?` (${summary.lastTest.date})`:''}</div>`:''}
+      ${summary.lastUnderstanding?`<div style="margin-top:2pt;"><span class="lbl">🌟 이해도</span>${'⭐'.repeat(summary.lastUnderstanding)}</div>`:''}
+      <div style="margin-top:6pt;"><span class="lbl">📋 직전 수업 숙제</span></div>
+      <ul>${fmtHomework}</ul>
+    </div>
+
+    ${weakHtml}
+
+    ${sectionsHtml}
+
+    <div class="memo-box">
+      <div class="lbl">📝 메모 (특이사항·전달사항)</div>
+      <div class="memo-line"></div>
+      <div class="memo-line"></div>
+      <div class="memo-line"></div>
+    </div>
+
+    <div class="footer">© 파란수학학원 몰입관 — 수업 준비 노트 · 학생별 종이 기록용</div>
+  </body></html>`;
+
+  const safeName = (student?.name||'학생').replace(/[\\/:*?"<>|]/g,'_');
+  const dateStr = (activeDate||today).replace(/[^\d]/g,'');
+  const filename = `${safeName}_수업준비노트_${dateStr}.doc`;
+  const blob = new Blob(['﻿', html], { type:'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ========== 📝 수업 준비 노트 탭 ==========
 function LessonPrepTab({ students, saveStudents, teachers = [] }) {
   const [selectedClass, setSelectedClass] = useState('all');
@@ -39399,7 +39547,12 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
     // 취약점
     const wrongNotes = st.wrongNotes || [];
     const unconquered = wrongNotes.filter(n => !n.conquered);
-    const topWeakType = unconquered.reduce((acc, n) => { if (n.type) acc[n.type] = (acc[n.type] || 0) + 1; return acc; }, {});
+    const topWeakType = unconquered.reduce((acc, n) => {
+      if (!n.type) return acc;
+      const k = toKorWeakType(n.type);
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
     const weakTypes = Object.entries(topWeakType).sort((a, b) => b[1] - a[1]).slice(0, 2);
     
     // 이해도
@@ -39613,6 +39766,21 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                 {isOpen && (
                   <div className="border-t p-3 bg-gray-50 space-y-3">
 
+                    {/* 📄 종이 기록용 워드 다운로드 */}
+                    <div className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                      <div className="text-[11px] text-emerald-800 leading-snug">
+                        <span className="font-bold">📄 종이 기록용 워드 다운로드</span>
+                        <span className="ml-1 text-emerald-600">— 인쇄 후 손으로 ○ 위에 ✔ 표시 / 메모</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); downloadLessonPrepDoc({ student: st, summary, activeDate }); }}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm whitespace-nowrap"
+                      >
+                        📥 워드 다운로드
+                      </button>
+                    </div>
+
                     {/* 직전 수업 요약 */}
                     <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100">
                       <p className="text-xs font-bold text-blue-700 mb-1.5">
@@ -39743,13 +39911,13 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                           ]} />
                       </div>
 
-                      {/* 4. 수업 계획 (재시험 필요만) */}
+                      {/* 4. 수업 계획 (재시험 통과/재시험) */}
                       <div className="bg-purple-50 rounded-lg p-2.5 border border-purple-100 space-y-2">
                         <p className="text-[11px] font-bold text-purple-700">🎯 수업 계획</p>
-                        <OptionGroup stName={st.name} label="재시험 필요" icon="🔄" optKey="retestCheck"
+                        <OptionGroup stName={st.name} label="재시험" icon="🔄" optKey="retestCheck"
                           options={[
-                            { value:'yes', label:'🔄 필요',   active:'bg-red-500 text-white' },
-                            { value:'no',  label:'✅ 불필요', active:'bg-green-500 text-white' },
+                            { value:'pass',   label:'✅ 통과',   active:'bg-green-500 text-white' },
+                            { value:'retest', label:'🔄 재시험', active:'bg-red-500 text-white' },
                           ]} />
                       </div>
 
