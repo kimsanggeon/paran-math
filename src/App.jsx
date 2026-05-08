@@ -40577,9 +40577,11 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
     }
   };
 
-  // 출결 상태 변경
+  // 출결 상태 변경 (기존 사유는 보존, 출석/지각 등으로 바뀌면 사유 자동 제거)
   const updateAttendance = (studentId, date, status, time = null) => {
     const key = `${date}_${studentId}`;
+    const prev = attendanceRecords[key] || {};
+    const keepReason = status === 'absent' || status === 'excused';
     const newRecords = {
       ...attendanceRecords,
       [key]: {
@@ -40587,8 +40589,21 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
         date,
         status, // present, absent, late, early, excused
         checkInTime: time || new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+        reason: keepReason ? (prev.reason || '') : '',
         updatedAt: new Date().toISOString()
       }
+    };
+    saveAttendance(newRecords);
+  };
+
+  // 결석 사유만 업데이트 (상태/시간은 유지)
+  const updateAbsenceReason = (studentId, date, reason) => {
+    const key = `${date}_${studentId}`;
+    const prev = attendanceRecords[key];
+    if (!prev) return;
+    const newRecords = {
+      ...attendanceRecords,
+      [key]: { ...prev, reason, updatedAt: new Date().toISOString() }
     };
     saveAttendance(newRecords);
   };
@@ -40665,11 +40680,12 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
     return stats;
   };
 
-  // 반 목록 가져오기
-  const classes = [...new Set(students.map(s => s.class || '미지정'))].sort();
+  // 반 목록 가져오기 (canonical 필드는 className — 일부 구 데이터는 class 사용)
+  const getClassName = (s) => s.className || s.class || '미지정';
+  const classes = [...new Set(students.map(getClassName))].sort();
   // 반 + 담당 선생님 필터 적용
   const filteredStudents = students.filter(s => {
-    if (filterClass !== 'all' && (s.class || '미지정') !== filterClass) return false;
+    if (filterClass !== 'all' && getClassName(s) !== filterClass) return false;
     if (filterTeacher !== 'all') {
       if (filterTeacher === 'unassigned') {
         if (s.teacherId) return false;
@@ -40789,6 +40805,8 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
                 const record = getAttendanceStatus(student.id, selectedDate);
                 const style = getStatusStyle(record?.status);
                 const StatusIcon = style.icon;
+                const showReason = record?.status === 'absent' || record?.status === 'excused';
+                const classLabel = getClassName(student);
                 return (
                   <div key={student.id} className="p-3 flex flex-col gap-2 hover:bg-gray-50">
                     <div className="flex items-center gap-3">
@@ -40797,7 +40815,10 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-bold text-gray-800 whitespace-nowrap">{student.name}</p>
-                        <p className="text-xs text-gray-500 whitespace-nowrap">{student.class || '미지정'} · {student.grade || ''}</p>
+                        <p className="text-xs text-gray-500 whitespace-nowrap">
+                          <span className={classLabel === '미지정' ? 'text-orange-500 font-medium' : ''}>{classLabel}</span>
+                          {student.grade ? ` · ${student.grade}` : ''}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -40832,6 +40853,21 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
                         })}
                       </div>
                     </div>
+                    {showReason && (
+                      <div className="flex items-start gap-2 mt-1 ml-12 bg-red-50 border border-red-200 rounded-lg p-2">
+                        <span className="text-xs font-bold text-red-700 whitespace-nowrap pt-1.5">
+                          {record.status === 'absent' ? '❌ 결석 사유' : '📋 사유결석 사유'}
+                        </span>
+                        <input
+                          type="text"
+                          value={record.reason || ''}
+                          onChange={(e) => updateAbsenceReason(student.id, selectedDate, e.target.value)}
+                          placeholder="예: 발열·병원 진료, 가족 행사, 학교 행사 등"
+                          className="flex-1 min-w-0 px-2 py-1 text-xs border border-red-200 rounded bg-white focus:border-red-400 focus:outline-none"
+                          maxLength={200}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               };
