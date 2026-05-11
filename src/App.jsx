@@ -39394,11 +39394,11 @@ function downloadLessonPrepDoc({ student, summary, activeDate }) {
     </tr></table>
 
     <div class="summary-box">
-      <div><span class="lbl">📖 직전 수업${summary.lastDate?` (${summary.lastDate})`:''}</span></div>
+      <div><span class="lbl">📖 직전 수업</span>${summary.lastDate?`직전 수업일: <strong>${summary.lastDate}</strong>${summary.wasAbsent?' <span style="color:#dc2626;font-weight:700;">❌ 결석</span>':''}`:''}${summary.wasAbsent && summary.contentSessionDate?` &nbsp;→&nbsp; 직전의 직전 수업일: <strong>${summary.contentSessionDate}</strong> 내용 기준`:''}${summary.wasAbsent && !summary.contentSessionDate?' <span style="color:#dc2626;">(이전 출석 기록 없음)</span>':''}</div>
       <ul>${fmtContents}</ul>
       ${summary.lastTest?`<div style="margin-top:4pt;"><span class="lbl">📊 최근 시험</span>${summary.lastTest.name} ${summary.lastTest.score}/${summary.lastTest.total}점${summary.lastTest.date?` (${summary.lastTest.date})`:''}</div>`:''}
       ${summary.lastUnderstanding?`<div style="margin-top:2pt;"><span class="lbl">🌟 이해도</span>${'⭐'.repeat(summary.lastUnderstanding)}</div>`:''}
-      <div style="margin-top:6pt;"><span class="lbl">📋 직전 수업 숙제</span></div>
+      <div style="margin-top:6pt;"><span class="lbl">📋 직전 수업 숙제</span>${summary.wasAbsent && summary.contentSessionDate?` <span style="color:#6366f1;font-weight:400;">(${summary.contentSessionDate} 회차 기준)</span>`:''}</div>
       <ul>${fmtHomework}</ul>
     </div>
 
@@ -39497,28 +39497,47 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
     const rd = reportCache[st.name];
     const sessions = rd?.sessions || [];
     const last = sessions[sessions.length - 1];
-    
-    // 마지막 진도
-    let lastProgress = '기록 없음';
-    if (last) {
-      const contents = last.lessonContents || [];
-      if (contents.length > 0) { const c = contents[contents.length - 1]; lastProgress = `${c.textbook || ''} ${c.range || ''}`.trim() || '기록 있음'; }
-      else if (last.lessonContent) lastProgress = last.lessonContent;
+
+    // ★ 직전 수업이 결석이면 그 이전(=직전의 직전) 수업 내용/과제를 사용
+    //    학생이 결석한 회차에는 내용/숙제가 비어 있거나 학생에게 적용되지 않으므로,
+    //    "다음 수업 준비" 관점에서는 학생이 실제로 받은 마지막 수업 회차가 기준.
+    const wasAbsent = last?.attendanceStatus === 'absent';
+    let contentSession = last;
+    let contentSessionDate = last?.date;
+    if (wasAbsent) {
+      for (let i = sessions.length - 2; i >= 0; i--) {
+        if (sessions[i]?.attendanceStatus !== 'absent') {
+          contentSession = sessions[i];
+          contentSessionDate = sessions[i].date;
+          break;
+        }
+      }
+      // 이전에도 결석/기록 없음만 있는 경우 contentSession===last 그대로 유지
+      if (contentSession === last) contentSessionDate = undefined;
     }
-    
-    // ★ 가장 최근 수업의 숙제 목록 (학습 보고서 연동)
+
+    // 마지막 진도 (실제 수업 받은 회차 기준 — 결석이면 직전의 직전 회차)
+    let lastProgress = '기록 없음';
+    if (contentSession) {
+      const contents = contentSession.lessonContents || [];
+      if (contents.length > 0) { const c = contents[contents.length - 1]; lastProgress = `${c.textbook || ''} ${c.range || ''}`.trim() || '기록 있음'; }
+      else if (contentSession.lessonContent) lastProgress = contentSession.lessonContent;
+    }
+
+    // ★ 학생이 실제로 받은 마지막 수업의 숙제 목록 (학습 보고서 연동)
     // assignments 배열 + lessonContents 중 isAssignment=true 항목 모두 수집
     let lastHomework = [];
-    if (last) {
+    const hwSource = wasAbsent && contentSession !== last ? contentSession : last;
+    if (hwSource) {
       // assignments 배열
-      (last.assignments || []).forEach(a => {
+      (hwSource.assignments || []).forEach(a => {
         const tb = a.textbook === '기타' ? (a.customTextbook || '') : (a.textbook || '');
         const range = a.pages || a.range || '';
         const label = [tb, range].filter(Boolean).join(' ') || '숙제';
         lastHomework.push({ label, completed: a.completed || a.status === 'completed' });
       });
       // lessonContents 중 isAssignment
-      (last.lessonContents || []).filter(c => c.isAssignment).forEach(c => {
+      (hwSource.lessonContents || []).filter(c => c.isAssignment).forEach(c => {
         const tb = c.textbook === '기타' ? (c.customTextbook || '') : (c.textbook || '');
         const range = c.pages || '';
         const label = [tb, range].filter(Boolean).join(' ') || '과제';
@@ -39557,18 +39576,25 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
     }, {});
     const weakTypes = Object.entries(topWeakType).sort((a, b) => b[1] - a[1]).slice(0, 2);
     
-    // 이해도
-    const lastUnderstanding = last?.understanding;
-    
-    // 마지막 수업일
+    // 이해도 — 실제 수업 받은 회차 기준
+    const lastUnderstanding = (wasAbsent && contentSession !== last ? contentSession : last)?.understanding;
+
+    // 마지막 수업일 (실제 가장 최근 회차 — 결석이라도 표기)
     const lastDate = last?.date;
 
-    // ★ 직전 수업 내용 (lessonContents - 과제 제외)
-    const lastSessionContents = last
-      ? (last.lessonContents || []).filter(c => !c.isAssignment && (c.textbook || c.customTextbook || c.detailUnit))
+    // ★ 직전 수업 내용 — 결석이면 직전의 직전 회차 사용
+    const contentSrc = wasAbsent && contentSession !== last ? contentSession : last;
+    const lastSessionContents = contentSrc
+      ? (contentSrc.lessonContents || []).filter(c => !c.isAssignment && (c.textbook || c.customTextbook || c.detailUnit))
       : [];
-    
-    return { lastProgress, pendingHW, lastHomework, lastTest, lastSessionContents, unconquered: unconquered.length, weakTypes, lastUnderstanding, lastDate, totalSessions: sessions.length };
+
+    return {
+      lastProgress, pendingHW, lastHomework, lastTest, lastSessionContents,
+      unconquered: unconquered.length, weakTypes, lastUnderstanding,
+      lastDate, totalSessions: sessions.length,
+      // 결석 fallback 컨텍스트
+      wasAbsent, contentSessionDate
+    };
   };
 
   // 현재 활성 날짜 (날짜 검색 or 오늘)
@@ -39785,9 +39811,23 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
 
                     {/* 직전 수업 요약 */}
                     <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100">
-                      <p className="text-xs font-bold text-blue-700 mb-1.5">
-                        📖 직전 수업 요약
-                        {summary.lastDate && <span className="font-normal text-blue-400 ml-1">({summary.lastDate})</span>}
+                      <p className="text-xs font-bold text-blue-700 mb-1.5 flex items-center flex-wrap gap-x-1">
+                        <span>📖 직전 수업 요약</span>
+                        {summary.lastDate && (
+                          <span className="font-normal text-blue-400">
+                            (직전 수업일: {summary.lastDate}
+                            {summary.wasAbsent && <span className="ml-1 text-red-500 font-bold">❌ 결석</span>}
+                            )
+                          </span>
+                        )}
+                        {summary.wasAbsent && summary.contentSessionDate && (
+                          <span className="font-normal text-blue-400">
+                            → 직전의 직전 수업일: <span className="font-bold text-blue-600">{summary.contentSessionDate}</span> 내용 표시
+                          </span>
+                        )}
+                        {summary.wasAbsent && !summary.contentSessionDate && (
+                          <span className="text-red-500 font-normal">— 이전 출석 기록 없음</span>
+                        )}
                       </p>
                       {/* 직전 수업 내용 */}
                       {summary.lastSessionContents.length > 0 && (
@@ -39817,7 +39857,12 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                     {/* 직전 숙제 (보고서 연동) */}
                     {summary.lastHomework.length > 0 && (
                       <div className="bg-indigo-50 rounded-lg p-2.5 border border-indigo-100">
-                        <p className="text-[11px] font-bold text-indigo-700 mb-1.5">📋 직전 수업 숙제</p>
+                        <p className="text-[11px] font-bold text-indigo-700 mb-1.5 flex flex-wrap items-center gap-x-1">
+                          <span>📋 직전 수업 숙제</span>
+                          {summary.wasAbsent && summary.contentSessionDate && (
+                            <span className="font-normal text-indigo-400">({summary.contentSessionDate} 회차 기준)</span>
+                          )}
+                        </p>
                         {summary.lastHomework.map((hw, i) => (
                           <div key={i} className="flex items-center gap-2 mb-0.5">
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hw.completed ? 'bg-green-400' : 'bg-gray-300'}`} />
