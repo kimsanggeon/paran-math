@@ -39355,13 +39355,16 @@ function downloadLessonPrepDoc({ student, summary, activeDate }) {
     ? summary.lastHomework.map(hw => `<li>${hw.label}${hw.completed?' <span style="color:#059669;">(완료)</span>':''}</li>`).join('')
     : '<li style="color:#9ca3af;">기록 없음</li>';
 
-  const fmtContents = summary.lastSessionContents.length > 0
-    ? summary.lastSessionContents.map(c => {
+  const renderContentsList = (arr) => arr.length > 0
+    ? arr.map(c => {
         const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
         const parts = [tb, c.grade, c.pages?`p.${c.pages}`:'', c.detailUnit?`— ${c.detailUnit}`:''].filter(Boolean);
         return `<li>${parts.join(' ')}</li>`;
       }).join('')
     : '<li style="color:#9ca3af;">기록 없음</li>';
+
+  const fmtContents = renderContentsList(summary.lastSessionContents);
+  const fmtSupplement = summary.wasSupplement ? renderContentsList(summary.supplementContents || []) : '';
 
   const weakHtml = summary.weakTypes.length > 0
     ? `<div class="weak-box"><strong>⚠️ 취약 유형:</strong> ${summary.weakTypes.map(([t,c]) => `${WEAK_TYPE_ICON[toKorWeakType(t)]||''} ${toKorWeakType(t)} (${c}개)`).join(' · ')}</div>`
@@ -39394,11 +39397,16 @@ function downloadLessonPrepDoc({ student, summary, activeDate }) {
     </tr></table>
 
     <div class="summary-box">
-      <div><span class="lbl">📖 직전 수업</span>${summary.lastDate?`직전 수업일: <strong>${summary.lastDate}</strong>${summary.wasAbsent?' <span style="color:#dc2626;font-weight:700;">❌ 결석</span>':''}`:''}${summary.wasAbsent && summary.contentSessionDate?` &nbsp;→&nbsp; 직전의 직전 수업일: <strong>${summary.contentSessionDate}</strong> 내용 기준`:''}${summary.wasAbsent && !summary.contentSessionDate?' <span style="color:#dc2626;">(이전 출석 기록 없음)</span>':''}</div>
-      <ul>${fmtContents}</ul>
+      <div><span class="lbl">📖 직전 수업</span>${summary.lastDate?`직전 수업일: <strong>${summary.lastDate}</strong>${summary.wasAbsent?' <span style="color:#dc2626;font-weight:700;">❌ 결석</span>':''}${summary.wasSupplement?' <span style="color:#c2410c;font-weight:700;">🟠 보충</span>':''}`:''}${summary.wasAbsent && summary.contentSessionDate?` &nbsp;→&nbsp; 직전의 직전 수업일: <strong>${summary.contentSessionDate}</strong> 내용 기준`:''}${summary.wasAbsent && !summary.contentSessionDate?' <span style="color:#dc2626;">(이전 출석 기록 없음)</span>':''}${summary.wasSupplement && summary.regularSessionDate?` &nbsp;→&nbsp; 직전 정규 수업일: <strong>${summary.regularSessionDate}</strong>`:''}${summary.wasSupplement && !summary.regularSessionDate?' <span style="color:#c2410c;">(이전 정규 수업 기록 없음)</span>':''}</div>
+      ${summary.wasSupplement
+        ? `<div style="margin-top:4pt;font-weight:700;color:#1d4ed8;">📘 정규 수업 내용${summary.regularSessionDate?` <span style="font-weight:400;color:#6b7280;">(${summary.regularSessionDate})</span>`:''}</div>
+           <ul>${fmtContents}</ul>
+           <div style="margin-top:4pt;font-weight:700;color:#c2410c;">🟠 보충 수업 내용${summary.supplementDate?` <span style="font-weight:400;color:#6b7280;">(${summary.supplementDate})</span>`:''}</div>
+           <ul>${fmtSupplement}</ul>`
+        : `<ul>${fmtContents}</ul>`}
       ${summary.lastTest?`<div style="margin-top:4pt;"><span class="lbl">📊 최근 시험</span>${summary.lastTest.name} ${summary.lastTest.score}/${summary.lastTest.total}점${summary.lastTest.date?` (${summary.lastTest.date})`:''}</div>`:''}
       ${summary.lastUnderstanding?`<div style="margin-top:2pt;"><span class="lbl">🌟 이해도</span>${'⭐'.repeat(summary.lastUnderstanding)}</div>`:''}
-      <div style="margin-top:6pt;"><span class="lbl">📋 직전 수업 숙제</span>${summary.wasAbsent && summary.contentSessionDate?` <span style="color:#6366f1;font-weight:400;">(${summary.contentSessionDate} 회차 기준)</span>`:''}</div>
+      <div style="margin-top:6pt;"><span class="lbl">📋 직전 수업 숙제</span>${summary.wasAbsent && summary.contentSessionDate?` <span style="color:#6366f1;font-weight:400;">(${summary.contentSessionDate} 회차 기준)</span>`:''}${summary.wasSupplement && summary.regularSessionDate?` <span style="color:#6366f1;font-weight:400;">(📘 정규 수업 ${summary.regularSessionDate} 기준)</span>`:''}</div>
       <ul>${fmtHomework}</ul>
     </div>
 
@@ -39502,6 +39510,10 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
     //    학생이 결석한 회차에는 내용/숙제가 비어 있거나 학생에게 적용되지 않으므로,
     //    "다음 수업 준비" 관점에서는 학생이 실제로 받은 마지막 수업 회차가 기준.
     const wasAbsent = last?.attendanceStatus === 'absent';
+    // ★ 직전 수업이 "보충"이면 정규 회차 내용/과제 + 보충 내용을 함께 표시
+    //    보충은 통상 새 과제를 부여하지 않으므로 과제는 정규 회차 기준이 자연스러움.
+    const wasSupplement = !wasAbsent && last?.sessionType === 'supplementary';
+
     let contentSession = last;
     let contentSessionDate = last?.date;
     if (wasAbsent) {
@@ -39516,6 +39528,20 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
       if (contentSession === last) contentSessionDate = undefined;
     }
 
+    // 보충 직전의 가장 가까운 정규(또는 sessionType 미지정=레거시) 회차 찾기.
+    // 결석은 건너뛰어 학생이 실제로 받은 정규 수업을 찾는다.
+    let regularSession = null;
+    if (wasSupplement) {
+      for (let i = sessions.length - 2; i >= 0; i--) {
+        const s = sessions[i];
+        const isRegular = !s?.sessionType || s.sessionType === 'regular';
+        if (isRegular && s.attendanceStatus !== 'absent') {
+          regularSession = s;
+          break;
+        }
+      }
+    }
+
     // 마지막 진도 (실제 수업 받은 회차 기준 — 결석이면 직전의 직전 회차)
     let lastProgress = '기록 없음';
     if (contentSession) {
@@ -39525,9 +39551,15 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
     }
 
     // ★ 학생이 실제로 받은 마지막 수업의 숙제 목록 (학습 보고서 연동)
-    // assignments 배열 + lessonContents 중 isAssignment=true 항목 모두 수집
+    // - 결석이면: contentSession (직전의 직전 회차)
+    // - 보충이면: regularSession (보충 직전의 정규 회차)  [정규 과제만 부여 가정]
+    // - 평소: last
     let lastHomework = [];
-    const hwSource = wasAbsent && contentSession !== last ? contentSession : last;
+    const hwSource = wasAbsent && contentSession !== last
+      ? contentSession
+      : wasSupplement && regularSession
+        ? regularSession
+        : last;
     if (hwSource) {
       // assignments 배열
       (hwSource.assignments || []).forEach(a => {
@@ -39577,15 +39609,30 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
     const weakTypes = Object.entries(topWeakType).sort((a, b) => b[1] - a[1]).slice(0, 2);
     
     // 이해도 — 실제 수업 받은 회차 기준
-    const lastUnderstanding = (wasAbsent && contentSession !== last ? contentSession : last)?.understanding;
+    //  · 결석: 직전의 직전 회차 / 보충: 정규 회차 (없으면 보충 자체)
+    const understandingSrc = wasAbsent && contentSession !== last
+      ? contentSession
+      : wasSupplement && regularSession
+        ? regularSession
+        : last;
+    const lastUnderstanding = understandingSrc?.understanding;
 
-    // 마지막 수업일 (실제 가장 최근 회차 — 결석이라도 표기)
+    // 마지막 수업일 (실제 가장 최근 회차 — 결석/보충이라도 표기)
     const lastDate = last?.date;
 
-    // ★ 직전 수업 내용 — 결석이면 직전의 직전 회차 사용
-    const contentSrc = wasAbsent && contentSession !== last ? contentSession : last;
+    // ★ 직전 수업 내용 — 결석이면 직전의 직전 회차, 보충이면 정규 회차 우선
+    const contentSrc = wasAbsent && contentSession !== last
+      ? contentSession
+      : wasSupplement && regularSession
+        ? regularSession
+        : last;
     const lastSessionContents = contentSrc
       ? (contentSrc.lessonContents || []).filter(c => !c.isAssignment && (c.textbook || c.customTextbook || c.detailUnit))
+      : [];
+
+    // 보충 회차 자체의 내용 (정규와 함께 두 칸으로 노출하기 위해 별도 보관)
+    const supplementContents = wasSupplement && last
+      ? (last.lessonContents || []).filter(c => !c.isAssignment && (c.textbook || c.customTextbook || c.detailUnit))
       : [];
 
     return {
@@ -39593,7 +39640,12 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
       unconquered: unconquered.length, weakTypes, lastUnderstanding,
       lastDate, totalSessions: sessions.length,
       // 결석 fallback 컨텍스트
-      wasAbsent, contentSessionDate
+      wasAbsent, contentSessionDate,
+      // 보충 fallback 컨텍스트
+      wasSupplement,
+      regularSessionDate: regularSession?.date,
+      supplementContents,
+      supplementDate: wasSupplement ? last?.date : undefined,
     };
   };
 
@@ -39817,6 +39869,7 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                           <span className="font-normal text-blue-400">
                             (직전 수업일: {summary.lastDate}
                             {summary.wasAbsent && <span className="ml-1 text-red-500 font-bold">❌ 결석</span>}
+                            {summary.wasSupplement && <span className="ml-1 text-orange-600 font-bold">🟠 보충</span>}
                             )
                           </span>
                         )}
@@ -39828,26 +39881,90 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                         {summary.wasAbsent && !summary.contentSessionDate && (
                           <span className="text-red-500 font-normal">— 이전 출석 기록 없음</span>
                         )}
+                        {summary.wasSupplement && summary.regularSessionDate && (
+                          <span className="font-normal text-blue-400">
+                            → 직전 정규 수업일: <span className="font-bold text-blue-600">{summary.regularSessionDate}</span>
+                          </span>
+                        )}
+                        {summary.wasSupplement && !summary.regularSessionDate && (
+                          <span className="text-orange-500 font-normal">— 이전 정규 수업 기록 없음</span>
+                        )}
                       </p>
-                      {/* 직전 수업 내용 */}
-                      {summary.lastSessionContents.length > 0 && (
-                        <div className="mb-2 space-y-0.5">
-                          {summary.lastSessionContents.map((c, ci) => {
-                            const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
-                            return (
-                              <div key={ci} className="flex items-start gap-1 text-xs text-gray-700">
-                                <span className="text-blue-400 flex-shrink-0">•</span>
-                                <span>
-                                  {tb && <span className="font-medium">{tb}</span>}
-                                  {c.grade && <span className="text-gray-400 ml-1">{c.grade}</span>}
-                                  {c.pages && <span className="text-blue-600 ml-1">p.{c.pages}</span>}
-                                  {c.detailUnit && <span className="text-gray-500 ml-1">— {c.detailUnit}</span>}
-                                </span>
+
+                      {/* 보충 케이스: 정규 + 보충 두 블록 */}
+                      {summary.wasSupplement ? (
+                        <div className="space-y-2 mb-2">
+                          {/* 정규 수업 내용 */}
+                          <div className="bg-white rounded p-2 border border-blue-200">
+                            <p className="text-[10px] font-bold text-blue-700 mb-1">📘 정규 수업 내용{summary.regularSessionDate && <span className="font-normal text-blue-400 ml-1">({summary.regularSessionDate})</span>}</p>
+                            {summary.lastSessionContents.length > 0 ? (
+                              <div className="space-y-0.5">
+                                {summary.lastSessionContents.map((c, ci) => {
+                                  const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
+                                  return (
+                                    <div key={ci} className="flex items-start gap-1 text-xs text-gray-700">
+                                      <span className="text-blue-400 flex-shrink-0">•</span>
+                                      <span>
+                                        {tb && <span className="font-medium">{tb}</span>}
+                                        {c.grade && <span className="text-gray-400 ml-1">{c.grade}</span>}
+                                        {c.pages && <span className="text-blue-600 ml-1">p.{c.pages}</span>}
+                                        {c.detailUnit && <span className="text-gray-500 ml-1">— {c.detailUnit}</span>}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            );
-                          })}
+                            ) : (
+                              <p className="text-[11px] text-gray-400">기록 없음</p>
+                            )}
+                          </div>
+                          {/* 보충 수업 내용 */}
+                          <div className="bg-orange-50 rounded p-2 border border-orange-200">
+                            <p className="text-[10px] font-bold text-orange-700 mb-1">🟠 보충 수업 내용{summary.supplementDate && <span className="font-normal text-orange-400 ml-1">({summary.supplementDate})</span>}</p>
+                            {summary.supplementContents.length > 0 ? (
+                              <div className="space-y-0.5">
+                                {summary.supplementContents.map((c, ci) => {
+                                  const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
+                                  return (
+                                    <div key={ci} className="flex items-start gap-1 text-xs text-gray-700">
+                                      <span className="text-orange-400 flex-shrink-0">•</span>
+                                      <span>
+                                        {tb && <span className="font-medium">{tb}</span>}
+                                        {c.grade && <span className="text-gray-400 ml-1">{c.grade}</span>}
+                                        {c.pages && <span className="text-orange-600 ml-1">p.{c.pages}</span>}
+                                        {c.detailUnit && <span className="text-gray-500 ml-1">— {c.detailUnit}</span>}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-gray-400">기록 없음</p>
+                            )}
+                          </div>
                         </div>
+                      ) : (
+                        /* 평소(또는 결석 폴백) 케이스: 단일 블록 */
+                        summary.lastSessionContents.length > 0 && (
+                          <div className="mb-2 space-y-0.5">
+                            {summary.lastSessionContents.map((c, ci) => {
+                              const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
+                              return (
+                                <div key={ci} className="flex items-start gap-1 text-xs text-gray-700">
+                                  <span className="text-blue-400 flex-shrink-0">•</span>
+                                  <span>
+                                    {tb && <span className="font-medium">{tb}</span>}
+                                    {c.grade && <span className="text-gray-400 ml-1">{c.grade}</span>}
+                                    {c.pages && <span className="text-blue-600 ml-1">p.{c.pages}</span>}
+                                    {c.detailUnit && <span className="text-gray-500 ml-1">— {c.detailUnit}</span>}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )
                       )}
+
                       <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
                         {summary.lastTest && <span><span className="text-gray-500">시험:</span> <span className="font-medium">{summary.lastTest.name} {summary.lastTest.score}/{summary.lastTest.total}점</span></span>}
                         {summary.lastUnderstanding && <span><span className="text-gray-500">이해도:</span> <span>{'⭐'.repeat(summary.lastUnderstanding)}</span></span>}
@@ -39861,6 +39978,9 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                           <span>📋 직전 수업 숙제</span>
                           {summary.wasAbsent && summary.contentSessionDate && (
                             <span className="font-normal text-indigo-400">({summary.contentSessionDate} 회차 기준)</span>
+                          )}
+                          {summary.wasSupplement && summary.regularSessionDate && (
+                            <span className="font-normal text-indigo-400">(📘 정규 수업 {summary.regularSessionDate} 기준)</span>
                           )}
                         </p>
                         {summary.lastHomework.map((hw, i) => (
