@@ -6634,27 +6634,45 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
 
             {/* 📝 시험 이력 요약 */}
             {(() => {
+              // 점수/총점 산출 — 답안 그리드(testAnswers)가 비어 있을 때
+              // testScore/testTotal 직접 입력값을 폴백으로 사용.
+              // 체킹누적테스트·일요모의고사 등은 점수만 입력하는 경우가 많아 이 폴백이 필수.
+              const deriveScore = (src) => {
+                const ans = src.testAnswers || [];
+                const answered = ans.filter(a => a !== null && a !== undefined).length;
+                if (src.correctAnswers !== undefined && src.totalProblems !== undefined) {
+                  return { correct: src.correctAnswers, total: src.totalProblems };
+                }
+                if (answered > 0) {
+                  return { correct: ans.filter(a => a === true).length, total: answered };
+                }
+                const sc = parseFloat(src.testScore);
+                const tot = parseFloat(src.testTotal);
+                if (!isNaN(sc) && !isNaN(tot) && tot > 0) {
+                  return { correct: sc, total: tot };
+                }
+                return { correct: 0, total: 0 };
+              };
+
               const allTests = [];
               (reportData?.sessions || []).forEach(sess => {
                 const d = sess.date || '';
                 // session-level test (구 형식)
-                if (sess.testType && sess.testAnswers?.length > 0) {
-                  const ans = sess.testAnswers || [];
+                if (sess.testType && ((sess.testAnswers?.length || 0) > 0 || sess.testScore !== undefined)) {
+                  const s = deriveScore(sess);
                   allTests.push({
                     date: d, type: sess.testType === '기타' ? sess.customTestName : sess.testType,
-                    correct: ans.filter(a => a === true).length,
-                    total: ans.filter(a => a !== null).length,
+                    correct: s.correct, total: s.total,
                     scope: sess.testScope || ''
                   });
                 }
                 // session.tests[] (신 형식)
                 (sess.tests || []).forEach(test => {
-                  const ans = test.testAnswers || [];
+                  const s = deriveScore(test);
                   allTests.push({
                     date: test.date || d,
                     type: test.testType === '기타' ? (test.customTestName || test.testName || '기타') : (test.testType || test.testName || '시험'),
-                    correct: test.correctAnswers !== undefined ? test.correctAnswers : ans.filter(a => a === true).length,
-                    total: test.totalProblems !== undefined ? test.totalProblems : ans.filter(a => a !== null).length,
+                    correct: s.correct, total: s.total,
                     scope: test.testScope || ''
                   });
                 });
