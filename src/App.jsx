@@ -23127,6 +23127,191 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                 >📥 워드 다운로드</button>
                               </div>
 
+                              {/* 🎯 종합 개념 테스트 — 학년/레벨 선택 + 단원·개념별 채점판 */}
+                              {(() => {
+                                const level = test.conceptTestLevel || '';
+                                const bankUnits = CONCEPT_TEST_BANK[level] || [];
+                                const grades = test.conceptGrades || {}; // { 'roman': { conceptN: 0|5|10 } }
+                                const noteMap = test.conceptNotes || {}; // { 'roman': { conceptN: string } }
+                                const selUnits = test.conceptSelectedUnits || []; // ['Ⅰ','Ⅱ',...]
+                                const setGrade = (roman, n, score) => {
+                                  const next = { ...grades, [roman]: { ...(grades[roman] || {}), [n]: score } };
+                                  // 자동 점수 계산 — 선택된 단원의 개념만 합산
+                                  const newSelUnits = selUnits.length > 0 ? selUnits : bankUnits.map(u => u.roman);
+                                  let earned = 0, totalMax = 0;
+                                  newSelUnits.forEach(r => {
+                                    const u = bankUnits.find(b => b.roman === r);
+                                    if (!u) return;
+                                    u.concepts.forEach(c => {
+                                      totalMax += 10;
+                                      const sv = (next[r] || {})[c.n];
+                                      if (typeof sv === 'number') earned += sv;
+                                    });
+                                  });
+                                  updateTestField(testIndex, 'conceptGrades', next);
+                                  if (totalMax > 0) {
+                                    updateTestField(testIndex, 'testScore', String(earned));
+                                    updateTestField(testIndex, 'testTotal', String(totalMax));
+                                  }
+                                };
+                                const setNote = (roman, n, note) => {
+                                  const next = { ...noteMap, [roman]: { ...(noteMap[roman] || {}), [n]: note } };
+                                  updateTestField(testIndex, 'conceptNotes', next);
+                                };
+                                const toggleUnit = (roman) => {
+                                  let next = selUnits.includes(roman) ? selUnits.filter(r => r !== roman) : [...selUnits, roman];
+                                  updateTestField(testIndex, 'conceptSelectedUnits', next);
+                                  // 점수 재계산
+                                  const newSelUnits = next.length > 0 ? next : bankUnits.map(u => u.roman);
+                                  let earned = 0, totalMax = 0;
+                                  newSelUnits.forEach(r => {
+                                    const u = bankUnits.find(b => b.roman === r);
+                                    if (!u) return;
+                                    u.concepts.forEach(c => {
+                                      totalMax += 10;
+                                      const sv = (grades[r] || {})[c.n];
+                                      if (typeof sv === 'number') earned += sv;
+                                    });
+                                  });
+                                  if (totalMax > 0) {
+                                    updateTestField(testIndex, 'testScore', String(earned));
+                                    updateTestField(testIndex, 'testTotal', String(totalMax));
+                                  }
+                                };
+                                const selectAllUnits = () => {
+                                  const allRomans = bankUnits.map(u => u.roman);
+                                  updateTestField(testIndex, 'conceptSelectedUnits', allRomans);
+                                  let earned = 0, totalMax = 0;
+                                  allRomans.forEach(r => {
+                                    const u = bankUnits.find(b => b.roman === r);
+                                    u.concepts.forEach(c => {
+                                      totalMax += 10;
+                                      const sv = (grades[r] || {})[c.n];
+                                      if (typeof sv === 'number') earned += sv;
+                                    });
+                                  });
+                                  if (totalMax > 0) {
+                                    updateTestField(testIndex, 'testScore', String(earned));
+                                    updateTestField(testIndex, 'testTotal', String(totalMax));
+                                  }
+                                };
+                                const clearAllGrades = () => {
+                                  updateTestField(testIndex, 'conceptGrades', {});
+                                  updateTestField(testIndex, 'testScore', '0');
+                                };
+                                // 활성 단원 (선택 안 했으면 전체)
+                                const activeRomans = selUnits.length > 0 ? selUnits : bankUnits.map(u => u.roman);
+                                const activeUnits = bankUnits.filter(u => activeRomans.includes(u.roman));
+                                const totalConcepts = activeUnits.reduce((s, u) => s + u.concepts.length, 0);
+                                const gradedConcepts = activeUnits.reduce((s, u) => s + u.concepts.filter(c => typeof (grades[u.roman] || {})[c.n] === 'number').length, 0);
+                                const earnedPts = activeUnits.reduce((s, u) => s + u.concepts.reduce((ss, c) => {
+                                  const sv = (grades[u.roman] || {})[c.n];
+                                  return ss + (typeof sv === 'number' ? sv : 0);
+                                }, 0), 0);
+                                const maxPts = totalConcepts * 10;
+
+                                return (
+                                  <div className="bg-white rounded-lg border border-indigo-200 p-2.5 space-y-2.5">
+                                    <p className="text-[11px] font-bold text-indigo-800">🎯 채점판 — 학년 · 레벨 · 단원별 개념 (각 10점)</p>
+
+                                    {/* 학년/레벨 선택 */}
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {Object.entries(CONCEPT_LEVEL_LABEL).map(([k, label]) => (
+                                        <button key={k} type="button"
+                                          onClick={() => { updateTestField(testIndex, 'conceptTestLevel', k); updateTestField(testIndex, 'conceptSelectedUnits', []); updateTestField(testIndex, 'conceptGrades', {}); }}
+                                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold border-2 transition-all ${ level === k ? (k.endsWith('_adv') ? 'bg-rose-500 text-white border-rose-600' : 'bg-emerald-500 text-white border-emerald-600') : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400' }`}>
+                                          {label}
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    {!level && (
+                                      <p className="text-[11px] text-gray-400 italic text-center py-3">먼저 학년·레벨을 선택하세요. 단원과 개념 목록이 자동으로 표시됩니다.</p>
+                                    )}
+
+                                    {level && bankUnits.length > 0 && (
+                                      <>
+                                        {/* 단원 토글 + 진행률 */}
+                                        <div className="flex items-center justify-between bg-indigo-50 rounded p-2">
+                                          <div className="text-[11px] text-indigo-700 font-bold">
+                                            {gradedConcepts}/{totalConcepts}개념 채점 · {earnedPts}/{maxPts}점
+                                            {maxPts > 0 && <span className="text-indigo-500 font-normal ml-1">({Math.round(earnedPts/maxPts*100)}%)</span>}
+                                          </div>
+                                          <div className="flex gap-1">
+                                            <button type="button" onClick={selectAllUnits} className="text-[10px] px-2 py-0.5 bg-white text-indigo-700 rounded border border-indigo-300 hover:bg-indigo-100">전체</button>
+                                            <button type="button" onClick={clearAllGrades} className="text-[10px] px-2 py-0.5 bg-white text-red-500 rounded border border-red-200 hover:bg-red-50">채점 초기화</button>
+                                          </div>
+                                        </div>
+
+                                        {/* 단원 선택 칩 */}
+                                        <div>
+                                          <p className="text-[10px] text-indigo-600 font-bold mb-1">📚 단원 선택 (다중) — 미선택 시 전체</p>
+                                          <div className="flex flex-wrap gap-1">
+                                            {bankUnits.map(u => {
+                                              const sel = selUnits.includes(u.roman);
+                                              const sem = u.semester;
+                                              return (
+                                                <button key={u.roman} type="button" onClick={() => toggleUnit(u.roman)}
+                                                  className={`px-2 py-1 rounded text-[10px] font-medium border ${ sel ? 'bg-indigo-500 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400' }`}
+                                                  title={`${sem} · ${u.roman}. ${u.name} (${u.concepts.length}개념)`}>
+                                                  <span className="opacity-60 mr-0.5">{sem === '1학기' ? '①' : '②'}</span>
+                                                  {u.roman}. {u.name.replace(/\s*\(.*?\)$/, '').slice(0, 12)}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+
+                                        {/* 단원별 개념 채점 */}
+                                        <div className="space-y-2">
+                                          {activeUnits.map(u => (
+                                            <div key={u.roman} className="border border-indigo-100 rounded p-2 bg-indigo-50/30">
+                                              <p className="text-[11px] font-bold text-indigo-800 mb-1.5">
+                                                <span className="text-[9px] text-indigo-400 mr-1">[{u.semester}]</span>
+                                                {u.roman}. {u.name}
+                                                <span className="ml-1 text-[10px] font-normal text-indigo-400">({u.concepts.length}개념 · {u.concepts.length * 10}점)</span>
+                                              </p>
+                                              <div className="space-y-1">
+                                                {u.concepts.map(c => {
+                                                  const score = (grades[u.roman] || {})[c.n];
+                                                  return (
+                                                    <div key={c.n} className="bg-white rounded p-1.5 border border-indigo-100">
+                                                      <div className="flex items-start gap-1.5">
+                                                        <span className="text-[11px] font-bold text-indigo-600 w-7 flex-shrink-0 text-center pt-1">{c.n}</span>
+                                                        <p className="flex-1 text-[10.5px] text-gray-700 leading-snug pt-0.5">{c.title}</p>
+                                                        <div className="flex gap-0.5 flex-shrink-0">
+                                                          {[
+                                                            { v: 10, label: '✅', color: 'bg-green-500 text-white', name: '완전' },
+                                                            { v: 5,  label: '🔶', color: 'bg-orange-400 text-white', name: '부분' },
+                                                            { v: 0,  label: '❌', color: 'bg-red-500 text-white', name: '미흡' },
+                                                          ].map(b => (
+                                                            <button key={b.v} type="button"
+                                                              onClick={() => setGrade(u.roman, c.n, score === b.v ? undefined : b.v)}
+                                                              title={`${b.name} (${b.v}점)`}
+                                                              className={`w-7 h-7 rounded text-xs font-bold border ${ score === b.v ? b.color + ' border-transparent shadow' : 'bg-white text-gray-300 border-gray-200 hover:border-gray-400' }`}>
+                                                              {b.label}
+                                                            </button>
+                                                          ))}
+                                                        </div>
+                                                      </div>
+                                                      <input type="text"
+                                                        value={(noteMap[u.roman] || {})[c.n] || ''}
+                                                        onChange={(e) => setNote(u.roman, c.n, e.target.value)}
+                                                        className="w-full mt-1 p-1 border border-indigo-100 rounded text-[10px] bg-white"
+                                                        placeholder="채점 메모 (선택)" />
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
                               {/* ① 개념별 이해도 — 단원 행 추가 */}
                               <div>
                                 <div className="flex items-center justify-between mb-1">
@@ -23432,7 +23617,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                             </div>
                             )}
 
-                            {/* 채점판 ── MC + 서술형 통합 */}
+                            {/* 채점판 ── MC + 서술형 통합 (종합 개념 테스트는 별도 개념 채점판 사용) */}
+                            {test.testType !== '종합 개념 테스트' && (
                             <div style={{background:"#f9fafb", borderRadius:"8px", border:"1px solid #e5e7eb", width:"100%", boxSizing:"border-box", overflow:"hidden"}}>
                               {/* ── 헤더: 문제 수 설정 ── */}
                               <div style={{background:"white", borderBottom:"1px solid #e5e7eb", padding:"10px 8px", display:"flex", flexDirection:"column", gap:"8px", width:"100%", boxSizing:"border-box"}}>
@@ -23829,7 +24015,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                 );
                               })()}
                             </div>
-                            
+                            )}
+
                             {/* 결과 분석 표시 */}
                             {test.testScore && test.testTotal && (
                               <div className="mt-2 p-2 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg text-xs border border-blue-100 space-y-1.5">
@@ -39763,6 +39950,353 @@ function downloadTowerGuideDoc() {
 }
 
 // ──────────────────────────────────────────────────────────
+// 🧠 종합 개념 테스트 — 단원·개념 데이터 (학년 × 핵심/심화)
+//   파란수학학원 몰입관 서술형 교재(중1·중2·중3 / 핵심·심화) 6권 기준.
+//   각 개념 만점 10점, 채점: 완전(10) / 부분(5) / 미흡(0).
+// ──────────────────────────────────────────────────────────
+const CONCEPT_TEST_BANK = {
+  "m1_core": [
+    { roman: "Ⅰ", name: "소인수분해", semester: "1학기", concepts: [
+      { n: 1, title: "소수와 합성수의 정의를 서술하고, 두 수를 어떻게 구별하는지" },
+      { n: 2, title: "거듭제곱의 의미와 표기 방법" },
+      { n: 3, title: "자연수를 소인수분해 하는 방법을 단계별로" },
+      { n: 4, title: "소인수분해를 이용하여 약수의 개수를 구하는 방법(원리)" },
+      { n: 5, title: "최대공약수와 최소공배수를 소인수분해로 구하는 방법" },
+    ] },
+    { roman: "Ⅱ", name: "정수와 유리수", semester: "1학기", concepts: [
+      { n: 1, title: "정수와 유리수의 정의와 분류 방법" },
+      { n: 2, title: "절댓값의 정의를 수직선을 이용하여" },
+      { n: 3, title: "두 유리수의 대소 비교 방법을 수직선을 이용하여" },
+      { n: 4, title: "유리수의 덧셈에서 부호와 절댓값을 어떻게 다루는지" },
+      { n: 5, title: "유리수의 곱셈에서 부호를 결정하는 규칙" },
+      { n: 6, title: "분배법칙이 무엇인지 서술하고, 그 활용" },
+    ] },
+    { roman: "Ⅲ", name: "문자와 식", semester: "1학기", concepts: [
+      { n: 1, title: "문자를 사용한 식에서 곱셈·나눗셈 기호를 생략하는 규칙" },
+      { n: 2, title: "식의 값을 구하는 방법" },
+      { n: 3, title: "항, 계수, 차수, 일차식의 의미" },
+      { n: 4, title: "동류항이 무엇이며, 동류항을 정리하는 방법" },
+      { n: 5, title: "일차식의 덧셈과 뺄셈 방법" },
+    ] },
+    { roman: "Ⅳ", name: "일차방정식", semester: "1학기", concepts: [
+      { n: 1, title: "방정식과 항등식의 차이" },
+      { n: 2, title: "등식의 성질 4가지" },
+      { n: 3, title: "이항이 무엇인지, 어떤 원리에서 나오는지" },
+      { n: 4, title: "일차방정식의 정의와 푸는 방법(일반적인 단계)" },
+      { n: 5, title: "일차방정식의 활용 문제를 푸는 일반적인 단계" },
+    ] },
+    { roman: "Ⅴ", name: "좌표평면과 그래프 (정비례·반비례)", semester: "2학기", concepts: [
+      { n: 1, title: "좌표평면의 구성과 사분면 결정 방법" },
+      { n: 2, title: "정비례 관계의 정의와 그래프의 특징" },
+      { n: 3, title: "반비례 관계의 정의와 그래프의 특징" },
+      { n: 4, title: "정비례와 반비례의 차이점을 비교하여" },
+      { n: 5, title: "주어진 정비례 관계식의 그래프를 그리는 방법" },
+    ] },
+    { roman: "Ⅵ", name: "기본 도형과 작도 · 합동", semester: "2학기", concepts: [
+      { n: 1, title: "직선, 반직선, 선분의 차이" },
+      { n: 2, title: "맞꼭지각의 정의와 성질" },
+      { n: 3, title: "동위각·엇각의 정의와 평행선의 성질" },
+      { n: 4, title: "작도가 무엇인지, 어떤 도구를 사용하는지" },
+      { n: 5, title: "삼각형의 합동 조건 3가지" },
+    ] },
+    { roman: "Ⅶ", name: "평면도형의 성질", semester: "2학기", concepts: [
+      { n: 1, title: "다각형, 정다각형, 대각선의 의미" },
+      { n: 2, title: "n각형의 내각의 합 공식이 어떻게 유도되는지" },
+      { n: 3, title: "다각형의 외각의 합이 항상 360°인 이유" },
+      { n: 4, title: "원과 관련된 용어(호, 현, 부채꼴, 활꼴, 중심각)" },
+      { n: 5, title: "한 원에서 중심각과 호의 길이의 관계, 그리고 부채꼴의 호의 길이·넓이 공식" },
+    ] },
+    { roman: "Ⅷ", name: "입체도형의 성질", semester: "2학기", concepts: [
+      { n: 1, title: "다면체의 정의와 정다면체에 대해" },
+      { n: 2, title: "회전체의 정의와 회전체를 평면으로 자른 단면의 모양" },
+      { n: 3, title: "기둥(각기둥·원기둥)의 부피 공식의 의미" },
+      { n: 4, title: "뿔(각뿔·원뿔)의 부피 공식과 기둥과의 관계" },
+      { n: 5, title: "구의 겉넓이와 부피 공식" },
+    ] },
+    { roman: "Ⅸ", name: "자료의 정리와 해석", semester: "2학기", concepts: [
+      { n: 1, title: "통계 용어(변량, 계급, 계급의 크기, 도수, 계급값)의 의미" },
+      { n: 2, title: "도수분포표를 만드는 방법을 단계별로" },
+      { n: 3, title: "히스토그램과 도수분포다각형을 그리는 방법과 차이점" },
+      { n: 4, title: "상대도수의 정의와 그것을 사용하는 이유" },
+      { n: 5, title: "도수분포표에서 평균을 구하는 방법" },
+    ] },
+  ],
+  "m1_adv": [
+    { roman: "Ⅰ", name: "소인수분해 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "자연수가 \"어떤 자연수의 제곱\"이 되기 위한 조건" },
+      { n: 2, title: "두 자연수의 곱과 최대공약수·최소공배수의 관계" },
+      { n: 3, title: "두 수가 \"서로소\"일 때의 특별한 성질" },
+      { n: 4, title: "어떤 수의 \"거듭제곱\"의 약수의 개수가 어떻게 변하는지" },
+    ] },
+    { roman: "Ⅱ", name: "정수와 유리수 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "(음수) × (음수) = (양수) 가 되는 이유를 분배법칙을 이용하여" },
+      { n: 2, title: "역수의 정의와 성질" },
+      { n: 3, title: "유리수의 뺄셈과 나눗셈을 어떻게 다루는지 그 원리" },
+      { n: 4, title: "절댓값의 성질" },
+      { n: 5, title: "두 유리수 사이에는 항상 또 다른 유리수가 있다는 사실" },
+    ] },
+    { roman: "Ⅲ", name: "문자와 식 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "다항식을 \"간단히 한다\"는 것이 무엇이며, 어떤 상태가 되어야 하는지" },
+      { n: 2, title: "일차식과 \"수\"의 곱셈 방법과 그 원리" },
+      { n: 3, title: "분수꼴의 일차식을 어떻게 처리하는지" },
+      { n: 4, title: "일차식과 \"일차식이 아닌 식\"을 구분하는 방법" },
+    ] },
+    { roman: "Ⅳ", name: "일차방정식 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "방정식 ax = b 에서 해의 개수가 어떻게 달라지는지" },
+      { n: 2, title: "비례식의 성질과 그것이 성립하는 이유" },
+      { n: 3, title: "거리·속력·시간 관계식의 의미와 활용 방법" },
+      { n: 4, title: "농도(소금물) 문제의 핵심 관계식과 풀이 원리" },
+    ] },
+    { roman: "Ⅴ", name: "좌표평면과 그래프 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "정비례 관계 y = ax 에서 비례상수 a의 의미" },
+      { n: 2, title: "어떤 점이 정비례·반비례 그래프 \"위에 있다\"는 것의 의미" },
+      { n: 3, title: "정비례·반비례 그래프 위의 점들이 가진 \"공통 성질\"" },
+      { n: 4, title: "정비례·반비례 그래프의 대칭성" },
+    ] },
+    { roman: "Ⅵ", name: "기본 도형과 작도 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "거리에 관한 세 가지 정의(점-점, 점-직선, 평행한 두 직선)" },
+      { n: 2, title: "평면에서 두 직선의 위치 관계를 모두" },
+      { n: 3, title: "공간에서 두 직선의 위치 관계와 \"꼬인 위치\"의 의미" },
+      { n: 4, title: "공간에서 직선과 평면의 위치 관계" },
+      { n: 5, title: "선분의 수직이등분선을 작도하는 방법과 그 원리" },
+    ] },
+    { roman: "Ⅶ", name: "평면도형의 성질 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "정다각형의 한 내각·한 외각의 크기 공식 유도" },
+      { n: 2, title: "한 외각의 크기로부터 정다각형의 변의 개수를 구하는 방법" },
+      { n: 3, title: "부채꼴의 넓이를 호의 길이로 나타내는 공식 유도" },
+      { n: 4, title: "한 원에서 두 부채꼴의 호의 길이와 넓이의 비" },
+    ] },
+    { roman: "Ⅷ", name: "입체도형의 성질 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "n각기둥의 꼭짓점, 모서리, 면의 개수 일반화" },
+      { n: 2, title: "n각뿔의 꼭짓점, 모서리, 면의 개수 일반화" },
+      { n: 3, title: "원뿔의 옆면을 펼친 모양과 그 크기" },
+      { n: 4, title: "원뿔 옆면(부채꼴)의 중심각을 구하는 방법" },
+      { n: 5, title: "정다면체가 5가지뿐인 이유" },
+    ] },
+    { roman: "Ⅸ", name: "자료의 정리와 해석 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "도수분포표를 사용할 때 발생하는 \"자료의 손실\"" },
+      { n: 2, title: "도수분포다각형의 모양으로부터 자료의 분포 해석" },
+      { n: 3, title: "상대도수가 자료 비교에 유리한 \"구체적인 예시\"" },
+      { n: 4, title: "도수분포표에서 \"누적도수\" 의 의미와 활용" },
+    ] },
+  ],
+  "m2_core": [
+    { roman: "Ⅰ", name: "유리수와 순환소수", semester: "1학기", concepts: [
+      { n: 1, title: "유한소수와 무한소수, 순환소수의 정의" },
+      { n: 2, title: "어떤 분수가 유한소수로 나타내어지는 조건" },
+      { n: 3, title: "순환소수를 분수로 고치는 방법을 단계별로" },
+      { n: 4, title: "유리수와 순환소수의 관계를 정리하여" },
+    ] },
+    { roman: "Ⅱ", name: "식의 계산 (지수법칙·다항식)", semester: "1학기", concepts: [
+      { n: 1, title: "지수법칙(자연수 지수)을 모두" },
+      { n: 2, title: "단항식의 곱셈과 나눗셈 방법" },
+      { n: 3, title: "다항식과 다항식의 덧셈·뺄셈 방법" },
+      { n: 4, title: "단항식·다항식의 곱셈/나눗셈 방법" },
+    ] },
+    { roman: "Ⅲ", name: "일차부등식과 연립일차방정식", semester: "1학기", concepts: [
+      { n: 1, title: "부등식과 일차부등식의 정의 · 해의 의미" },
+      { n: 2, title: "부등식의 성질 (음수 곱·나눗셈 주의)" },
+      { n: 3, title: "일차부등식을 푸는 단계" },
+      { n: 4, title: "미지수 2개인 일차방정식과 그 해의 의미" },
+      { n: 5, title: "연립일차방정식의 해와 푸는 두 가지 방법" },
+    ] },
+    { roman: "Ⅳ", name: "일차함수와 그 그래프", semester: "1학기", concepts: [
+      { n: 1, title: "함수와 일차함수의 정의" },
+      { n: 2, title: "y = ax + b 그래프와 정비례 그래프의 관계" },
+      { n: 3, title: "x절편, y절편 의 정의와 구하는 방법" },
+      { n: 4, title: "일차함수 \"기울기\" 의 정의와 의미" },
+      { n: 5, title: "두 일차함수 그래프와 연립방정식의 해의 관계" },
+    ] },
+    { roman: "Ⅴ", name: "도형의 성질 (이등변삼각형·사각형)", semester: "2학기", concepts: [
+      { n: 1, title: "이등변삼각형의 정의와 두 가지 성질" },
+      { n: 2, title: "직각삼각형의 합동 조건 두 가지" },
+      { n: 3, title: "삼각형의 외심과 내심의 정의와 성질" },
+      { n: 4, title: "평행사변형의 정의와 네 가지 성질" },
+      { n: 5, title: "여러 사각형의 정의와 평행사변형과의 관계" },
+    ] },
+    { roman: "Ⅵ", name: "도형의 닮음", semester: "2학기", concepts: [
+      { n: 1, title: "닮음의 정의와 닮음비, 닮음 기호 표기" },
+      { n: 2, title: "삼각형의 닮음 조건 세 가지" },
+      { n: 3, title: "삼각형에서 평행선과 선분의 길이의 비 정리" },
+      { n: 4, title: "삼각형의 두 변의 중점을 연결한 선분의 성질" },
+    ] },
+    { roman: "Ⅶ", name: "피타고라스 정리", semester: "2학기", concepts: [
+      { n: 1, title: "피타고라스 정리" },
+      { n: 2, title: "피타고라스 정리의 \"역\" 과 그 활용" },
+      { n: 3, title: "좌표평면에서 두 점 사이의 거리를 구하는 방법" },
+    ] },
+    { roman: "Ⅷ", name: "확률", semester: "2학기", concepts: [
+      { n: 1, title: "사건과 경우의 수의 정의" },
+      { n: 2, title: "경우의 수의 합의 법칙·곱의 법칙" },
+      { n: 3, title: "확률의 정의와 그 값의 범위" },
+      { n: 4, title: "여사건의 확률과 그 활용" },
+      { n: 5, title: "두 사건의 확률의 덧셈정리·곱셈정리" },
+    ] },
+  ],
+  "m2_adv": [
+    { roman: "Ⅰ", name: "유리수와 순환소수 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "0.9̇ = 1 임을 보이고, 그 의미" },
+      { n: 2, title: "분수의 \"순환마디 길이\"와 분모의 관련성" },
+      { n: 3, title: "유한소수가 되는 분수를 변환하는 원리" },
+      { n: 4, title: "순환소수↔분수 빠른 변환 공식과 그 원리" },
+    ] },
+    { roman: "Ⅱ", name: "식의 계산 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "지수법칙이 성립하는 원리 (거듭제곱 정의)" },
+      { n: 2, title: "지수법칙 나눗셈에서 m<n / m=n 경우의 처리" },
+      { n: 3, title: "지수법칙 적용 시 흔한 실수와 올바른 처리" },
+      { n: 4, title: "다항식 곱셈에서 \"전개\"의 원리" },
+    ] },
+    { roman: "Ⅲ", name: "일차부등식과 연립방정식 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "부등식의 해를 수직선 위에 나타내는 방법" },
+      { n: 2, title: "연립방정식 해의 개수가 3가지로 나뉘는 경우" },
+      { n: 3, title: "거리·속력·시간 — \"왕복 평균 속력\"의 함정" },
+      { n: 4, title: "농도 문제의 \"물 추가·증발\" 변화 원리" },
+    ] },
+    { roman: "Ⅳ", name: "일차함수 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "일차함수의 그래프를 그리는 두 가지 방법 비교" },
+      { n: 2, title: "기울기와 한 점 / 두 점으로 식을 구하는 방법" },
+      { n: 3, title: "그래프와 좌표축이 이루는 삼각형의 넓이" },
+      { n: 4, title: "일차함수 활용 — 변하는 양 사이의 관계식" },
+    ] },
+    { roman: "Ⅴ", name: "도형의 성질 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "이등변삼각형 \"두 밑각 같음\"을 합동으로 증명" },
+      { n: 2, title: "외심·내심을 수직이등분선·각의 이등분선으로 결정하는 이유" },
+      { n: 3, title: "평행사변형 \"두 대각선 이등분\" 합동 증명" },
+      { n: 4, title: "어떤 사각형이 평행사변형이 되는 5가지 조건" },
+      { n: 5, title: "여러 사각형의 \"대각선의 성질\" 비교" },
+    ] },
+    { roman: "Ⅵ", name: "도형의 닮음 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "닮은 입체도형의 부피의 비 = 닮음비의 세제곱 이유" },
+      { n: 2, title: "직각삼각형 빗변의 수선으로 만들어지는 닮은 세 삼각형" },
+      { n: 3, title: "삼각형에서 평행선이 변에 만든 비의 \"역\" 정리" },
+      { n: 4, title: "삼각형의 무게중심의 정의와 성질" },
+    ] },
+    { roman: "Ⅶ", name: "피타고라스 정리 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "피타고라스 정리를 \"넓이\" 관점으로 증명" },
+      { n: 2, title: "정사각형의 대각선 길이가 √2 a 임을 보임" },
+      { n: 3, title: "직육면체의 대각선 길이 공식 유도" },
+    ] },
+    { roman: "Ⅷ", name: "확률 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "\"중복 허용하지 않는\" 경우의 수 두 가지 상황 비교" },
+      { n: 2, title: "순서 있음 vs 순서 없음 의 차이" },
+      { n: 3, title: "확률에서 \"같은 가능성\" 가정의 중요성" },
+      { n: 4, title: "확률 덧셈정리에서 동시에 일어나는 경우 공식" },
+      { n: 5, title: "꺼낸 것을 다시 넣는 경우 vs 안 넣는 경우" },
+    ] },
+  ],
+  "m3_core": [
+    { roman: "Ⅰ", name: "제곱근과 실수", semester: "1학기", concepts: [
+      { n: 1, title: "제곱근의 정의" },
+      { n: 2, title: "근호 √ 의 의미와 \"제곱근\" vs \"√a\" 의 차이" },
+      { n: 3, title: "제곱근의 성질과 √a² 의 의미" },
+      { n: 4, title: "유리수와 무리수, 실수의 관계" },
+      { n: 5, title: "두 실수의 대소를 비교하는 방법" },
+    ] },
+    { roman: "Ⅱ", name: "근호를 포함한 식의 계산", semester: "1학기", concepts: [
+      { n: 1, title: "근호의 곱셈과 나눗셈에 관한 성질" },
+      { n: 2, title: "근호 밖으로 빼내는 / 안으로 넣는 방법" },
+      { n: 3, title: "분모의 유리화 방법" },
+      { n: 4, title: "근호를 포함한 식의 덧셈과 뺄셈 방법" },
+    ] },
+    { roman: "Ⅲ", name: "다항식의 곱셈과 인수분해", semester: "1학기", concepts: [
+      { n: 1, title: "곱셈 공식 네 가지" },
+      { n: 2, title: "인수분해의 정의와 공통인수로 묶기" },
+      { n: 3, title: "곱셈 공식을 이용한 인수분해 (공식 인수분해)" },
+      { n: 4, title: "여러 단계 인수분해 (공통인수 + 공식 적용)" },
+    ] },
+    { roman: "Ⅳ", name: "이차방정식", semester: "1학기", concepts: [
+      { n: 1, title: "이차방정식의 정의와 \"해\" 의 의미" },
+      { n: 2, title: "인수분해를 이용한 이차방정식 풀이" },
+      { n: 3, title: "제곱근을 이용한 이차방정식 풀이" },
+      { n: 4, title: "이차방정식의 근의 공식" },
+      { n: 5, title: "이차방정식 활용 문제의 일반적 단계" },
+    ] },
+    { roman: "Ⅴ", name: "이차함수", semester: "2학기", concepts: [
+      { n: 1, title: "이차함수 정의와 y = ax² 그래프의 특징" },
+      { n: 2, title: "y = a(x-p)² + q 그래프와 평행이동" },
+      { n: 3, title: "y = ax² + bx + c 를 표준형으로 고치는 방법" },
+      { n: 4, title: "그래프와 x축 교점 = 이차방정식의 해" },
+      { n: 5, title: "이차함수의 최댓값·최솟값을 구하는 원리" },
+    ] },
+    { roman: "Ⅵ", name: "삼각비", semester: "2학기", concepts: [
+      { n: 1, title: "직각삼각형에서 sin, cos, tan 의 정의" },
+      { n: 2, title: "30°, 45°, 60° 의 삼각비 값" },
+      { n: 3, title: "0°, 90° 의 삼각비 값" },
+      { n: 4, title: "삼각비로 변의 길이를 구하는 방법" },
+    ] },
+    { roman: "Ⅶ", name: "원의 성질", semester: "2학기", concepts: [
+      { n: 1, title: "원의 \"현\" 에 관한 성질" },
+      { n: 2, title: "원의 접선의 성질" },
+      { n: 3, title: "원주각과 중심각의 관계" },
+      { n: 4, title: "원에 내접하는 사각형의 성질" },
+    ] },
+    { roman: "Ⅷ", name: "통계 (대푯값과 산포도)", semester: "2학기", concepts: [
+      { n: 1, title: "대푯값(평균·중앙값·최빈값) 의 정의" },
+      { n: 2, title: "세 대푯값의 적절한 사용 경우 비교" },
+      { n: 3, title: "산포도와 \"편차\" 의 정의" },
+      { n: 4, title: "분산과 표준편차의 정의 및 구하는 방법" },
+      { n: 5, title: "산점도와 상관관계" },
+    ] },
+  ],
+  "m3_adv": [
+    { roman: "Ⅰ", name: "제곱근과 실수 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "√2 가 무리수임을 보이는 방법 (귀류법)" },
+      { n: 2, title: "수직선 위에 무리수를 정확히 표시하는 방법" },
+      { n: 3, title: "두 실수 사이에 또 다른 유리수·무리수 존재" },
+      { n: 4, title: "제곱근의 근사값을 구하는 방법" },
+    ] },
+    { roman: "Ⅱ", name: "근호 식의 계산 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "근호의 곱셈·나눗셈 성질이 성립하는 원리" },
+      { n: 2, title: "분모의 유리화에서 켤레식을 곱하는 원리" },
+      { n: 3, title: "이중근호 √(a ± 2√b) 를 푸는 방법" },
+      { n: 4, title: "근호 식의 분배법칙·곱셈공식 활용" },
+    ] },
+    { roman: "Ⅲ", name: "다항식의 곱셈·인수분해 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "곱셈 공식이 성립하는 원리를 분배법칙으로 증명" },
+      { n: 2, title: "곱셈 공식을 \"수의 계산\" 에 활용" },
+      { n: 3, title: "치환을 이용한 인수분해의 원리" },
+      { n: 4, title: "여러 항 다항식의 인수분해 — \"적절히 묶기\"" },
+    ] },
+    { roman: "Ⅳ", name: "이차방정식 (심화)", semester: "1학기", concepts: [
+      { n: 1, title: "근의 공식이 완전제곱식 만들기로 유도되는 과정" },
+      { n: 2, title: "이차방정식의 근과 계수의 관계" },
+      { n: 3, title: "판별식이 해의 개수를 결정하는 원리" },
+      { n: 4, title: "두 근이 주어질 때 이차방정식을 거꾸로 만드는 방법" },
+    ] },
+    { roman: "Ⅴ", name: "이차함수 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "그래프가 \"y축\" 이 아닌 \"축\" 에 대해 대칭인 이유" },
+      { n: 2, title: "y = ax² + bx + c 의 a, b, c 부호가 그래프에 드러나는 방식" },
+      { n: 3, title: "그래프와 x축 교점 = 이차방정식의 해 (기하·대수)" },
+      { n: 4, title: "이차함수 활용 — 최댓·최솟값으로 넓이의 최대" },
+    ] },
+    { roman: "Ⅵ", name: "삼각비 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "삼각비가 \"한 각의 크기에만 의존\" 하는 이유" },
+      { n: 2, title: "삼각비 사이의 기본 관계" },
+      { n: 3, title: "예각 A 와 (90° - A) 의 삼각비 관계" },
+      { n: 4, title: "삼각비로 \"높이를 직접 잴 수 없는 곳의 높이\" 구하기" },
+    ] },
+    { roman: "Ⅶ", name: "원의 성질 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "원주각 = 중심각의 절반 임을 증명" },
+      { n: 2, title: "같은/한 호에 대한 원주각의 일정성과 활용" },
+      { n: 3, title: "접선과 현이 이루는 각의 성질" },
+      { n: 4, title: "내접 사각형 대각의 합 = 180° 도출" },
+    ] },
+    { roman: "Ⅷ", name: "통계 (심화)", semester: "2학기", concepts: [
+      { n: 1, title: "두 자료를 합쳤을 때 평균의 변화" },
+      { n: 2, title: "분산의 빠른 계산법 (제곱평균 - 평균제곱)" },
+      { n: 3, title: "표준편차의 의미를 두 자료 비교로" },
+      { n: 4, title: "산점도에서 상관계수의 의미를 직관적으로" },
+    ] },
+  ],
+};
+
+const CONCEPT_LEVEL_LABEL = {
+  m1_core: '중1 핵심', m1_adv: '중1 심화',
+  m2_core: '중2 핵심', m2_adv: '중2 심화',
+  m3_core: '중3 핵심', m3_adv: '중3 심화',
+};
+
+// ──────────────────────────────────────────────────────────
 // 🧠 종합 개념 테스트 — 학부모용 개별 진단 리포트 워드 다운로드
 //   백지 테스트 결과 + 5개 분석 섹션을 학부모 안내장 톤으로 출력.
 //   파일: paran_parent_notice.docx 의 IV. 항목(① ~ ⑤) 구조를 반영.
@@ -39771,6 +40305,15 @@ function downloadConceptDiagnosisReport({ student, test, session, teacherName })
   const today = new Date().toLocaleDateString('ko-KR');
   const dx = test?.diagnosisReport || {};
   const concepts = Array.isArray(dx.conceptUnderstanding) ? dx.conceptUnderstanding : [];
+  // 새 채점판 데이터
+  const ctLevel = test?.conceptTestLevel || '';
+  const ctBank = CONCEPT_TEST_BANK[ctLevel] || [];
+  const ctSelUnits = Array.isArray(test?.conceptSelectedUnits) && test.conceptSelectedUnits.length > 0
+    ? test.conceptSelectedUnits
+    : ctBank.map(u => u.roman);
+  const ctGrades = test?.conceptGrades || {};
+  const ctNotes = test?.conceptNotes || {};
+  const ctActiveUnits = ctBank.filter(u => ctSelUnits.includes(u.roman));
   const levelLabel = { full:'완전 이해', partial:'부분 이해', relearn:'재학습 필요' };
   const levelColor = { full:'#059669', partial:'#d97706', relearn:'#dc2626' };
   const levelBg    = { full:'#f0fdf4', partial:'#fffbeb', relearn:'#fef2f2' };
@@ -39829,6 +40372,52 @@ function downloadConceptDiagnosisReport({ student, test, session, teacherName })
       <td class="lbl">담당 강사</td><td class="val">${teacherName || ''}</td>
       <td class="lbl">총평 점수</td><td class="val">${(!isNaN(sc)&&!isNaN(tot))?`<span class="score-box">${test.testScore} / ${test.testTotal}${pct!==null?` &nbsp; (${pct}%)`:''}</span>`:'<span style="color:#9ca3af;">점수 미기재</span>'}</td>
     </tr></table>
+
+    ${ctLevel && ctActiveUnits.length > 0 ? (() => {
+      // 단원별 채점 결과 표
+      const levelLabel = ({
+        m1_core:'중1 핵심', m1_adv:'중1 심화',
+        m2_core:'중2 핵심', m2_adv:'중2 심화',
+        m3_core:'중3 핵심', m3_adv:'중3 심화'
+      })[ctLevel] || ctLevel;
+      let totalEarned = 0, totalMax = 0;
+      const unitBlocks = ctActiveUnits.map(u => {
+        const rows = u.concepts.map(c => {
+          const sv = (ctGrades[u.roman] || {})[c.n];
+          totalMax += 10;
+          if (typeof sv === 'number') totalEarned += sv;
+          const lbl = sv === 10 ? '<span class="badge" style="background:#f0fdf4;border-color:#059669;color:#065f46;">✅ 완전 (10)</span>'
+                    : sv === 5  ? '<span class="badge" style="background:#fffbeb;border-color:#d97706;color:#92400e;">🔶 부분 (5)</span>'
+                    : sv === 0  ? '<span class="badge" style="background:#fef2f2;border-color:#dc2626;color:#991b1b;">❌ 미흡 (0)</span>'
+                    : '<span style="color:#9ca3af;">미채점</span>';
+          const note = (ctNotes[u.roman] || {})[c.n] || '';
+          return `<tr>
+            <td style="width:6%;text-align:center;font-weight:700;color:#3730a3;">${c.n}</td>
+            <td style="width:48%;color:#111827;">${c.title.replace(/</g,'&lt;')}</td>
+            <td style="width:18%;text-align:center;">${lbl}</td>
+            <td style="color:#374151;">${note.replace(/</g,'&lt;')}</td>
+          </tr>`;
+        }).join('');
+        return `<div class="section" style="margin-top:6pt;">
+          <div class="section-head" style="background:#eef2ff;color:#3730a3;font-size:10pt;">
+            <span style="font-weight:400;color:#6b7280;font-size:9pt;">[${u.semester}]</span>
+            ${u.roman}. ${u.name.replace(/</g,'&lt;')}
+            <span style="font-weight:400;color:#6b7280;font-size:9pt;float:right;">${u.concepts.length}개념 · ${u.concepts.length * 10}점</span>
+          </div>
+          <table class="concept-table">
+            <thead><tr><th style="width:6%;text-align:center;">#</th><th style="width:48%;">개념</th><th style="width:18%;text-align:center;">채점</th><th>메모</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      }).join('');
+      const pctLocal = totalMax > 0 ? Math.round(totalEarned / totalMax * 100) : 0;
+      return `<div class="section">
+        <div class="section-head" style="background:#eef2ff;color:#3730a3;">🧠 단원·개념별 채점 결과 — ${levelLabel} · ${ctActiveUnits.length}단원 · 합계 <strong>${totalEarned} / ${totalMax}점 (${pctLocal}%)</strong></div>
+        <div class="section-body" style="padding:6pt 8pt;background:#fafafa;">
+          ${unitBlocks}
+        </div>
+      </div>` ;
+    })() : ''}
 
     <div class="section">
       <div class="section-head">① 개념별 이해도 — 단원별 3단계 진단</div>
