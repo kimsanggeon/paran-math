@@ -6373,7 +6373,14 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                   {/* 안내 토글 */}
                   <details className="mt-3 bg-white/10 rounded-lg overflow-hidden">
                     <summary className="px-3 py-2 text-xs text-indigo-200 cursor-pointer hover:bg-white/5 flex items-center gap-1">
-                      <span>💡</span> <span>몰입의 탑이 뭐예요?</span> <span className="ml-auto text-indigo-400">▼</span>
+                      <span>💡</span> <span>몰입의 탑이 뭐예요?</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); downloadTowerGuideDoc(); }}
+                        className="ml-auto px-2 py-0.5 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold rounded border border-white/20 whitespace-nowrap"
+                        title="몰입의 탑·포인트 시스템 한 페이지 안내문 (워드)"
+                      >📥 워드</button>
+                      <span className="text-indigo-400">▼</span>
                     </summary>
                     <div className="px-3 pb-3 text-[11px] text-indigo-200 space-y-2">
                       <p className="font-bold text-yellow-300">시험, 숙제, 학습 태도, 자습으로 탑을 올라가세요!</p>
@@ -28652,8 +28659,20 @@ function GamificationTab({ students, saveStudents }) {
         <div className="bg-gradient-to-b from-indigo-900 via-indigo-800 to-purple-900 rounded-2xl p-6 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 text-[120px] opacity-5 leading-none">🏰</div>
           <div className="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-indigo-900/80 to-transparent" />
-          <h2 className="text-2xl font-black mb-1 relative z-10">🏰 몰입의 탑</h2>
-          <p className="text-indigo-300 text-sm mb-4 relative z-10">시험 · 숙제 · 태도 · 자습으로 탑을 올라가세요!</p>
+          <div className="flex items-start justify-between gap-2 relative z-10">
+            <div>
+              <h2 className="text-2xl font-black mb-1">🏰 몰입의 탑</h2>
+              <p className="text-indigo-300 text-sm mb-4">시험 · 숙제 · 태도 · 자습으로 탑을 올라가세요!</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => downloadTowerGuideDoc()}
+              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-bold rounded-lg shadow-sm border border-white/20 whitespace-nowrap"
+              title="몰입의 탑·포인트 시스템 한 페이지 안내문 (워드)"
+            >
+              📥 안내문 워드
+            </button>
+          </div>
 
           {/* 상위 3명 포디움 */}
           {(() => {
@@ -39467,6 +39486,142 @@ function downloadLessonPrepDoc({ student, summary, activeDate }) {
   const safeName = (student?.name||'학생').replace(/[\\/:*?"<>|]/g,'_');
   const dateStr = (activeDate||today).replace(/[^\d]/g,'');
   const filename = `${safeName}_수업준비노트_${dateStr}.doc`;
+  const blob = new Blob(['﻿', html], { type:'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ──────────────────────────────────────────────────────────
+// 🏰 몰입의 탑 & ⭐ 포인트 시스템 — 한 페이지 워드 안내문
+//   학생·학부모용 인쇄물. A4 portrait 1장에 들어가도록 컴팩트 설계.
+// ──────────────────────────────────────────────────────────
+function downloadTowerGuideDoc() {
+  const today = new Date().toLocaleDateString('ko-KR');
+  const STYLE = `
+    @page { margin: 1.0cm 1.1cm; }
+    body { font-family:'Pretendard','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',sans-serif; color:#111827; line-height:1.4; letter-spacing:-0.1pt; font-size:9.5pt; }
+    h1 { color:#3730a3; font-size:18pt; font-weight:800; letter-spacing:-0.5pt; padding-bottom:4pt; margin:0 0 3pt; border-bottom:1pt solid #1f2937; }
+    .subtitle { color:#6b7280; font-size:9pt; margin:0 0 10pt; }
+    h2 { font-size:11pt; font-weight:800; margin:8pt 0 4pt; padding:3pt 6pt; border-left:3pt solid #4f46e5; background:#eef2ff; color:#3730a3; }
+    h2.bad { border-left-color:#dc2626; background:#fef2f2; color:#991b1b; }
+    h2.good { border-left-color:#059669; background:#f0fdf4; color:#065f46; }
+    h2.point { border-left-color:#d97706; background:#fffbeb; color:#92400e; }
+    .intro { padding:6pt 8pt; border:0.5pt solid #1f2937; background:#fafafa; margin-bottom:4pt; font-size:9pt; }
+    .rules { width:100%; border-collapse:collapse; border:0.5pt solid #1f2937; margin:2pt 0 4pt; }
+    .rules td { padding:5pt 8pt; border-top:0.5pt solid #6b7280; font-size:9.5pt; vertical-align:middle; }
+    .rules tr:first-child td { border-top:none; }
+    .rules td.icon { width:24pt; text-align:center; font-size:11pt; }
+    .rules td.lbl { width:38%; font-weight:700; color:#111827; }
+    .rules td.val { color:#1f2937; }
+    .rules td.val strong { color:#3730a3; }
+    .rules td.val .bad { color:#dc2626; font-weight:700; }
+    .two-col { display:table; width:100%; border-collapse:collapse; }
+    .two-col > .col { display:table-cell; width:50%; vertical-align:top; padding-right:4pt; }
+    .two-col > .col + .col { padding-right:0; padding-left:4pt; }
+    .shop { width:100%; border-collapse:collapse; border:0.5pt solid #1f2937; margin:2pt 0; }
+    .shop td { padding:4pt 8pt; border-top:0.5pt solid #6b7280; font-size:9.5pt; vertical-align:middle; }
+    .shop tr:first-child td { border-top:none; }
+    .shop td.item { font-weight:700; color:#111827; }
+    .shop td.price { width:60pt; text-align:right; color:#92400e; font-weight:800; }
+    .qa { padding:5pt 8pt; border:0.5pt solid #1f2937; background:#fafafa; font-size:9pt; margin:2pt 0; }
+    .qa p { margin:1pt 0; }
+    .qa .q { font-weight:700; color:#3730a3; }
+    .qa .a { color:#374151; }
+    .footer { text-align:center; color:#6b7280; font-size:8pt; margin-top:6pt; padding-top:4pt; border-top:0.5pt solid #6b7280; }
+    .legend { display:inline-block; padding:1pt 5pt; border:0.5pt solid #1f2937; background:#fff; font-size:8.5pt; margin-right:4pt; }
+  `;
+
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>몰입의 탑 & 포인트 안내</title><style>${STYLE}</style></head><body>
+    <h1>🏰 몰입의 탑 &amp; ⭐ 포인트 시스템 안내</h1>
+    <p class="subtitle">파란수학학원 몰입관 — 학생/학부모용 · 출력일자 ${today}</p>
+
+    <div class="intro">
+      <strong>몰입의 탑</strong>은 시험·숙제·태도·자습 데이터를 0.5층 단위로 자동 집계해, 매일의 학습이 보이는 탑으로 쌓이는 게이미피케이션 시스템입니다. 2026년 4월부터 시작되며, 10층 달성마다 면제권 보상이 지급됩니다.
+    </div>
+
+    <h2 class="good">🎯 층수 적립 (보상)</h2>
+    <table class="rules">
+      <tr><td class="icon">📝</td><td class="lbl">시험 통과</td><td class="val">일일테스트 <strong>+0.5</strong> · 주간테스트 <strong>+1</strong> · 심화 <strong>+2</strong></td></tr>
+      <tr><td class="icon">🔄</td><td class="lbl">체킹누적테스트 통과</td><td class="val">A단계 <strong>+0.2</strong> · B단계 <strong>+0.5</strong> · C단계 <strong>+1</strong></td></tr>
+      <tr><td class="icon">🏫</td><td class="lbl">정기고사 등수</td><td class="val">10등↑ <strong>+10</strong> · 20등↑ <strong>+7</strong> · 30등↑ <strong>+5</strong> · 50등↑ <strong>+3</strong></td></tr>
+      <tr><td class="icon">📊</td><td class="lbl">성취도평가</td><td class="val">70점 이상 <strong>+2</strong></td></tr>
+      <tr><td class="icon">📚</td><td class="lbl">숙제 완료</td><td class="val">1건당 <strong>+0.3</strong> · 주간 전부 완료 보너스 <strong>+1</strong></td></tr>
+      <tr><td class="icon">💪</td><td class="lbl">학습 태도 평균</td><td class="val">4점 이상 <strong>+0.5</strong> · 4.5점 이상 <strong>+1</strong></td></tr>
+      <tr><td class="icon">⏱</td><td class="lbl">자습 인증</td><td class="val">30분 이상 <strong>+0.3</strong> · 60분 이상 <strong>+0.5</strong></td></tr>
+      <tr><td class="icon">🔥</td><td class="lbl">연속 정답 콤보</td><td class="val">연속 5문제 정답 <strong>+0.5</strong></td></tr>
+    </table>
+
+    <h2 class="bad">⚠️ 층수 차감 (방어 실패)</h2>
+    <table class="rules">
+      <tr><td class="icon">🛡️</td><td class="lbl">주간테스트 미통과</td><td class="val"><span class="bad">-2층</span></td></tr>
+      <tr><td class="icon">📝</td><td class="lbl">일일테스트 미통과</td><td class="val"><span class="bad">-1.5층</span></td></tr>
+      <tr><td class="icon">📚</td><td class="lbl">숙제 미완료</td><td class="val"><span class="bad">-0.5층</span>, 연속 미완료 시 추가 <span class="bad">-1층</span></td></tr>
+      <tr><td class="icon">💪</td><td class="lbl">학습 태도 부진</td><td class="val">평균 3 이하 <span class="bad">-2.5층</span> · 평균 2 이하 <span class="bad">-3.5층</span></td></tr>
+    </table>
+
+    <h2>🏆 마일스톤 보상</h2>
+    <table class="rules">
+      <tr><td class="icon">🔟</td><td class="lbl">10층 달성마다</td><td class="val">🛡️ 재시험 면제권 또는 🎯 숙제 면제권 <strong>택 1</strong></td></tr>
+      <tr><td class="icon">👑</td><td class="lbl">학원 1위 (몰입영주)</td><td class="val">전용 칭호 + 면제권 보너스</td></tr>
+      <tr><td class="icon">📊</td><td class="lbl">주간 / 월간 1위</td><td class="val">명예의 전당 등극</td></tr>
+    </table>
+
+    <h2 class="point">⭐ 포인트 시스템 — 두 종류로 분리</h2>
+    <div class="two-col">
+      <div class="col">
+        <div class="intro" style="background:#f0fdf4;border-color:#065f46;">
+          <p style="margin:0 0 3pt;"><strong style="color:#065f46;">누적 P (Lifetime)</strong> — 평생 누적, 절대 감소 X</p>
+          · 층수에 직접 기여 (1P = 1층)<br/>
+          · 선생님이 우수 활동 시 수동 지급<br/>
+          · 보상 상점 구매와 무관하게 유지
+        </div>
+      </div>
+      <div class="col">
+        <div class="intro" style="background:#fffbeb;border-color:#92400e;">
+          <p style="margin:0 0 3pt;"><strong style="color:#92400e;">잔액 P (Balance)</strong> — 보상 상점 사용 가능 잔액</p>
+          · 선생님 지급 시 누적과 함께 +N 증가<br/>
+          · 보상 상점 구매 시 잔액만 -N 감소<br/>
+          · 층수에는 영향 없음
+        </div>
+      </div>
+    </div>
+
+    <h2 class="point">🎁 보상 상점</h2>
+    <div class="two-col">
+      <div class="col">
+        <table class="shop">
+          <tr><td class="item">🖍️ 색연필</td><td class="price">5 P</td></tr>
+          <tr><td class="item">✏️ 형광펜</td><td class="price">10 P</td></tr>
+          <tr><td class="item">📓 노트 / 오답노트</td><td class="price">15 P</td></tr>
+        </table>
+      </div>
+      <div class="col">
+        <table class="shop">
+          <tr><td class="item">🎯 숙제 면제권</td><td class="price">20 P</td></tr>
+          <tr><td class="item">🛡️ 재시험 면제권</td><td class="price">25 P</td></tr>
+          <tr><td class="item">☕ 휴식 +5분</td><td class="price">30 P</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <h2>💡 자주 묻는 질문</h2>
+    <div class="qa">
+      <p><span class="q">Q.</span> 보상 상점에서 색연필을 사면 탑 층수가 떨어지나요?</p>
+      <p><span class="a">A. 아닙니다. 누적 P(층수 기여)는 그대로 유지되고 잔액 P만 5 차감됩니다.</span></p>
+      <p style="margin-top:3pt;"><span class="q">Q.</span> 결석한 날도 방어 패널티가 있나요?</p>
+      <p><span class="a">A. 결석 회차에는 시험이 없으므로 직접 패널티는 없습니다. 다만 결석 누적은 학습 태도에 반영되어 간접 영향이 있을 수 있습니다.</span></p>
+      <p style="margin-top:3pt;"><span class="q">Q.</span> 시작 시점이 언제인가요?</p>
+      <p><span class="a">A. 2026년 4월 1일부터의 학습 데이터가 집계됩니다. 그 이전 데이터는 탑 층수에 반영되지 않습니다.</span></p>
+    </div>
+
+    <div class="footer">© 파란수학학원 몰입관 · 본 안내문은 학생/학부모용 인쇄 자료입니다.</div>
+  </body></html>`;
+
+  const dateStr = today.replace(/[^\d]/g, '');
+  const filename = `몰입의탑_포인트시스템_안내_${dateStr}.doc`;
   const blob = new Blob(['﻿', html], { type:'application/msword' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
