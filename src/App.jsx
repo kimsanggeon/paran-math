@@ -23019,7 +23019,15 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                           </button>
                         </div>
                         <div style={{display:"flex", flexDirection:"column", gap:"8px", marginBottom:"8px", width:"100%", boxSizing:"border-box", overflow:"hidden"}}>
-                          <select value={test.testType || ''} onChange={(e) => updateTestField(testIndex, 'testType', e.target.value)} className="w-full p-2 border rounded text-xs">
+                          <select value={test.testType || ''} onChange={(e) => {
+                            const newType = e.target.value;
+                            updateTestField(testIndex, 'testType', newType);
+                            // 종합 개념 테스트는 백지테스트(서술형 전용) — 객관식 수는 0, 서술형 기본 1로 초기화
+                            if (newType === '종합 개념 테스트') {
+                              updateTestField(testIndex, 'testQuestionCount', 0);
+                              if (!test.essayQuestionCount) updateTestField(testIndex, 'essayQuestionCount', 1);
+                            }
+                          }} className="w-full p-2 border rounded text-xs">
                             <option value="">시험 선택</option>
                             <option value="일일테스트">📝 일일테스트</option>
                             <option value="주간테스트">📝 주간테스트</option>
@@ -23117,16 +23125,6 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                   className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded shadow-sm whitespace-nowrap"
                                   title="개별 진단 리포트를 워드(.doc)로 다운로드"
                                 >📥 워드 다운로드</button>
-                              </div>
-
-                              {/* 시험 범위 */}
-                              <div>
-                                <label className="text-[10px] text-indigo-700 font-bold block mb-1">시험 범위</label>
-                                <input type="text"
-                                  value={test.testScope || ''}
-                                  onChange={(e) => updateTestField(testIndex, 'testScope', e.target.value)}
-                                  className="w-full p-2 border border-indigo-200 rounded text-xs bg-white"
-                                  placeholder="예: 중2-1학기 일차함수 + 1학년 누적 핵심" />
                               </div>
 
                               {/* ① 개념별 이해도 — 단원 행 추가 */}
@@ -23347,8 +23345,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                           <>
                             <input type="text" value={test.testScope || ''} onChange={(e) => updateTestField(testIndex, 'testScope', e.target.value)} className="w-full p-2 border rounded text-xs mb-2" placeholder="시험 범위" />
                             
-                            {/* 난이도 선택: 체킹누적테스트는 상단 A/B/C/D로 이미 처리, 나머지만 표시 */}
-                            {test.testType !== '체킹누적테스트' && (
+                            {/* 난이도 선택: 체킹누적테스트는 상단 A/B/C/D로 이미 처리, 종합 개념 테스트는 백지테스트라 난이도 분류 없음 */}
+                            {test.testType !== '체킹누적테스트' && test.testType !== '종합 개념 테스트' && (
                             <div className="mb-2">
                               <label className="text-xs text-gray-500 block mb-1">📊 난이도</label>
                               <div className="flex gap-1 flex-wrap">
@@ -23371,8 +23369,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                             </div>
                             )}
                             
-                            {/* 정답률 범위 (체킹누적테스트 제외) */}
-                            {test.testType !== '체킹누적테스트' && (
+                            {/* 정답률 범위 (체킹누적테스트·종합 개념 테스트 제외) */}
+                            {test.testType !== '체킹누적테스트' && test.testType !== '종합 개념 테스트' && (
                             <div className="space-y-2 mb-2">
                               <div>
                                 <label className="text-xs text-gray-500 block mb-1">📈 실제 정답률 범위</label>
@@ -23440,7 +23438,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                               <div style={{background:"white", borderBottom:"1px solid #e5e7eb", padding:"10px 8px", display:"flex", flexDirection:"column", gap:"8px", width:"100%", boxSizing:"border-box"}}>
                                 <p className="text-xs font-bold text-gray-700">🎯 채점판</p>
                                 {/* 객관식 + 서술형 문제수 — 세로 배치 */}
-                                {/* 객관식 */}
+                                {/* 객관식 — 종합 개념 테스트는 백지테스트라 객관식 없음 */}
+                                {test.testType !== '종합 개념 테스트' && (
                                 <div style={{display:'flex', alignItems:'center', gap:'8px', background:'#eff6ff', padding:'8px 10px', borderRadius:'8px', border:'1px solid #93c5fd', boxSizing:'border-box'}}>
                                   <span style={{fontSize:'13px', color:'#1d4ed8', fontWeight:600, flexShrink:0, width:'44px'}}>객관식</span>
                                   <input
@@ -23452,12 +23451,13 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                   />
                                   <span style={{fontSize:'13px', color:'#3b82f6', flexShrink:0}}>문제</span>
                                 </div>
+                                )}
                                 {/* 서술형 */}
                                 <div style={{display:'flex', alignItems:'center', gap:'8px', background:'#faf5ff', padding:'8px 10px', borderRadius:'8px', border:'1px solid #c4b5fd', boxSizing:'border-box'}}>
                                   <span style={{fontSize:'13px', color:'#7e22ce', fontWeight:600, flexShrink:0, width:'44px'}}>서술형</span>
                                   <input
                                     type="number"
-                                    value={test.essayQuestionCount || 0}
+                                    value={test.essayQuestionCount ?? (test.testType === '종합 개념 테스트' ? 1 : 0)}
                                     onChange={(e) => updateTestField(testIndex, 'essayQuestionCount', Math.max(0, parseInt(e.target.value) || 0))}
                                     style={{flex:1, minWidth:0, padding:'7px', border:'1px solid #c4b5fd', borderRadius:'6px', fontSize:'18px', textAlign:'center', background:'white', fontWeight:700}}
                                     min="0" max="30"
@@ -23465,8 +23465,13 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                   <span style={{fontSize:'13px', color:'#9333ea', flexShrink:0}}>문제</span>
                                 </div>
                                 {/* 2행: 채점판 생성 버튼 전체 너비 */}
+                                {/* 종합 개념 테스트는 객관식 문항 수를 0으로 고정해 서술형 N문제만 생성 */}
                                 <button
-                                  onClick={() => initTestAnswersForTestFull(testIndex, test.testQuestionCount ?? 10, test.essayQuestionCount || 0)}
+                                  onClick={() => {
+                                    const mc = test.testType === '종합 개념 테스트' ? 0 : (test.testQuestionCount ?? 10);
+                                    const essay = test.essayQuestionCount ?? (test.testType === '종합 개념 테스트' ? 1 : 0);
+                                    initTestAnswersForTestFull(testIndex, mc, essay);
+                                  }}
                                   style={{width:'100%', padding:'8px', background:'#3b82f6', color:'white', borderRadius:'6px', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer'}}
                                 >
                                   🎯 채점판 생성
@@ -23571,8 +23576,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                       </div>
                                     )}
 
-                                    {/* ── 객관식 그리드 (일요모의고사가 아닌 경우) ── */}
-                                    {mcCount > 0 && test.testType !== '일요모의고사' && (
+                                    {/* ── 객관식 그리드 (일요모의고사·종합 개념 테스트 제외) ── */}
+                                    {mcCount > 0 && test.testType !== '일요모의고사' && test.testType !== '종합 개념 테스트' && (
                                       <div>
                                         <div className="flex items-center gap-2 mb-1.5 min-w-0">
                                           <span className="text-xs font-bold text-blue-700 whitespace-nowrap">📝 객관식 ({mcCount}문제)</span>
@@ -23780,8 +23785,8 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                       )}
                                     </div>
 
-                                    {/* ── 객관식 오답 유형 패널 (체킹누적테스트 제외) ── */}
-                                    {test.testType !== '체킹누적테스트' && mcCount > 0 && test.testAnswers.slice(0, mcCount).filter(a => a === false).length > 0 && (
+                                    {/* ── 객관식 오답 유형 패널 (체킹누적테스트·종합 개념 테스트 제외) ── */}
+                                    {test.testType !== '체킹누적테스트' && test.testType !== '종합 개념 테스트' && mcCount > 0 && test.testAnswers.slice(0, mcCount).filter(a => a === false).length > 0 && (
                                       <div style={{background:"#fff1f2", borderRadius:"8px", border:"1px solid #fecaca", padding:"8px", width:"100%", boxSizing:"border-box", overflow:"hidden"}}>
                                         <p className="text-xs font-bold text-red-700 mb-2">📊 객관식 오답 유형</p>
                                         <div className="space-y-1 w-full">
