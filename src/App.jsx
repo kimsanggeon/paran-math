@@ -211,8 +211,12 @@ function calculateTowerFloor(reportData, student = {}) {
           if (test.difficulty === 'highest' || test.difficulty === 'high') { bd.test += 2; }
           else if (test.testType === '주간테스트') { bd.test += 1; }
           else { bd.test += 0.5; } // 일일테스트 등
+        } else {
+          // ★ 미통과 패널티 (요청 사양): 주간 -2.0, 일일 -1.5
+          //    각 회차마다 즉시 차감 — 통과한 회차가 있어도 실패 자체는 누적된다.
+          if (test.testType === '주간테스트') bd.defense -= 2.0;
+          else if (test.testType === '일일테스트') bd.defense -= 1.5;
         }
-        // ★ 일일테스트 미통과 패널티는 아래 방어 체크에서 일괄 처리 (이중 차감 방지)
       }
 
       // ── 연속 정답 콤보 보너스 ──
@@ -280,6 +284,8 @@ function calculateTowerFloor(reportData, student = {}) {
       }
     });
   });
+  // ★ 방어 상태 판정 (UI 배지용) — 각 회차 미통과 차감은 위 테스트 루프에서 이미 처리됨.
+  //    여기서는 중복 차감 없이 최근 7일 통과 여부로 상태만 결정.
   if (recentDefenseTests.length > 0) {
     const anyPassed = recentDefenseTests.some(t => t.passed);
     if (anyPassed) {
@@ -287,9 +293,6 @@ function calculateTowerFloor(reportData, student = {}) {
       result.lastDefenseDate = recentDefenseTests.filter(t => t.passed).pop()?.date;
       result.defenseStreak = (student.tower?.defenseStreak || 0) + 1;
     } else {
-      // ★ 방어 실패 패널티 강화: -1 → -2.5
-      // (10층 마일스톤 보상이 너무 자주 발생하지 않도록 일일/주간테스트 모두 미통과 시 큰 손실)
-      bd.defense -= 2.5;
       result.defenseStatus = 'failed';
     }
   } else { result.defenseStatus = 'pending'; }
@@ -6269,7 +6272,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                   {/* 층수 획득 내역 */}
                   <div className="grid grid-cols-4 gap-1.5 text-center text-[10px]">
                     <div className="bg-white/10 rounded-lg p-1.5">
-                      <p className="text-yellow-300 font-bold text-xs">📝 {tower.breakdown.test}</p>
+                      <p className="text-yellow-300 font-bold text-xs">📝 {tower.breakdown.test.toFixed(1)}</p>
                       <p className="text-indigo-300">시험</p>
                     </div>
                     <div className="bg-white/10 rounded-lg p-1.5">
@@ -6277,7 +6280,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                       <p className="text-indigo-300">체킹</p>
                     </div>
                     <div className="bg-white/10 rounded-lg p-1.5">
-                      <p className="text-pink-300 font-bold text-xs">🏫 {tower.breakdown.exam}</p>
+                      <p className="text-pink-300 font-bold text-xs">🏫 {tower.breakdown.exam.toFixed(1)}</p>
                       <p className="text-indigo-300">정기/성취</p>
                     </div>
                     <div className="bg-white/10 rounded-lg p-1.5">
@@ -6387,10 +6390,10 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                       </div>
                       <div className="pt-1 border-t border-indigo-600">
                         <p className="text-red-300">⚠️ <strong>방어 주의!</strong></p>
-                        <p>🛡️ 주간테스트 미통과 → <strong>-1층</strong></p>
-                        <p>📝 일일테스트 미통과 → <strong>-0.5층</strong></p>
-                        <p>📚 숙제 미완료 → <strong>-0.3층</strong>, 연속 미완료 → <strong>-1층</strong></p>
-                        <p>💪 학습 태도 평균 3 이하 → <strong>-1층</strong></p>
+                        <p>🛡️ 주간테스트 미통과 → <strong>-2층</strong></p>
+                        <p>📝 일일테스트 미통과 → <strong>-1.5층</strong></p>
+                        <p>📚 숙제 미완료 → <strong>-0.5층</strong>, 연속 미완료 → 추가 <strong>-1층</strong></p>
+                        <p>💪 학습 태도 평균 3 이하 → <strong>-2.5층</strong> (2 이하 -3.5)</p>
                       </div>
                       <div className="pt-1 border-t border-indigo-600">
                         <p className="text-amber-300">🏆 <strong>보상!</strong></p>
@@ -6552,7 +6555,13 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
 
             {/* 🎁 보상 상점 */}
             {(() => {
-              const myPoints = (student.tower?.manualPoints || 0);
+              // ★ 포인트 이원화 — manualPoints: 평생 누적(층수 기여, 절대 감소X)
+              //                  pointBalance: 보상 상점에서 차감되는 잔액
+              //  레거시 데이터 호환: pointBalance가 미정의면 manualPoints 값을 잔액으로 가정.
+              const lifetimePoints = (student.tower?.manualPoints || 0);
+              const myPoints = (student.tower?.pointBalance !== undefined && student.tower?.pointBalance !== null)
+                ? student.tower.pointBalance
+                : lifetimePoints;
               const rewards = [
                 { name: '🖍️ 색연필', cost: 5 },
                 { name: '✏️ 형광펜', cost: 10 },
@@ -6566,21 +6575,25 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                 <div className="bg-white rounded-xl shadow p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-gray-800 flex items-center gap-2">🎁 보상 상점</h3>
-                    <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-bold">⭐ {myPoints}P</span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold" title="보상 상점에서 사용 가능한 잔액">⭐ 잔액 {myPoints}P</span>
+                      <span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-medium" title="누적 포인트는 층수 기여에 사용되며 감소하지 않습니다">누적 {lifetimePoints}P</span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {rewards.map((r, i) => (
                       <button key={i} disabled={myPoints < r.cost}
                         onClick={() => {
                           if (!confirm(`${r.name}을(를) ${r.cost}P로 교환할까요?`)) return;
-                          const newPoints = myPoints - r.cost;
+                          const newBalance = myPoints - r.cost;
                           const newHistory = [...rewardHistory, { reward: r.name, cost: r.cost, date: new Date().toISOString() }];
                           // 면제권 구매 시 잔액 증가
                           const curTickets = student.tower?.tickets || { homework: 0, retest: 0 };
                           let newTickets = curTickets;
                           if (r.name.includes('숙제 면제권')) newTickets = { ...curTickets, homework: (curTickets.homework || 0) + 1 };
                           else if (r.name.includes('재시험 면제권')) newTickets = { ...curTickets, retest: (curTickets.retest || 0) + 1 };
-                          const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, manualPoints: newPoints, rewardHistory: newHistory, tickets: newTickets } } : s);
+                          // ★ pointBalance만 차감, manualPoints(누적)는 그대로 유지 — 층수 보존
+                          const updated = students.map(s => s.id === student.id ? { ...s, tower: { ...s.tower, pointBalance: newBalance, rewardHistory: newHistory, tickets: newTickets } } : s);
                           saveStudents(updated);
                           if (r.name.includes('면제권')) {
                             alert(`🎉 ${r.name} 교환 완료! 보유함에 추가되었어요. 사용 신청은 보유 면제권 카드에서 할 수 있어요.`);
@@ -28713,7 +28726,16 @@ function GamificationTab({ students, saveStudents }) {
                     const pts = parseInt(prompt(`${s.name}에게 지급할 몰입 포인트:`));
                     if (!pts || isNaN(pts)) return;
                     const reason = prompt('지급 사유:') || '선생님 지급';
-                    const updated = students.map(st => st.id === s.id ? { ...st, tower: { ...st.tower, manualPoints: (st.tower?.manualPoints || 0) + pts, pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: pts, reason, type: 'manual' }] } } : st);
+                    // ★ 누적(층수 기여)과 잔액(보상 상점 사용분) 둘 다 동시 증가
+                    const curLifetime = s.tower?.manualPoints || 0;
+                    const curBalance = (s.tower?.pointBalance !== undefined && s.tower?.pointBalance !== null)
+                      ? s.tower.pointBalance
+                      : curLifetime;
+                    const updated = students.map(st => st.id === s.id ? { ...st, tower: { ...st.tower,
+                      manualPoints: curLifetime + pts,
+                      pointBalance: curBalance + pts,
+                      pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: pts, reason, type: 'manual' }]
+                    } } : st);
                     saveStudents(updated);
                   }} className="px-2 py-1.5 bg-yellow-500 text-white rounded-lg text-[10px] font-bold hover:bg-yellow-600 flex-shrink-0" title="포인트 지급">
                     +⭐
