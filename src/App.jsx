@@ -9053,6 +9053,7 @@ function StudentErrorChecklist({ student, students, saveStudents, reportData, se
                   <option value="성취도평가">성취도평가</option>
                   <option value="체킹누적테스트">체킹누적테스트</option>
                   <option value="일요모의고사">일요모의고사</option>
+                  <option value="종합 개념 테스트">종합 개념 테스트</option>
                   <option value="기타">기타</option>
                 </select>
               </div>
@@ -22862,6 +22863,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                             <option value="성취도평가">📊 성취도평가</option>
                             <option value="체킹누적테스트">📝 체킹누적테스트</option>
                             <option value="일요모의고사">📋 일요모의고사</option>
+                            <option value="종합 개념 테스트">🧠 종합 개념 테스트</option>
                             <option value="기타">✏️ 기타</option>
                           </select>
                           <div className="flex items-center gap-2 w-full min-w-0">
@@ -23025,6 +23027,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                             <option value="성취도평가">📊 성취도평가</option>
                             <option value="체킹누적테스트">📝 체킹누적테스트</option>
                             <option value="일요모의고사">📋 일요모의고사</option>
+                            <option value="종합 개념 테스트">🧠 종합 개념 테스트</option>
                             <option value="기타">✏️ 기타</option>
                           </select>
                           {/* 체킹누적테스트: A/B/C/D 난이도 (채점판 위에 표시) */}
@@ -23081,6 +23084,128 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                         {test.testType === '기타' && (
                           <input type="text" value={test.customTestName || ''} onChange={(e) => updateTestField(testIndex, 'customTestName', e.target.value)} className="w-full p-2 border rounded text-xs mb-2" placeholder="시험명 (예: 경시대회)" />
                         )}
+
+                        {/* ── 🧠 종합 개념 테스트: 학부모 진단 리포트 작성 UI ── */}
+                        {test.testType === '종합 개념 테스트' && (() => {
+                          const dx = test.diagnosisReport || {};
+                          const concepts = Array.isArray(dx.conceptUnderstanding) ? dx.conceptUnderstanding : [];
+                          const updateDx = (patch) => {
+                            updateTestField(testIndex, 'diagnosisReport', { ...dx, ...patch });
+                          };
+                          const updateConcept = (idx, patch) => {
+                            const next = [...concepts];
+                            next[idx] = { ...next[idx], ...patch };
+                            updateDx({ conceptUnderstanding: next });
+                          };
+                          const addConcept = () => updateDx({ conceptUnderstanding: [...concepts, { unit:'', level:'partial', note:'' }] });
+                          const removeConcept = (idx) => updateDx({ conceptUnderstanding: concepts.filter((_, i) => i !== idx) });
+                          return (
+                            <div className="mb-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold text-indigo-800">🧠 종합 개념 테스트 — 개별 진단 리포트</p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const stu = students.find(s => s.name === reportData.studentName) || { name: reportData.studentName, grade: reportData.schoolGrade, className: reportData.className };
+                                    downloadConceptDiagnosisReport({
+                                      student: stu,
+                                      test,
+                                      session: currentSession,
+                                      teacherName: loggedInTeacher?.name || ''
+                                    });
+                                  }}
+                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold rounded shadow-sm whitespace-nowrap"
+                                  title="개별 진단 리포트를 워드(.doc)로 다운로드"
+                                >📥 워드 다운로드</button>
+                              </div>
+
+                              {/* 시험 범위 */}
+                              <div>
+                                <label className="text-[10px] text-indigo-700 font-bold block mb-1">시험 범위</label>
+                                <input type="text"
+                                  value={test.testScope || ''}
+                                  onChange={(e) => updateTestField(testIndex, 'testScope', e.target.value)}
+                                  className="w-full p-2 border border-indigo-200 rounded text-xs bg-white"
+                                  placeholder="예: 중2-1학기 일차함수 + 1학년 누적 핵심" />
+                              </div>
+
+                              {/* ① 개념별 이해도 — 단원 행 추가 */}
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-[10px] text-indigo-700 font-bold">① 개념별 이해도</label>
+                                  <button type="button" onClick={addConcept} className="text-[10px] px-2 py-0.5 bg-white text-indigo-700 rounded border border-indigo-300 hover:bg-indigo-100">+ 단원 추가</button>
+                                </div>
+                                {concepts.length === 0 ? (
+                                  <p className="text-[10px] text-indigo-400 text-center py-2 bg-white rounded border border-dashed border-indigo-200">단원 추가 버튼으로 평가할 단원을 등록하세요</p>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {concepts.map((c, ci) => (
+                                      <div key={ci} className="flex gap-1.5 items-center bg-white p-1.5 rounded border border-indigo-100">
+                                        <input type="text" value={c.unit || ''} onChange={(e) => updateConcept(ci, { unit: e.target.value })} placeholder="단원명" className="flex-1 min-w-0 p-1.5 border rounded text-xs" />
+                                        <select value={c.level || 'partial'} onChange={(e) => updateConcept(ci, { level: e.target.value })} className="p-1.5 border rounded text-xs">
+                                          <option value="full">✅ 완전 이해</option>
+                                          <option value="partial">🔶 부분 이해</option>
+                                          <option value="relearn">❌ 재학습 필요</option>
+                                        </select>
+                                        <input type="text" value={c.note || ''} onChange={(e) => updateConcept(ci, { note: e.target.value })} placeholder="메모(선택)" className="flex-1 min-w-0 p-1.5 border rounded text-xs" />
+                                        <button type="button" onClick={() => removeConcept(ci)} className="p-1 text-red-400 hover:text-red-600" title="삭제"><Trash2 size={12} /></button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* ② 취약 단원 분석 */}
+                              <div>
+                                <label className="text-[10px] text-indigo-700 font-bold block mb-1">② 취약 단원 분석 — 막히는 지점과 원인</label>
+                                <textarea value={dx.weakUnitsAnalysis || ''} onChange={(e) => updateDx({ weakUnitsAnalysis: e.target.value })} rows={2} className="w-full p-2 border border-indigo-200 rounded text-xs bg-white resize-y" placeholder="예: 함수의 그래프 해석에서 막힘. 원인: 변수와 좌표 대응 개념이 흔들림." />
+                              </div>
+
+                              {/* ③ 학습 태도 평가 — 정리력·논리력·집중도 (5점) */}
+                              <div>
+                                <label className="text-[10px] text-indigo-700 font-bold block mb-1">③ 학습 태도 평가 — 백지 답안에서 드러난 지표 (1~5)</label>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {[
+                                    { key:'attitudeOrganization', label:'📋 정리력' },
+                                    { key:'attitudeLogic', label:'🧩 논리력' },
+                                    { key:'attitudeFocus', label:'🎯 집중도' },
+                                  ].map(item => (
+                                    <div key={item.key} className="bg-white p-1.5 rounded border border-indigo-100">
+                                      <p className="text-[10px] text-gray-600 mb-1">{item.label}</p>
+                                      <div className="flex gap-0.5">
+                                        {[1,2,3,4,5].map(n => (
+                                          <button key={n} type="button" onClick={() => updateDx({ [item.key]: n === dx[item.key] ? 0 : n })}
+                                            className={`flex-1 py-1 rounded text-xs border ${ (dx[item.key]||0) >= n ? 'bg-amber-400 text-white border-amber-500' : 'bg-white text-gray-300 border-gray-200' }`}>
+                                            ★
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <textarea value={dx.attitudeNote || ''} onChange={(e) => updateDx({ attitudeNote: e.target.value })} rows={1} className="w-full mt-1.5 p-2 border border-indigo-200 rounded text-xs bg-white resize-y" placeholder="태도 관찰 메모 (선택)" />
+                              </div>
+
+                              {/* ④ 맞춤 후속 학습 계획 */}
+                              <div>
+                                <label className="text-[10px] text-indigo-700 font-bold block mb-1">④ 맞춤 후속 학습 계획 — 다음 단원 방향과 보강 과제</label>
+                                <textarea value={dx.followUpPlan || ''} onChange={(e) => updateDx({ followUpPlan: e.target.value })} rows={2} className="w-full p-2 border border-indigo-200 rounded text-xs bg-white resize-y" placeholder="예: 다음 2주간 일차함수 그래프 단원 재학습. 쎈 88~92p 재풀이 + 오답노트 5문제 작성." />
+                              </div>
+
+                              {/* ⑤ 학부모 상담 자료 */}
+                              <div>
+                                <label className="text-[10px] text-indigo-700 font-bold block mb-1">⑤ 학부모 상담 자료 — 1:1 면담 시 함께 보실 내용</label>
+                                <textarea value={dx.parentConsult || ''} onChange={(e) => updateDx({ parentConsult: e.target.value })} rows={2} className="w-full p-2 border border-indigo-200 rounded text-xs bg-white resize-y" placeholder="예: 개념 정리력은 향상 중. 단, 풀이 과정을 끝까지 적는 습관이 필요. 가정에서도 '풀이 끝까지 적기' 격려 부탁드립니다." />
+                              </div>
+
+                              {/* 종합 코멘트 (선택) */}
+                              <div>
+                                <label className="text-[10px] text-indigo-700 font-bold block mb-1">💬 종합 코멘트 (선택)</label>
+                                <textarea value={dx.overallComment || ''} onChange={(e) => updateDx({ overallComment: e.target.value })} rows={1} className="w-full p-2 border border-indigo-200 rounded text-xs bg-white resize-y" placeholder="리포트 최상단 요약 한 줄 (선택)" />
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* ── 정기고사: 점수 + 등수 수동 입력 전용 UI ── */}
                         {test.testType === '정기고사' && (
@@ -24122,6 +24247,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                       <option value="성취도평가">성취도평가</option>
                       <option value="체킹누적테스트">체킹누적테스트</option>
                       <option value="일요모의고사">일요모의고사</option>
+                      <option value="종합 개념 테스트">종합 개념 테스트</option>
                       <option value="기타">기타</option>
                     </select>
                     <input type="date" value={test.testDate} onChange={(e) => updateUpcomingTest(index, 'testDate', e.target.value)} className="p-2 border rounded text-sm" />
@@ -27502,6 +27628,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                           <option value="정기고사">정기고사</option>
                           <option value="성취도평가">성취도평가</option>
                           <option value="체킹누적테스트">체킹누적테스트</option>
+                          <option value="종합 개념 테스트">종합 개념 테스트</option>
                           <option value="기타">기타</option>
                         </select>
                         {examTemplate.examType === '기타' && (
@@ -33903,7 +34030,7 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
   const textbooks = [...ALL_TEXTBOOKS, '시험'];
 
   // 시험 유형
-  const testTypes = ['일일테스트', '주간테스트', '정기테스트', '성취도테스트', '체킹누적테스트', '일요모의고사', '기타'];
+  const testTypes = ['일일테스트', '주간테스트', '정기테스트', '성취도테스트', '체킹누적테스트', '일요모의고사', '종합 개념 테스트', '기타'];
 
   // 학년별 단원 데이터
   const unitsByGrade = {
@@ -39622,6 +39749,133 @@ function downloadTowerGuideDoc() {
 
   const dateStr = today.replace(/[^\d]/g, '');
   const filename = `몰입의탑_포인트시스템_안내_${dateStr}.doc`;
+  const blob = new Blob(['﻿', html], { type:'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ──────────────────────────────────────────────────────────
+// 🧠 종합 개념 테스트 — 학부모용 개별 진단 리포트 워드 다운로드
+//   백지 테스트 결과 + 5개 분석 섹션을 학부모 안내장 톤으로 출력.
+//   파일: paran_parent_notice.docx 의 IV. 항목(① ~ ⑤) 구조를 반영.
+// ──────────────────────────────────────────────────────────
+function downloadConceptDiagnosisReport({ student, test, session, teacherName }) {
+  const today = new Date().toLocaleDateString('ko-KR');
+  const dx = test?.diagnosisReport || {};
+  const concepts = Array.isArray(dx.conceptUnderstanding) ? dx.conceptUnderstanding : [];
+  const levelLabel = { full:'완전 이해', partial:'부분 이해', relearn:'재학습 필요' };
+  const levelColor = { full:'#059669', partial:'#d97706', relearn:'#dc2626' };
+  const levelBg    = { full:'#f0fdf4', partial:'#fffbeb', relearn:'#fef2f2' };
+  const stars = (n) => n > 0 ? '★'.repeat(Math.min(5,Math.max(0,Math.round(n)))) + '☆'.repeat(Math.max(0, 5-Math.min(5,Math.round(n)))) : '미평가';
+  const sc = parseFloat(test?.testScore);
+  const tot = parseFloat(test?.testTotal);
+  const pct = (!isNaN(sc) && !isNaN(tot) && tot > 0) ? Math.round(sc/tot*100) : null;
+
+  const STYLE = `
+    @page { margin: 1.3cm 1.3cm; }
+    body { font-family:'Pretendard','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',sans-serif; color:#111827; line-height:1.55; letter-spacing:-0.1pt; font-size:10pt; }
+    h1 { color:#3730a3; font-size:18pt; font-weight:800; letter-spacing:-0.5pt; padding-bottom:5pt; margin:0 0 3pt; border-bottom:1pt solid #1f2937; }
+    .subtitle { color:#6b7280; font-size:9.5pt; margin:0 0 10pt; }
+    .info-table { width:100%; border-collapse:collapse; border:0.5pt solid #1f2937; margin-bottom:10pt; }
+    .info-table td { padding:6pt 9pt; border:0.5pt solid #6b7280; font-size:9.5pt; vertical-align:middle; }
+    .info-table td.lbl { width:14%; font-weight:700; color:#111827; background:#f9fafb; }
+    .info-table td.val { width:36%; }
+    .score-box { display:inline-block; padding:3pt 8pt; border:0.5pt solid #1f2937; background:#eef2ff; color:#3730a3; font-weight:800; font-size:10pt; }
+    .section { margin:8pt 0 4pt; border:0.5pt solid #1f2937; }
+    .section-head { padding:5pt 10pt; font-weight:800; font-size:10.5pt; background:#eef2ff; color:#3730a3; border-bottom:0.5pt solid #1f2937; }
+    .section-body { padding:6pt 10pt; font-size:9.5pt; color:#374151; min-height:14pt; }
+    .concept-table { width:100%; border-collapse:collapse; margin:0; }
+    .concept-table th { padding:5pt 8pt; border-bottom:0.5pt solid #1f2937; background:#fafafa; font-weight:700; text-align:left; font-size:9pt; color:#374151; }
+    .concept-table td { padding:5pt 8pt; border-top:0.5pt solid #6b7280; font-size:9.5pt; vertical-align:middle; }
+    .concept-table tr:first-child td { border-top:none; }
+    .badge { display:inline-block; padding:1pt 6pt; border:0.5pt solid; font-size:9pt; font-weight:700; }
+    .att-row { display:table; width:100%; }
+    .att-row > .att-col { display:table-cell; padding:4pt 8pt; border-right:0.5pt solid #6b7280; vertical-align:top; }
+    .att-row > .att-col:last-child { border-right:none; }
+    .att-row > .att-col .lbl { font-weight:700; color:#3730a3; font-size:9pt; }
+    .att-row > .att-col .val { font-size:11pt; color:#d97706; margin-top:1pt; }
+    .footer { margin-top:14pt; padding-top:6pt; border-top:0.5pt solid #6b7280; text-align:center; color:#6b7280; font-size:8.5pt; }
+    .sign-block { margin-top:12pt; text-align:right; font-size:9.5pt; color:#111827; }
+    .sign-block .name { font-weight:800; font-size:10.5pt; margin-top:2pt; }
+  `;
+
+  const conceptRowsHtml = concepts.length > 0
+    ? concepts.map(c => `<tr>
+        <td style="width:34%;font-weight:700;color:#111827;">${(c.unit || '').replace(/</g,'&lt;') || '단원 미입력'}</td>
+        <td style="width:22%;"><span class="badge" style="background:${levelBg[c.level]||'#f3f4f6'};border-color:${levelColor[c.level]||'#9ca3af'};color:${levelColor[c.level]||'#374151'};">${levelLabel[c.level] || '미평가'}</span></td>
+        <td style="color:#374151;">${(c.note || '').replace(/</g,'&lt;')}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="3" style="color:#9ca3af;text-align:center;padding:10pt;">개념별 이해도 항목이 입력되지 않았습니다.</td></tr>`;
+
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${student?.name||'학생'} 종합 개념 테스트 개별 진단 리포트</title><style>${STYLE}</style></head><body>
+    <h1>🧠 종합 개념 테스트 — 개별 진단 리포트</h1>
+    <p class="subtitle">파란수학학원 몰입관 · 학부모용 1:1 진단 자료 · 백지 테스트 기반</p>
+
+    <table class="info-table"><tr>
+      <td class="lbl">학생 이름</td><td class="val">${student?.name||''}</td>
+      <td class="lbl">학년 / 반</td><td class="val">${(student?.grade||'') + (student?.className?' / '+student.className:'')}</td>
+    </tr><tr>
+      <td class="lbl">시험일</td><td class="val">${session?.date || test?.date || ''}</td>
+      <td class="lbl">시험 범위</td><td class="val">${(test?.testScope || '').replace(/</g,'&lt;') || '-'}</td>
+    </tr><tr>
+      <td class="lbl">담당 강사</td><td class="val">${teacherName || ''}</td>
+      <td class="lbl">총평 점수</td><td class="val">${(!isNaN(sc)&&!isNaN(tot))?`<span class="score-box">${test.testScore} / ${test.testTotal}${pct!==null?` &nbsp; (${pct}%)`:''}</span>`:'<span style="color:#9ca3af;">점수 미기재</span>'}</td>
+    </tr></table>
+
+    <div class="section">
+      <div class="section-head">① 개념별 이해도 — 단원별 3단계 진단</div>
+      <table class="concept-table">
+        <thead><tr><th>단원</th><th style="width:22%;">이해 단계</th><th>관찰 메모</th></tr></thead>
+        <tbody>${conceptRowsHtml}</tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-head">② 취약 단원 분석 — 막히는 지점과 원인</div>
+      <div class="section-body">${(dx.weakUnitsAnalysis || '').replace(/</g,'&lt;').replace(/\n/g,'<br/>') || '<span style="color:#9ca3af;">분석 내용이 입력되지 않았습니다.</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">③ 학습 태도 평가 — 백지 답안에서 드러난 정리력·논리력·집중도</div>
+      <div class="section-body" style="padding:0;">
+        <div class="att-row">
+          <div class="att-col" style="width:25%;"><div class="lbl">📋 정리력</div><div class="val">${stars(dx.attitudeOrganization)}</div></div>
+          <div class="att-col" style="width:25%;"><div class="lbl">🧩 논리력</div><div class="val">${stars(dx.attitudeLogic)}</div></div>
+          <div class="att-col" style="width:25%;"><div class="lbl">🎯 집중도</div><div class="val">${stars(dx.attitudeFocus)}</div></div>
+          <div class="att-col" style="width:25%;padding:8pt;font-size:9pt;color:#374151;">${(dx.attitudeNote || '').replace(/</g,'&lt;').replace(/\n/g,'<br/>') || '<span style="color:#9ca3af;">메모 없음</span>'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">④ 맞춤 후속 학습 계획 — 다음 단원 방향과 보강 과제</div>
+      <div class="section-body">${(dx.followUpPlan || '').replace(/</g,'&lt;').replace(/\n/g,'<br/>') || '<span style="color:#9ca3af;">학습 계획이 입력되지 않았습니다.</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">⑤ 학부모 상담 자료 — 1:1 면담 시 함께 보실 내용</div>
+      <div class="section-body">${(dx.parentConsult || '').replace(/</g,'&lt;').replace(/\n/g,'<br/>') || '<span style="color:#9ca3af;">상담 자료가 입력되지 않았습니다.</span>'}</div>
+    </div>
+
+    ${dx.overallComment ? `<div class="section">
+      <div class="section-head" style="background:#fffbeb;color:#92400e;">💬 종합 코멘트</div>
+      <div class="section-body">${dx.overallComment.replace(/</g,'&lt;').replace(/\n/g,'<br/>')}</div>
+    </div>` : ''}
+
+    <div class="sign-block">
+      ${today}<br/>
+      <span class="name">파란수학학원 몰입관</span>${teacherName ? ` · 담당 ${teacherName}` : ''}
+    </div>
+
+    <div class="footer">© 파란수학학원 몰입관 — 본 진단 리포트는 학생의 학습 처방을 위해 작성된 1:1 자료입니다. 외부 유출을 삼가주세요.</div>
+  </body></html>`;
+
+  const safeName = (student?.name||'학생').replace(/[\\/:*?"<>|]/g,'_');
+  const dateStr = (session?.date || test?.date || today).replace(/[^\d]/g,'');
+  const filename = `${safeName}_종합개념테스트_진단리포트_${dateStr}.doc`;
   const blob = new Blob(['﻿', html], { type:'application/msword' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
