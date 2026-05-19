@@ -40508,6 +40508,9 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
   const [loading, setLoading] = useState(true);
   const [expandedStudent, setExpandedStudent] = useState(null);
   const [searchDate, setSearchDate] = useState(''); // 날짜 검색
+  // 학부모 카톡 전송용 메시지 미리보기 모달
+  const [kakaoPreview, setKakaoPreview] = useState(null); // { studentName, message }
+  const [kakaoCopied, setKakaoCopied] = useState(false);
   const todayStr = new Date().toISOString().split('T')[0];
   
   const classOptions = ['중등몰입A', '중등몰입B', '중등몰입C', '고등몰입A'];
@@ -40773,6 +40776,75 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
 
   return (
     <div className="space-y-4">
+      {/* 💬 학부모 카톡 전송 미리보기 모달 */}
+      {kakaoPreview && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setKakaoPreview(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* 헤더 */}
+            <div className="bg-yellow-400 px-4 py-3 rounded-t-xl flex items-center justify-between">
+              <p className="font-bold text-yellow-900 text-sm">💬 {kakaoPreview.studentName} 학부모님께 보낼 메시지</p>
+              <button onClick={() => setKakaoPreview(null)} className="text-yellow-900 hover:text-yellow-700 text-xl font-bold leading-none">×</button>
+            </div>
+            {/* 본문 */}
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-900">
+                <p className="font-bold mb-1">📌 사용 방법</p>
+                <p className="leading-relaxed">
+                  ① 아래 <strong>📋 메시지 복사</strong> 버튼을 누르세요.<br/>
+                  ② 카카오톡을 열어 학부모님 채팅창에 <strong>붙여넣기 (Ctrl+V / 길게 눌러 붙여넣기)</strong> 하면 끝.<br/>
+                  <span className="text-yellow-700">※ 모바일에서는 위의 카톡 전송 버튼이 공유 시트를 띄워 카카오톡을 바로 선택할 수 있습니다.</span>
+                </p>
+              </div>
+              <textarea
+                value={kakaoPreview.message}
+                onChange={e => setKakaoPreview({ ...kakaoPreview, message: e.target.value })}
+                rows={14}
+                className="w-full p-3 border border-gray-300 rounded-lg text-xs bg-gray-50 font-mono resize-y"
+                style={{ lineHeight: 1.6 }}
+              />
+              <p className="text-[11px] text-gray-500">메시지는 보내기 전 직접 수정하실 수 있습니다.</p>
+            </div>
+            {/* 하단 버튼 */}
+            <div className="border-t bg-gray-50 px-4 py-3 rounded-b-xl flex items-center justify-end gap-2">
+              <button
+                onClick={() => setKakaoPreview(null)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded-lg">
+                닫기
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(kakaoPreview.message);
+                    setKakaoCopied(true);
+                  } catch (e) {
+                    // fallback — textarea select + execCommand
+                    const ta = document.createElement('textarea');
+                    ta.value = kakaoPreview.message; document.body.appendChild(ta);
+                    ta.select();
+                    try { document.execCommand('copy'); setKakaoCopied(true); } catch (_) {}
+                    document.body.removeChild(ta);
+                  }
+                }}
+                className={`px-4 py-2 ${kakaoCopied ? 'bg-green-500 hover:bg-green-600' : 'bg-yellow-500 hover:bg-yellow-600'} text-white text-sm font-bold rounded-lg shadow-sm flex items-center gap-1.5`}>
+                {kakaoCopied ? '✅ 복사 완료' : '📋 메시지 복사'}
+              </button>
+              {/Mobi|Android|iPhone/i.test(navigator.userAgent) && (
+                <button
+                  onClick={async () => {
+                    if (navigator.share) {
+                      try { await navigator.share({ title: `${kakaoPreview.studentName} 수업 준비 보고`, text: kakaoPreview.message }); }
+                      catch (_) {}
+                    }
+                  }}
+                  className="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-sm font-bold rounded-lg shadow-sm">
+                  📤 공유
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 헤더 */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-2xl p-4 text-white">
         <h2 className="text-lg font-bold mb-1">📝 수업 준비 노트</h2>
@@ -41082,27 +41154,43 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
 
                             const msg = lines.join('\n');
 
-                            // 클립보드 복사 + 카톡 열기
-                            const openKakao = () => {
-                              const encoded = encodeURIComponent(msg);
-                              // 모바일: kakaotalk://send (텍스트 공유), 데스크탑: 카카오 share
-                              const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
-                              if (isMobile) {
-                                window.location.href = 'kakaotalk://send?text=' + encoded;
-                              } else {
-                                window.open('https://web.kakao.com/', '_blank');
+                            // 1) 모바일 — Web Share API 우선 시도 (네이티브 공유 시트 → 카톡 선택)
+                            const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+                            const tryShare = async () => {
+                              if (navigator.share) {
+                                try {
+                                  await navigator.share({ title: `${st.name} 수업 준비 보고`, text: msg });
+                                  return true;
+                                } catch (e) {
+                                  // 사용자가 공유 시트를 닫았거나 실패
+                                  if (e && e.name !== 'AbortError') console.warn('share failed', e);
+                                  return false;
+                                }
                               }
+                              return false;
                             };
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                              navigator.clipboard.writeText(msg).then(() => {
-                                alert('✅ 학부모 메시지가 클립보드에 복사되었습니다.\n\n카카오톡이 열리면 학부모님 채팅창에 붙여넣기(Ctrl+V 또는 길게 눌러 붙여넣기) 해주세요.');
-                                openKakao();
-                              }).catch(() => {
-                                window.prompt('아래 메시지를 복사해 카톡으로 보내세요:', msg);
-                              });
-                            } else {
-                              window.prompt('아래 메시지를 복사해 카톡으로 보내세요:', msg);
-                            }
+
+                            // 2) 데스크탑 또는 share 실패 — 미리보기 모달 + 클립보드 복사
+                            const openPreview = async () => {
+                              setKakaoCopied(false);
+                              setKakaoPreview({ studentName: st.name, message: msg });
+                              // 백그라운드로 자동 복사 시도 (모달이 열린 상태에서 사용자 액션이 있어야 동작하는 브라우저도 있어 best-effort)
+                              try {
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                  await navigator.clipboard.writeText(msg);
+                                  setKakaoCopied(true);
+                                }
+                              } catch (_) {}
+                            };
+
+                            (async () => {
+                              if (isMobile) {
+                                const ok = await tryShare();
+                                if (!ok) await openPreview();
+                              } else {
+                                await openPreview();
+                              }
+                            })();
                           }}
                           className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-xs font-bold rounded-lg shadow-sm whitespace-nowrap flex items-center gap-1"
                           title="체크리스트 완성 후 학부모님 카톡으로 바로 전송"
