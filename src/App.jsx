@@ -40706,6 +40706,26 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
 
   const getOption = (studentName, key) => prepNotes[activeDate]?.[studentName]?.[key] || '';
 
+  // 소제목별 자유 메모 (예: 숙제 검사 → 완료 여부에 대한 부가 메모)
+  const setSubMemo = (studentName, key, text) => {
+    const updated = { ...prepNotes };
+    if (!updated[activeDate]) updated[activeDate] = {};
+    if (!updated[activeDate][studentName]) updated[activeDate][studentName] = {};
+    updated[activeDate][studentName][key + '_memo'] = text;
+    savePrepNotes(updated);
+  };
+  const getSubMemo = (studentName, key) => prepNotes[activeDate]?.[studentName]?.[key + '_memo'] || '';
+
+  // 직전 수업 / 숙제 직접 수정 (오버라이드)
+  const setOverride = (studentName, field, text) => {
+    const updated = { ...prepNotes };
+    if (!updated[activeDate]) updated[activeDate] = {};
+    if (!updated[activeDate][studentName]) updated[activeDate][studentName] = {};
+    updated[activeDate][studentName][field] = text;
+    savePrepNotes(updated);
+  };
+  const getOverride = (studentName, field) => prepNotes[activeDate]?.[studentName]?.[field];
+
   // 체크리스트 토글 (기존 호환용)
   const toggleCheck = (studentName, key) => {
     const updated = { ...prepNotes };
@@ -40822,23 +40842,35 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
           const teacherMap = {};
           filtered.forEach(s => { const tid=s.teacherId||'__none__'; if(!teacherMap[tid])teacherMap[tid]={}; const cn=s.className||'__unassigned__'; if(!teacherMap[tid][cn])teacherMap[tid][cn]=[]; teacherMap[tid][cn].push(s); });
 
-          // 인라인 OptionGroup 컴포넌트
+          // 인라인 OptionGroup 컴포넌트 — 소제목별로 기타 메모 한 줄 추가
           const OptionGroup = ({ stName, label, icon, optKey, options, autoValue }) => {
             const val = getOption(stName, optKey) || autoValue || '';
             const isAuto = !getOption(stName, optKey) && !!autoValue;
+            const memoVal = getSubMemo(stName, optKey);
             return (
-              <div className="flex items-start gap-2 flex-wrap">
-                <span className="text-xs text-gray-600 w-28 flex-shrink-0 pt-1">
-                  {icon} {label}
-                  {isAuto && <span className="ml-1 text-[9px] text-indigo-400 block">보고서↑</span>}
-                </span>
-                <div className="flex gap-1 flex-wrap">
-                  {options.map(opt => (
-                    <button key={opt.value} onClick={() => setOption(stName, optKey, opt.value)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${ val === opt.value ? `${opt.active} border-transparent shadow-sm${isAuto?' ring-2 ring-indigo-300 ring-offset-1':''}` : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300' }`}>
-                      {opt.label}
-                    </button>
-                  ))}
+              <div className="space-y-1">
+                <div className="flex items-start gap-2 flex-wrap">
+                  <span className="text-xs text-gray-600 w-28 flex-shrink-0 pt-1">
+                    {icon} {label}
+                    {isAuto && <span className="ml-1 text-[9px] text-indigo-400 block">보고서↑</span>}
+                  </span>
+                  <div className="flex gap-1 flex-wrap">
+                    {options.map(opt => (
+                      <button key={opt.value} onClick={() => setOption(stName, optKey, opt.value)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${ val === opt.value ? `${opt.active} border-transparent shadow-sm${isAuto?' ring-2 ring-indigo-300 ring-offset-1':''}` : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300' }`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pl-[7.25rem]">
+                  <input
+                    type="text"
+                    value={memoVal}
+                    onChange={e => setSubMemo(stName, optKey, e.target.value)}
+                    placeholder="✏️ 기타 메모 (선택)"
+                    className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-[11px] bg-white/70 focus:bg-white focus:border-indigo-300 placeholder:text-gray-300"
+                  />
                 </div>
               </div>
             );
@@ -40889,22 +40921,200 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                 {isOpen && (
                   <div className="border-t p-3 bg-gray-50 space-y-3">
 
-                    {/* 📄 종이 기록용 워드 다운로드 */}
-                    <div className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
-                      <div className="text-[11px] text-emerald-800 leading-snug">
-                        <span className="font-bold">📄 종이 기록용 워드 다운로드</span>
-                        <span className="ml-1 text-emerald-600">— 인쇄 후 손으로 ○ 위에 ✔ 표시 / 메모</span>
+                    {/* 📄 종이 워드 다운로드 + 📱 학부모 카톡 전송 */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                        <div className="text-[11px] text-emerald-800 leading-snug">
+                          <span className="font-bold">📄 종이 기록용 워드 다운로드</span>
+                          <span className="ml-1 text-emerald-600">— 인쇄 후 손으로 ○ 위에 ✔ 표시</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); downloadLessonPrepDoc({ student: st, summary, activeDate }); }}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm whitespace-nowrap"
+                        >
+                          📥 워드 다운로드
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); downloadLessonPrepDoc({ student: st, summary, activeDate }); }}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm whitespace-nowrap"
-                      >
-                        📥 워드 다운로드
-                      </button>
+                      {/* 학부모 카톡 전송 */}
+                      <div className="flex items-center justify-between gap-2 bg-yellow-50 border border-yellow-300 rounded-lg p-2.5">
+                        <div className="text-[11px] text-yellow-900 leading-snug">
+                          <span className="font-bold">💬 학부모 카톡 전송</span>
+                          <span className="ml-1 text-yellow-700">— 체크리스트·메모 자동 정리 후 카톡으로 바로 보내기</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // 메시지 빌드 — 학부모 시점의 친근한 톤
+                            const opt = (k) => getOption(st.name, k);
+                            const mem = (k) => getSubMemo(st.name, k);
+                            const ov  = (f) => getOverride(st.name, f);
+                            const lines = [];
+                            lines.push(`[${st.name} 학생 수업 준비 보고 — ${activeDate}]`);
+                            lines.push('');
+
+                            // 직전 수업 요약
+                            lines.push('📖 직전 수업 요약');
+                            if (typeof ov('overrideLastSession') === 'string' && ov('overrideLastSession').trim()) {
+                              lines.push(ov('overrideLastSession').trim());
+                            } else {
+                              if (summary.lastDate) lines.push(`· 직전 수업일: ${summary.lastDate}${summary.wasAbsent?' (❌ 결석)':summary.wasSupplement?' (🟠 보충)':''}`);
+                              if (summary.wasAbsent && summary.contentSessionDate) lines.push(`  → 표시 기준: ${summary.contentSessionDate}`);
+                              if (summary.wasSupplement && summary.regularSessionDate) lines.push(`  → 정규 수업일: ${summary.regularSessionDate}`);
+                              const fmtList = (arr, prefix='·') => arr.map(c => {
+                                const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
+                                const parts = [tb, c.grade, c.pages?`p.${c.pages}`:'', c.detailUnit?`— ${c.detailUnit}`:''].filter(Boolean).join(' ');
+                                return `${prefix} ${parts}`;
+                              });
+                              if (summary.wasSupplement) {
+                                if (summary.lastSessionContents.length) { lines.push('📘 정규:'); fmtList(summary.lastSessionContents,'  ·').forEach(l=>lines.push(l)); }
+                                if (summary.supplementContents.length)  { lines.push('🟠 보충:'); fmtList(summary.supplementContents,'  ·').forEach(l=>lines.push(l)); }
+                              } else {
+                                fmtList(summary.lastSessionContents).forEach(l=>lines.push(l));
+                              }
+                              if (summary.lastTest) lines.push(`🎯 ${summary.lastTest.name} ${summary.lastTest.score}/${summary.lastTest.total}점`);
+                              if (summary.lastUnderstanding) lines.push(`🌟 이해도: ${'⭐'.repeat(summary.lastUnderstanding)}`);
+                            }
+                            lines.push('');
+
+                            // 직전 숙제
+                            lines.push('📋 직전 수업 숙제');
+                            if (typeof ov('overrideLastHomework') === 'string' && ov('overrideLastHomework').trim()) {
+                              lines.push(ov('overrideLastHomework').trim());
+                            } else if (summary.lastHomework.length > 0) {
+                              summary.lastHomework.forEach(hw => lines.push(`· ${hw.label}${hw.completed?' (완료)':''}`));
+                            } else {
+                              lines.push('· 기록 없음');
+                            }
+                            lines.push('');
+
+                            // 취약 유형
+                            if (summary.weakTypes.length > 0) {
+                              lines.push('⚠️ 취약 유형');
+                              summary.weakTypes.forEach(([t,c]) => lines.push(`· ${t} (${c}개)`));
+                              lines.push('');
+                            }
+
+                            // 수업 전 체크리스트
+                            const labelMap = {
+                              done:'✅ 완료', partial:'🔶 약간 미완', notdone:'❌ 미완료',
+                              good:'👍 충분', weak:'👎 미흡',
+                              sincere:'😊 확실히 했음', lazy:'😑 대충 했음',
+                              fine:'😊 괜찮음', abit:'😪 약간', sleepy:'😴 많이 졸림',
+                              focused:'🎯 집중함', distract:'😵 많이 산만',
+                              high:'🔥 높음', mid:'😐 보통', low:'😞 낮음',
+                              written:'✅ 작성', notwritten:'❌ 미작성',
+                              pass:'✅ 통과', retest:'🔄 재시험',
+                            };
+                            const fmtItem = (label, key) => {
+                              const v = opt(key);
+                              const m = mem(key);
+                              if (!v && !m) return null;
+                              const valLbl = v ? (labelMap[v] || v) : '—';
+                              return `· ${label}: ${valLbl}${m?` (${m})`:''}`;
+                            };
+                            const sections = [
+                              ['📚 숙제 검사', [
+                                ['완료 여부','hwDone'],['풀이 과정','hwProcess'],
+                                ['틀린 문제 수정','hwCorrect'],['숙제 성실도','hwQuality'],
+                              ]],
+                              ['🧠 수업 태도', [
+                                ['졸음·무기력','attitudeSleepy'],['집중·산만','attitudeDistract'],['학습 의욕','attitudeMotivation'],
+                              ]],
+                              ['📋 행정', [
+                                ['부모님 사인','parentSign'],['오답노트','odalNote'],
+                              ]],
+                              ['🎯 수업 계획', [
+                                ['재시험','retestCheck'],
+                              ]],
+                            ];
+                            // hwDone 자동 fallback
+                            const hwDoneVal = opt('hwDone') || hwAutoStatus;
+                            sections.forEach(([secLabel, items]) => {
+                              const filled = items.map(([lbl,k]) => {
+                                if (k === 'hwDone') {
+                                  const v = hwDoneVal;
+                                  const m = mem(k);
+                                  if (!v && !m) return null;
+                                  const valLbl = v ? (labelMap[v] || v) : '—';
+                                  return `· ${lbl}: ${valLbl}${m?` (${m})`:''}`;
+                                }
+                                return fmtItem(lbl, k);
+                              }).filter(Boolean);
+                              if (filled.length > 0) {
+                                lines.push(secLabel);
+                                filled.forEach(l => lines.push(l));
+                                lines.push('');
+                              }
+                            });
+
+                            // 메모 (전체)
+                            const memoVal = getMemo(st.name);
+                            if (memoVal && memoVal.trim()) {
+                              lines.push('📝 메모');
+                              lines.push(memoVal.trim());
+                              lines.push('');
+                            }
+
+                            lines.push('— 파란수학학원 몰입관');
+
+                            const msg = lines.join('\n');
+
+                            // 클립보드 복사 + 카톡 열기
+                            const openKakao = () => {
+                              const encoded = encodeURIComponent(msg);
+                              // 모바일: kakaotalk://send (텍스트 공유), 데스크탑: 카카오 share
+                              const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+                              if (isMobile) {
+                                window.location.href = 'kakaotalk://send?text=' + encoded;
+                              } else {
+                                window.open('https://web.kakao.com/', '_blank');
+                              }
+                            };
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                              navigator.clipboard.writeText(msg).then(() => {
+                                alert('✅ 학부모 메시지가 클립보드에 복사되었습니다.\n\n카카오톡이 열리면 학부모님 채팅창에 붙여넣기(Ctrl+V 또는 길게 눌러 붙여넣기) 해주세요.');
+                                openKakao();
+                              }).catch(() => {
+                                window.prompt('아래 메시지를 복사해 카톡으로 보내세요:', msg);
+                              });
+                            } else {
+                              window.prompt('아래 메시지를 복사해 카톡으로 보내세요:', msg);
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-xs font-bold rounded-lg shadow-sm whitespace-nowrap flex items-center gap-1"
+                          title="체크리스트 완성 후 학부모님 카톡으로 바로 전송"
+                        >
+                          💬 카톡 전송
+                        </button>
+                      </div>
                     </div>
 
                     {/* 직전 수업 요약 */}
+                    {(() => {
+                      const overrideSess = getOverride(st.name, 'overrideLastSession');
+                      const editing = overrideSess !== undefined;
+                      // auto 텍스트 (편집 모드 첫 진입 시 기본 채움)
+                      const autoSummary = (() => {
+                        const parts = [];
+                        if (summary.lastDate) parts.push(`📅 ${summary.lastDate}${summary.wasAbsent ? ' (결석)' : summary.wasSupplement ? ' (보충)' : ''}`);
+                        if (summary.wasSupplement && summary.regularSessionDate) parts.push(`📘 정규 수업: ${summary.regularSessionDate}`);
+                        const list = (arr) => arr.map(c => {
+                          const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
+                          return [tb, c.grade, c.pages?`p.${c.pages}`:'', c.detailUnit?`— ${c.detailUnit}`:''].filter(Boolean).join(' ');
+                        });
+                        if (summary.wasSupplement) {
+                          if (summary.lastSessionContents.length) parts.push('• 정규: ' + list(summary.lastSessionContents).join(' / '));
+                          if (summary.supplementContents.length) parts.push('• 보충: ' + list(summary.supplementContents).join(' / '));
+                        } else if (summary.lastSessionContents.length) {
+                          list(summary.lastSessionContents).forEach(s => parts.push('• ' + s));
+                        }
+                        if (summary.lastTest) parts.push(`🎯 ${summary.lastTest.name} ${summary.lastTest.score}/${summary.lastTest.total}점`);
+                        if (summary.lastUnderstanding) parts.push(`🌟 이해도 ${'⭐'.repeat(summary.lastUnderstanding)}`);
+                        return parts.join('\n');
+                      })();
+                      return (
                     <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100">
                       <p className="text-xs font-bold text-blue-700 mb-1.5 flex items-center flex-wrap gap-x-1">
                         <span>📖 직전 수업 요약</span>
@@ -40932,7 +41142,22 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                         {summary.wasSupplement && !summary.regularSessionDate && (
                           <span className="text-orange-500 font-normal">— 이전 정규 수업 기록 없음</span>
                         )}
+                        <button type="button"
+                          onClick={() => setOverride(st.name, 'overrideLastSession', editing ? undefined : autoSummary)}
+                          className={`ml-auto px-2 py-0.5 text-[10px] font-bold rounded border ${editing ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'}`}>
+                          {editing ? '↩ 원래대로' : '✏️ 직접 수정'}
+                        </button>
                       </p>
+
+                      {editing ? (
+                        <textarea
+                          value={overrideSess}
+                          onChange={e => setOverride(st.name, 'overrideLastSession', e.target.value)}
+                          rows={6}
+                          className="w-full p-2 border border-blue-200 rounded text-xs bg-white resize-y mb-1"
+                          placeholder="직전 수업 요약을 직접 입력하세요"
+                        />
+                      ) : (<>
 
                       {/* 보충 케이스: 정규 + 보충 두 블록 */}
                       {summary.wasSupplement ? (
@@ -41012,10 +41237,29 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                         {summary.lastTest && <span><span className="text-gray-500">시험:</span> <span className="font-medium">{summary.lastTest.name} {summary.lastTest.score}/{summary.lastTest.total}점</span></span>}
                         {summary.lastUnderstanding && <span><span className="text-gray-500">이해도:</span> <span>{'⭐'.repeat(summary.lastUnderstanding)}</span></span>}
                       </div>
+                      </>)}
                     </div>
+                    ); })()}
 
-                    {/* 직전 숙제 (보고서 연동) */}
-                    {summary.lastHomework.length > 0 && (
+                    {/* 직전 숙제 (보고서 연동) — 직접 수정 가능 */}
+                    {(() => {
+                      const overrideHw = getOverride(st.name, 'overrideLastHomework');
+                      const editingHw = overrideHw !== undefined;
+                      const autoHwText = summary.lastHomework.map(hw => `• ${hw.label}${hw.completed ? ' (완료)' : ''}`).join('\n');
+                      if (summary.lastHomework.length === 0 && !editingHw) {
+                        // 보고서에 숙제 기록 없음 — 그래도 직접 추가할 수 있도록 빈 버튼 노출
+                        return (
+                          <div className="bg-indigo-50 rounded-lg p-2.5 border border-indigo-100 flex items-center justify-between">
+                            <p className="text-[11px] font-bold text-indigo-700">📋 직전 수업 숙제 <span className="font-normal text-indigo-400">(보고서 기록 없음)</span></p>
+                            <button type="button"
+                              onClick={() => setOverride(st.name, 'overrideLastHomework', '')}
+                              className="px-2 py-0.5 text-[10px] font-bold rounded border bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50">
+                              ✏️ 직접 입력
+                            </button>
+                          </div>
+                        );
+                      }
+                      return (
                       <div className="bg-indigo-50 rounded-lg p-2.5 border border-indigo-100">
                         <p className="text-[11px] font-bold text-indigo-700 mb-1.5 flex flex-wrap items-center gap-x-1">
                           <span>📋 직전 수업 숙제</span>
@@ -41025,8 +41269,21 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                           {summary.wasSupplement && summary.regularSessionDate && (
                             <span className="font-normal text-indigo-400">(📘 정규 수업 {summary.regularSessionDate} 기준)</span>
                           )}
+                          <button type="button"
+                            onClick={() => setOverride(st.name, 'overrideLastHomework', editingHw ? undefined : autoHwText)}
+                            className={`ml-auto px-2 py-0.5 text-[10px] font-bold rounded border ${editingHw ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50'}`}>
+                            {editingHw ? '↩ 원래대로' : '✏️ 직접 수정'}
+                          </button>
                         </p>
-                        {summary.lastHomework.map((hw, i) => (
+                        {editingHw ? (
+                          <textarea
+                            value={overrideHw}
+                            onChange={e => setOverride(st.name, 'overrideLastHomework', e.target.value)}
+                            rows={4}
+                            className="w-full p-2 border border-indigo-200 rounded text-xs bg-white resize-y"
+                            placeholder="• 쎈 p.93~96&#10;• 오답노트 5문제"
+                          />
+                        ) : summary.lastHomework.map((hw, i) => (
                           <div key={i} className="flex items-center gap-2 mb-0.5">
                             <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${hw.completed ? 'bg-green-400' : 'bg-gray-300'}`} />
                             <span className="text-xs text-gray-700">{hw.label}</span>
@@ -41042,7 +41299,8 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                           </div>
                         )}
                       </div>
-                    )}
+                      );
+                    })()}
 
                     {summary.weakTypes.length > 0 && (
                       <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100">
