@@ -1129,7 +1129,7 @@ export default function ParanMathSystem() {
       <div className={`bg-gradient-to-r ${getHeaderColor()} text-white p-4 shadow-lg`}>
         <div className="max-w-6xl mx-auto flex justify-between items-center gap-2">
           <div className="min-w-0 flex-1 flex items-center gap-2 md:gap-3">
-            <img src="/logo-icon.png" alt="" className="h-9 w-9 md:h-11 md:w-11 flex-shrink-0"
+            <img src="/logo-icon.png?v=3" alt="" className="h-9 w-9 md:h-11 md:w-11 flex-shrink-0"
               style={{ filter: 'brightness(1.2) saturate(1.15) drop-shadow(0 1px 4px rgba(255,255,255,0.5))' }} />
             <div className="min-w-0">
               <h1 className="text-lg md:text-2xl font-bold whitespace-nowrap truncate">파란수학학원 몰입관</h1>
@@ -1691,7 +1691,7 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
           <div className="absolute inset-0 flex flex-col justify-center items-center px-12 text-white">
             <div className="mb-6">
               <div className="w-24 h-24 rounded-3xl bg-white/15 backdrop-blur flex items-center justify-center mb-4 border border-white/20 shadow-2xl p-2">
-                <img src="/logo-icon.png" alt="파란수학학원 몰입관" className="w-full h-full object-contain"
+                <img src="/logo-icon.png?v=3" alt="파란수학학원 몰입관" className="w-full h-full object-contain"
                   style={{ filter: 'brightness(1.3) saturate(1.2) drop-shadow(0 2px 6px rgba(255,255,255,0.5))' }} />
               </div>
               <h1 className="text-4xl font-black leading-tight" style={{ fontFamily: "'Noto Serif KR', serif" }}>파란수학학원</h1>
@@ -1718,7 +1718,7 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
           <div className="w-full max-w-sm">
             {/* 모바일 로고 */}
             <div className="lg:hidden text-center mb-6">
-              <img src="/logo-icon.png" alt="파란수학학원 몰입관" className="h-16 w-16 mx-auto mb-2"
+              <img src="/logo-icon.png?v=3" alt="파란수학학원 몰입관" className="h-16 w-16 mx-auto mb-2"
                 style={{ filter: 'brightness(0.92) contrast(1.15) saturate(1.08)' }} />
               <h1 className="text-2xl font-black text-slate-800 mt-1" style={{ fontFamily: "'Noto Serif KR', serif" }}>파란수학학원 몰입관</h1>
             </div>
@@ -1948,7 +1948,7 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
       }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src="/logo-icon.png" alt="" style={{
+            <img src="/logo-icon.png?v=3" alt="" style={{
               width: 38, height: 38, objectFit: 'contain',
               // 스크롤 전(어두운 파랑 hero): 밝게 + 글로우 / 스크롤 후(흰색): 약간 어둡게 + 대비
               filter: scrolled
@@ -2216,7 +2216,7 @@ function LoginScreen({ students: propStudents, teachers, passwords, onLogin }) {
       <footer style={{ background: '#0f172a', padding: '40px 24px', textAlign: 'center' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
-            <img src="/logo-icon.png" alt="" style={{
+            <img src="/logo-icon.png?v=3" alt="" style={{
               width: 36, height: 36, objectFit: 'contain',
               filter: 'brightness(1.4) saturate(1.25) drop-shadow(0 0 6px rgba(96,165,250,0.5))'
             }} />
@@ -4034,7 +4034,7 @@ function ParentView({ student, students, onLogout }) {
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 shadow-lg">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div className="min-w-0 flex-1 flex items-center gap-2 md:gap-3">
-            <img src="/logo-icon.png" alt="" className="h-9 w-9 md:h-11 md:w-11 flex-shrink-0"
+            <img src="/logo-icon.png?v=3" alt="" className="h-9 w-9 md:h-11 md:w-11 flex-shrink-0"
               style={{ filter: 'brightness(1.2) saturate(1.15) drop-shadow(0 1px 4px rgba(255,255,255,0.5))' }} />
             <div className="min-w-0">
               <h1 className="text-base md:text-xl font-bold whitespace-nowrap truncate">파란수학학원 몰입관</h1>
@@ -8563,7 +8563,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
 
         {/* 하단 */}
         <div className="text-center text-gray-400 text-sm py-4 flex items-center justify-center gap-2">
-          <img src="/logo-icon.png" alt="" className="h-6 w-6"
+          <img src="/logo-icon.png?v=3" alt="" className="h-6 w-6"
             style={{ filter: 'brightness(0.85) contrast(1.18) saturate(1.1)' }} />
           <p>파란수학학원 몰입관</p>
         </div>
