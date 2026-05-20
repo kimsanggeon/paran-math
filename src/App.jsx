@@ -42281,6 +42281,26 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
     saveAttendance(newRecords);
   };
 
+  // ★ 잘못 클릭 수정 — 출결 기록 삭제 (미등록 상태로 되돌림)
+  const clearAttendance = (studentId, date) => {
+    const key = `${date}_${studentId}`;
+    if (!attendanceRecords[key]) return;
+    const newRecords = { ...attendanceRecords };
+    delete newRecords[key];
+    saveAttendance(newRecords);
+  };
+
+  // 같은 상태 다시 누르면 토글 해제 (잘못 클릭 즉시 취소)
+  const toggleAttendance = (studentId, date, status) => {
+    const key = `${date}_${studentId}`;
+    const prev = attendanceRecords[key];
+    if (prev && prev.status === status) {
+      clearAttendance(studentId, date);
+    } else {
+      updateAttendance(studentId, date, status);
+    }
+  };
+
   // 특정 날짜의 학생 출결 상태 가져오기
   const getAttendanceStatus = (studentId, date) => {
     const key = `${date}_${studentId}`;
@@ -42465,6 +42485,9 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
             <h3 className="font-bold text-lg text-teal-800">
               📅 {selectedDate} ({dayNames[new Date(selectedDate).getDay()]}요일) 출석부
             </h3>
+            <p className="text-[11px] text-teal-700 mt-1">
+              💡 잘못 클릭한 경우 — <strong>다른 상태 버튼</strong>을 누르거나, <strong>같은 버튼을 다시 눌러</strong> 토글 해제, 또는 <strong>↻ 취소</strong> 버튼으로 미등록으로 되돌릴 수 있습니다.
+            </p>
           </div>
           
           <div className="divide-y">
@@ -42514,16 +42537,32 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
                         </button>
                         {['present', 'late', 'early', 'absent', 'excused'].map(status => {
                           const s = getStatusStyle(status);
+                          const isActive = record?.status === status;
                           return (
                             <button
                               key={status}
-                              onClick={() => updateAttendance(student.id, selectedDate, status)}
-                              className={`px-2 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${ record?.status === status ? `${s.bg} ${s.text} ring-2 ring-offset-1 ring-current` : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }`}
+                              onClick={() => toggleAttendance(student.id, selectedDate, status)}
+                              title={isActive ? '다시 눌러 미등록으로 되돌리기' : `${s.label}으로 표시`}
+                              className={`px-2 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex-shrink-0 ${ isActive ? `${s.bg} ${s.text} ring-2 ring-offset-1 ring-current` : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }`}
                             >
                               {s.label}
                             </button>
                           );
                         })}
+                        {/* ↻ 잘못 클릭 시 미등록으로 되돌리기 — 기록이 있을 때만 노출 */}
+                        {record && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`${student.name} 학생의 ${selectedDate} 출결 기록을 삭제하고 "미등록" 상태로 되돌리시겠습니까?`)) {
+                                clearAttendance(student.id, selectedDate);
+                              }
+                            }}
+                            title="출결 기록 취소 (미등록으로)"
+                            className="px-2 py-1 rounded-lg text-xs font-bold bg-white border border-red-200 text-red-500 hover:bg-red-50 transition-colors whitespace-nowrap flex-shrink-0 flex items-center gap-0.5"
+                          >
+                            ↻ 취소
+                          </button>
+                        )}
                       </div>
                     </div>
                     {showReason && (
