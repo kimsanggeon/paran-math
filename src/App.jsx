@@ -28541,6 +28541,8 @@ function GamificationTab({ students, saveStudents }) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [gamifView, setGamifView] = useState('tower'); // 'tower' | 'exp' | 'territory'
   const [teacherTerritories, setTeacherTerritories] = useState({});
+  // ⭐ 포인트 지급 모달 (소수점 지원 + 누적 안전성)
+  const [grantModal, setGrantModal] = useState(null); // { studentId, studentName, amount, reason }
 
   // ★ 뒤로가기: 학생 선택 → 목록
   useBackButton('gamif-student', () => {
@@ -29080,23 +29082,9 @@ function GamificationTab({ students, saveStudents }) {
                     <p className="font-black text-indigo-700 text-lg">{floor}</p>
                     <p className="text-[10px] text-gray-400">층</p>
                   </div>
-                  {/* 포인트 지급 버튼 */}
-                  <button onClick={() => {
-                    const pts = parseInt(prompt(`${s.name}에게 지급할 몰입 포인트:`));
-                    if (!pts || isNaN(pts)) return;
-                    const reason = prompt('지급 사유:') || '선생님 지급';
-                    // ★ 누적(층수 기여)과 잔액(보상 상점 사용분) 둘 다 동시 증가
-                    const curLifetime = s.tower?.manualPoints || 0;
-                    const curBalance = (s.tower?.pointBalance !== undefined && s.tower?.pointBalance !== null)
-                      ? s.tower.pointBalance
-                      : curLifetime;
-                    const updated = students.map(st => st.id === s.id ? { ...st, tower: { ...st.tower,
-                      manualPoints: curLifetime + pts,
-                      pointBalance: curBalance + pts,
-                      pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: pts, reason, type: 'manual' }]
-                    } } : st);
-                    saveStudents(updated);
-                  }} className="px-2 py-1.5 bg-yellow-500 text-white rounded-lg text-[10px] font-bold hover:bg-yellow-600 flex-shrink-0" title="포인트 지급">
+                  {/* 포인트 지급 버튼 — 모달 호출 */}
+                  <button onClick={() => setGrantModal({ studentId: s.id, studentName: s.name, amount: '', reason: '' })}
+                    className="px-2 py-1.5 bg-yellow-500 text-white rounded-lg text-[10px] font-bold hover:bg-yellow-600 flex-shrink-0" title="포인트 지급">
                     +⭐
                   </button>
                 </div>
@@ -29755,6 +29743,116 @@ function GamificationTab({ students, saveStudents }) {
         </div>
       )}
       </>)}
+
+      {/* ⭐ 포인트 지급 모달 — 소수점 지원 + 누적 안전성 */}
+      {grantModal && (() => {
+        const target = students.find(s => s.id === grantModal.studentId);
+        const curLifetime = target?.tower?.manualPoints || 0;
+        const curBalance = (target?.tower?.pointBalance !== undefined && target?.tower?.pointBalance !== null)
+          ? target.tower.pointBalance
+          : curLifetime;
+        const amt = parseFloat(grantModal.amount);
+        const valid = !isNaN(amt) && amt !== 0;
+        const nextLifetime = valid ? Math.round((curLifetime + amt) * 10) / 10 : curLifetime;
+        const nextBalance = valid ? Math.round((curBalance + amt) * 10) / 10 : curBalance;
+        const submit = () => {
+          if (!valid) return;
+          const reason = (grantModal.reason || '').trim() || '선생님 지급';
+          // ★ 최신 students 배열에서 직접 읽어 안전한 누적 보장 (stale closure 방지)
+          const updated = students.map(st => {
+            if (st.id !== grantModal.studentId) return st;
+            const cl = st.tower?.manualPoints || 0;
+            const cb = (st.tower?.pointBalance !== undefined && st.tower?.pointBalance !== null) ? st.tower.pointBalance : cl;
+            return { ...st, tower: { ...(st.tower || {}),
+              manualPoints: Math.round((cl + amt) * 10) / 10,
+              pointBalance: Math.round((cb + amt) * 10) / 10,
+              pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: amt, reason, type: 'manual' }]
+            } };
+          });
+          saveStudents(updated);
+          setGrantModal(null);
+        };
+        const quickButtons = [0.5, 1, 1.5, 2, 5, 10, -1, -5];
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setGrantModal(null)}>
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+              {/* 헤더 */}
+              <div className="bg-gradient-to-r from-yellow-400 to-amber-500 px-4 py-3 rounded-t-xl flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-yellow-900 text-base">⭐ {grantModal.studentName} 학생 포인트 지급</p>
+                  <p className="text-yellow-900/80 text-[11px]">소수점 가능 · 누적 P / 잔액 P 동시 증가</p>
+                </div>
+                <button onClick={() => setGrantModal(null)} className="text-yellow-900 hover:text-yellow-700 text-2xl font-bold leading-none">×</button>
+              </div>
+              {/* 본문 */}
+              <div className="p-4 space-y-3">
+                {/* 현재 상태 */}
+                <div className="bg-gray-50 border rounded-lg p-3 grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] text-gray-500">💎 누적 P (층수 기여)</p>
+                    <p className="text-lg font-bold text-emerald-700">{curLifetime}P → <span className="text-emerald-600">{nextLifetime}P</span></p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500">🪙 잔액 P (상점 사용)</p>
+                    <p className="text-lg font-bold text-amber-700">{curBalance}P → <span className="text-amber-600">{nextBalance}P</span></p>
+                  </div>
+                </div>
+
+                {/* 지급 포인트 입력 */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1.5">지급할 포인트 (소수점 가능, 음수도 가능)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={grantModal.amount}
+                    onChange={e => setGrantModal({ ...grantModal, amount: e.target.value })}
+                    placeholder="예: 0.5, 1.5, 5"
+                    className="w-full p-3 border-2 border-yellow-300 rounded-lg text-xl font-bold text-center focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 outline-none"
+                    autoFocus
+                  />
+                  <div className="grid grid-cols-4 gap-1.5 mt-2">
+                    {quickButtons.map(v => (
+                      <button key={v} type="button"
+                        onClick={() => {
+                          const cur = parseFloat(grantModal.amount) || 0;
+                          const next = Math.round((cur + v) * 10) / 10;
+                          setGrantModal({ ...grantModal, amount: String(next) });
+                        }}
+                        className={`py-1.5 text-xs font-bold rounded border-2 transition-all ${v < 0 ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'}`}>
+                        {v > 0 ? `+${v}` : v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 사유 */}
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1.5">지급 사유 (선택)</label>
+                  <input
+                    type="text"
+                    value={grantModal.reason}
+                    onChange={e => setGrantModal({ ...grantModal, reason: e.target.value })}
+                    placeholder="예: 일일테스트 만점, 친구 도움 등"
+                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+
+                {!valid && grantModal.amount !== '' && (
+                  <p className="text-xs text-red-500">⚠️ 0 이 아닌 유효한 숫자를 입력해 주세요.</p>
+                )}
+              </div>
+              {/* 버튼 */}
+              <div className="border-t bg-gray-50 px-4 py-3 rounded-b-xl flex items-center justify-end gap-2">
+                <button onClick={() => setGrantModal(null)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded-lg">취소</button>
+                <button onClick={submit} disabled={!valid}
+                  className={`px-5 py-2 text-sm font-bold rounded-lg shadow-sm ${valid ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                  {valid ? (amt > 0 ? `+${amt}P 지급` : `${amt}P 차감`) : '지급'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
