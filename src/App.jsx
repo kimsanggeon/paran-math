@@ -5132,6 +5132,8 @@ function ParentView({ student, students, onLogout }) {
               </h3>
               <p className="text-xs text-teal-600">학생이 앱에서 직접 기록한 가정 자습 시간입니다.</p>
             </div>
+            {/* 🏆 자습 영웅 — 내 아이 지표 (읽기 전용) */}
+            <StudentSelfStudyHeroCard student={student} students={students} saveStudents={() => {}} readOnly viewerType="parent" />
             {/* 📈 기능2: 자습시간 ↔ 성적 상관관계 */}
             <StudyTimeScoreCorrelation studentName={student.name} reportData={reportData} />
             <StudyTimeViewer key={'pv-'+student.id} studentName={student.name} studentGrade={student.grade} userType="parent" />
@@ -8443,7 +8445,7 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
 
         {/* ========== ⏱ 자습 시간 기록 탭 ========== */}
         {activeTab === 'studytime' && (
-          <SelfStudyTab student={student} />
+          <SelfStudyTab student={student} students={students} />
         )}
 
         {/* ========== 내 정보 탭 ========== */}
@@ -30568,7 +30570,9 @@ function SelfStudyHeroView({ students, saveStudents }) {
 // 🏆 자습 영웅 — 단일 학생 카드 (오답노트 등 다른 화면에서 재사용)
 //   같은 데이터 소스·같은 규칙으로 '자습 영웅'과 완전 연동
 // ============================================================
-function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
+function StudentSelfStudyHeroCard({ student, students, saveStudents, readOnly = false, viewerType = 'teacher' }) {
+  // readOnly: 학생/학부모 시점 — 보상 지급 버튼·목표 수정·주간 보너스 지급 숨김
+  // viewerType: 'teacher' | 'student' | 'parent' — 라벨 톤 조정
   const [metrics, setMetrics] = useState(null);
   const [dayMap, setDayMap] = useState({});
   const [allMetrics, setAllMetrics] = useState({}); // 반 내 랭킹 계산용
@@ -30671,7 +30675,10 @@ function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
       {/* 헤더 — 자습 영웅 연동 안내 */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-xs font-bold text-emerald-800 flex items-center gap-1">
-          🏆 자습 영웅 지표 <span className="text-[10px] font-normal text-emerald-600">— 게이미피케이션 ＞ 자습 영웅과 완전 연동</span>
+          🏆 자습 영웅 지표
+          {viewerType === 'teacher' && <span className="text-[10px] font-normal text-emerald-600">— 게이미피케이션 ＞ 자습 영웅과 완전 연동</span>}
+          {viewerType === 'student' && <span className="text-[10px] font-normal text-emerald-600">— 내 자습 성장 한눈에</span>}
+          {viewerType === 'parent' && <span className="text-[10px] font-normal text-emerald-600">— 우리 아이 자습 한눈에</span>}
         </p>
         {streakBadge && (
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${streakBadge.cls}`}>{streakBadge.label}</span>
@@ -30707,7 +30714,9 @@ function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold text-gray-700">🎯 주간 자습 목표</span>
-            <button onClick={openGoalEdit} className="text-[10px] text-emerald-600 hover:bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">✏️ 수정</button>
+            {!readOnly && (
+              <button onClick={openGoalEdit} className="text-[10px] text-emerald-600 hover:bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">✏️ 수정</button>
+            )}
           </div>
           <span className={`text-xs font-bold ${goalDone ? 'text-emerald-600' : 'text-gray-500'}`}>
             {fmtMin(weekMin)} / {fmtMin(goal)} ({goalPct}%) {goalDone && '✅'}
@@ -30719,11 +30728,16 @@ function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
             style={{ width: `${goalPct}%` }}
           />
         </div>
-        {goalDone && !bonusClaimed && (
+        {goalDone && !bonusClaimed && !readOnly && (
           <button onClick={grantBonus}
             className="mt-2 w-full py-1.5 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold rounded-lg shadow animate-pulse">
             🎁 주간 목표 달성! +2P 보너스 지급하기
           </button>
+        )}
+        {goalDone && !bonusClaimed && readOnly && (
+          <p className="mt-2 text-[11px] text-amber-700 text-center font-bold bg-amber-50 rounded py-1.5">
+            🎁 주간 목표 달성! 선생님 확인 후 +2P 보너스 지급 예정
+          </p>
         )}
         {bonusClaimed && (
           <p className="mt-2 text-[11px] text-emerald-600 text-center font-bold">✓ 이번 주 보너스 지급 완료</p>
@@ -30759,11 +30773,14 @@ function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
           <div className="bg-white rounded-lg p-3 border border-emerald-100">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs font-bold text-gray-700">🎁 누적 자습 마일스톤 ({Math.floor(totalMin/60)}시간 / 다음 {next.icon} {Math.floor(next.mins/60)}시간)</span>
-              {unclaimed.length > 0 && (
+              {unclaimed.length > 0 && !readOnly && (
                 <button onClick={grantAllMilestones}
                   className="px-2.5 py-0.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-[10px] font-bold rounded shadow animate-pulse">
                   🎁 보상 {unclaimed.length}건 지급
                 </button>
+              )}
+              {unclaimed.length > 0 && readOnly && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded">🎁 보상 {unclaimed.length}건 대기</span>
               )}
             </div>
             <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
@@ -30795,8 +30812,8 @@ function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
         <StudyHeatmap dayMap={dayMap} weeks={13} />
       </div>
 
-      {/* 목표 수정 인라인 폼 */}
-      {goalEditOpen && (
+      {/* 목표 수정 인라인 폼 (선생님 전용) */}
+      {goalEditOpen && !readOnly && (
         <div className="bg-white rounded-lg p-3 border-2 border-emerald-300">
           <p className="text-xs font-bold text-emerald-800 mb-2">주간 목표 시간 (시간 단위, 소수점 가능)</p>
           <div className="flex items-center gap-2">
@@ -32082,7 +32099,7 @@ function TextbookDailyAlertPanel({ tbEntries, tbMeta = {}, pickProblems, selecte
 }
 
 // ========== ⏱ 자습 시간 기록 탭 (학생용) ==========
-function SelfStudyTab({ student }) {
+function SelfStudyTab({ student, students = [] }) {
   // student.name 안전 처리 (학생이 비어있어도 hooks 순서는 유지)
   const studentName = student?.name || '__unknown__';
   const STORAGE_KEY = `paran:studytime:${studentName}`;
@@ -32655,6 +32672,9 @@ function SelfStudyTab({ student }) {
 
   return (
     <div className="space-y-4">
+      {/* 🏆 자습 영웅 — 내 지표 (읽기 전용) */}
+      {student && <StudentSelfStudyHeroCard student={student} students={students} saveStudents={() => {}} readOnly viewerType="student" />}
+
       {/* ⑧ 자습 시간 ↔ 시험 성적 상관관계 — 학생 동기부여용 */}
       {studentReport && <StudyTimeScoreCorrelation studentName={studentName} reportData={studentReport} />}
 
