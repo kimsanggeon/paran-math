@@ -3943,86 +3943,78 @@ function ParentView({ student, students, onLogout }) {
     };
   })();
 
-  // 📰 교육 뉴스 (후킹 문구 + 실제 교육 뉴스 사이트 최신 페이지 링크)
+  // 📰 교육 뉴스 — Google 뉴스 검색 기반 (항상 동작하는 실시간 검색)
+  //   기존 가짜 제목 + 사이트 리스트 URL → 깨진 링크 문제 해결
+  //   각 항목 클릭 시 해당 키워드의 최신 뉴스 검색 결과로 이동
   const getEduNews = () => {
     const now = new Date();
     const month = now.getMonth(); // 0-11
-    
-    // 교육 뉴스 사이트 URL (최신 뉴스 페이지)
-    const eduSites = {
-      ebsNews: 'https://news.ebs.co.kr/ebsnews/menu1/index.jsp',
-      moeNews: 'https://www.moe.go.kr/boardCnts/listRenew.do?boardID=294&m=020402&s=moe',
-      kiceNews: 'https://www.kice.re.kr/boardCnts/list.do?boardID=1500234&m=030309&s=kice',
-      eduNews: 'https://www.hangyo.com/news/articleList.html?sc_section_code=S1N1',
-      veritas: 'https://www.veritas-a.com/news/articleList.html?sc_section_code=S1N1',
-      edujin: 'https://www.edujin.co.kr/news/articleList.html?sc_section_code=S1N1',
-      dhnews: 'https://www.dhnews.co.kr/news/articleList.html?sc_section_code=S1N4',
-      naeilEdu: 'https://www.naeil.com/news/articleList.html?sc_sub_section_code=S2N1'
-    };
-    
+    // Google 뉴스 한국어/대한민국 검색 URL 생성
+    const gNews = (q) => `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=ko&gl=KR&ceid=KR:ko`;
+
     const newsData = {
       0: [ // 1월
-        { title: '🔥 겨울방학 수학 공부, 이렇게 하면 망한다?', site: 'EBS 교육뉴스', url: eduSites.ebsNews },
-        { title: '😱 새 학년 선행학습, 안 하면 진짜 뒤처질까?', site: '교육부 보도자료', url: eduSites.moeNews },
-        { title: '💡 수포자 탈출! 전문가가 알려주는 비법', site: '한국교원신문', url: eduSites.eduNews }
+        { title: '🔥 겨울방학 수학 공부법 — 올해 가장 많이 본 기사', site: '교육 뉴스', url: gNews('겨울방학 수학 공부법 학습') },
+        { title: '😱 새 학년 선행학습, 정말 필요할까?', site: '교육부·EBS', url: gNews('새 학년 선행학습 필요성 중학교') },
+        { title: '💡 수포자 탈출 비법 — 전문가가 알려주는 방법', site: '교육 뉴스', url: gNews('수포자 탈출 수학 학습법') }
       ],
       1: [ // 2월
-        { title: '🚨 새 학기 수학, 첫 단추 잘못 끼우면 끝?', site: 'EBS 교육뉴스', url: eduSites.ebsNews },
-        { title: '📊 2026 교육과정 수학, 뭐가 달라지나?', site: '교육부 보도자료', url: eduSites.moeNews },
-        { title: '🎯 자기주도학습 습관, 이렇게 만들어라!', site: '베리타스알파', url: eduSites.veritas }
+        { title: '🚨 새 학기 수학 첫 단추 — 이렇게 시작하세요', site: '교육 뉴스', url: gNews('새 학기 수학 학습법 중학교') },
+        { title: '📊 2026 교육과정 수학 — 무엇이 달라지나', site: '교육부', url: gNews('2026 교육과정 개정 수학') },
+        { title: '🎯 자기주도학습 습관 만드는 법', site: '교육 뉴스', url: gNews('자기주도학습 습관 형성') }
       ],
       2: [ // 3월
-        { title: '⚡ 3월 첫 시험, 이것만 알면 100점?', site: '에듀진', url: eduSites.edujin },
-        { title: '📝 수학 노트 정리법, 1등급은 다르다!', site: 'EBS 교육뉴스', url: eduSites.ebsNews },
-        { title: '🔍 오답노트의 진실, 이렇게 해야 효과있다', site: '대학저널', url: eduSites.dhnews }
+        { title: '⚡ 3월 첫 시험 대비 전략', site: '교육 뉴스', url: gNews('3월 모의고사 첫 시험 대비') },
+        { title: '📝 수학 노트 정리법 — 1등급의 비밀', site: '교육 뉴스', url: gNews('수학 노트 정리법 1등급') },
+        { title: '🔍 오답노트 효과 — 어떻게 써야 할까', site: '교육 뉴스', url: gNews('오답노트 작성법 효과') }
       ],
       3: [ // 4월
-        { title: '🔥 중간고사 D-7, 벼락치기로 될까?', site: '베리타스알파', url: eduSites.veritas },
-        { title: '😰 시험 불안증 극복, 심리학자가 알려주는 비법', site: '한국교원신문', url: eduSites.eduNews },
-        { title: '⏰ 수학 시험 시간 부족? 이렇게 해결해라!', site: 'EBS 교육뉴스', url: eduSites.ebsNews }
+        { title: '🔥 중간고사 D-7 마무리 전략', site: '교육 뉴스', url: gNews('중간고사 대비 수학 일주일') },
+        { title: '😰 시험 불안증 극복 — 심리학자 조언', site: '교육 뉴스', url: gNews('시험 불안 극복 청소년') },
+        { title: '⏰ 수학 시험 시간 관리법', site: '교육 뉴스', url: gNews('수학 시험 시간 관리 풀이 전략') }
       ],
       4: [ // 5월
-        { title: '📉 중간고사 망했다? 지금부터가 진짜다!', site: '에듀진', url: eduSites.edujin },
-        { title: '🎯 취약 단원 공략법, 전문가 노하우 공개', site: 'EBS 교육뉴스', url: eduSites.ebsNews },
-        { title: '💪 수학 자신감 회복, 이렇게 시작해라!', site: '내일신문 교육', url: eduSites.naeilEdu }
+        { title: '📉 중간고사 후 학습 — 지금이 진짜 골든타임', site: '교육 뉴스', url: gNews('중간고사 후 학습 전략') },
+        { title: '🎯 취약 단원 공략법 — 전문가 노하우', site: '교육 뉴스', url: gNews('수학 취약 단원 보강 학습법') },
+        { title: '💪 수학 자신감 회복 — 이렇게 시작하세요', site: '교육 뉴스', url: gNews('수학 자신감 회복 학습 동기') }
       ],
       5: [ // 6월
-        { title: '📚 기말고사 준비, 지금 시작 안 하면 늦다?', site: '베리타스알파', url: eduSites.veritas },
-        { title: '🏖️ 여름방학 계획, 수학 1등급의 비밀', site: 'EBS 교육뉴스', url: eduSites.ebsNews },
-        { title: '🧠 수학 개념 총정리, 이것만 보면 끝!', site: '교육부 보도자료', url: eduSites.moeNews }
+        { title: '📚 기말고사 준비 — 6월 학습 로드맵', site: '교육 뉴스', url: gNews('기말고사 대비 학습 계획 6월') },
+        { title: '🏖️ 여름방학 학습 계획 — 1등급의 비결', site: '교육 뉴스', url: gNews('여름방학 수학 학습 계획') },
+        { title: '🧠 수학 개념 총정리 학습법', site: '교육 뉴스', url: gNews('수학 개념 정리 학습법') }
       ],
       6: [ // 7월
-        { title: '🔥 기말고사 막판 스퍼트, 이렇게!', site: '에듀진', url: eduSites.edujin },
-        { title: '☀️ 여름방학 알차게 보내는 법, 부모 필독!', site: '한국교원신문', url: eduSites.eduNews },
-        { title: '📈 다음 학기 미리 준비하는 학생들의 비밀', site: 'EBS 교육뉴스', url: eduSites.ebsNews }
+        { title: '🔥 기말고사 마지막 스퍼트', site: '교육 뉴스', url: gNews('기말고사 막판 대비 학습') },
+        { title: '☀️ 여름방학 알차게 보내는 법 — 부모 필독', site: '교육 뉴스', url: gNews('여름방학 학생 학습 가이드 학부모') },
+        { title: '📈 2학기 선행 — 어디까지 해야 하나', site: '교육 뉴스', url: gNews('2학기 선행학습 수학 범위') }
       ],
       7: [ // 8월
-        { title: '🚀 여름방학 마지막 주, 이것만 해라!', site: '베리타스알파', url: eduSites.veritas },
-        { title: '📋 2학기 준비 체크리스트, 놓치면 후회!', site: '교육부 보도자료', url: eduSites.moeNews },
-        { title: '💡 수학 기초 부족? 지금이 마지막 기회!', site: 'EBS 교육뉴스', url: eduSites.ebsNews }
+        { title: '🚀 여름방학 마지막 주 — 꼭 챙길 것', site: '교육 뉴스', url: gNews('여름방학 마지막 학습 정리') },
+        { title: '📋 2학기 준비 체크리스트', site: '교육 뉴스', url: gNews('2학기 준비 학습 체크리스트') },
+        { title: '💡 수학 기초 부족 — 지금이 마지막 기회', site: '교육 뉴스', url: gNews('수학 기초 보충 학습법') }
       ],
       8: [ // 9월
-        { title: '🎒 2학기 시작, 성적 뒤집는 골든타임!', site: '에듀진', url: eduSites.edujin },
-        { title: '📅 중간고사 100일 전략, 1등급 로드맵', site: 'EBS 교육뉴스', url: eduSites.ebsNews },
-        { title: '⏰ 수학 학습 루틴, 이렇게 만들어라!', site: '대학저널', url: eduSites.dhnews }
+        { title: '🎒 2학기 시작 — 성적 뒤집는 골든타임', site: '교육 뉴스', url: gNews('2학기 학습 전략 중학교') },
+        { title: '📅 중간고사 100일 전략', site: '교육 뉴스', url: gNews('중간고사 학습 로드맵 100일') },
+        { title: '⏰ 수학 학습 루틴 만들기', site: '교육 뉴스', url: gNews('수학 학습 루틴 매일 공부') }
       ],
       9: [ // 10월
-        { title: '⚡ 중간고사 직전! 이것만 봐도 10점 오른다?', site: '베리타스알파', url: eduSites.veritas },
-        { title: '🎯 시험장 실전 꿀팁, 고수들만 아는 비밀', site: 'EBS 교육뉴스', url: eduSites.ebsNews },
-        { title: '✏️ 수학 실수 줄이는 법, 전문가 조언', site: '한국교원신문', url: eduSites.eduNews }
+        { title: '⚡ 중간고사 직전 — 10점 올리는 법', site: '교육 뉴스', url: gNews('중간고사 직전 점수 올리기 수학') },
+        { title: '🎯 시험장 실전 꿀팁', site: '교육 뉴스', url: gNews('수학 시험 실전 풀이 전략') },
+        { title: '✏️ 수학 실수 줄이는 법', site: '교육 뉴스', url: gNews('수학 계산 실수 줄이기') }
       ],
       10: [ // 11월
-        { title: '🔥 수능 수학 분석, 올해 트렌드는?', site: '평가원 공지', url: eduSites.kiceNews },
-        { title: '📝 기말고사 시작! 수능과 내신 동시 잡기', site: '베리타스알파', url: eduSites.veritas },
-        { title: '❄️ 겨울방학 계획, 벌써 세워야 한다고?', site: 'EBS 교육뉴스', url: eduSites.ebsNews }
+        { title: '🔥 수능 수학 분석 — 올해 트렌드', site: '교육 뉴스', url: gNews('수능 수학 분석 올해') },
+        { title: '📝 기말고사 + 수능 — 동시 잡는 법', site: '교육 뉴스', url: gNews('기말고사 수능 학습 병행') },
+        { title: '❄️ 겨울방학 계획 — 미리 세우는 비결', site: '교육 뉴스', url: gNews('겨울방학 학습 계획 수학') }
       ],
       11: [ // 12월
-        { title: '🎄 기말고사 끝! 방학 전 꼭 해야 할 것', site: '에듀진', url: eduSites.edujin },
-        { title: '⛷️ 겨울방학 수학 특강, 효과 있을까?', site: 'EBS 교육뉴스', url: eduSites.ebsNews },
-        { title: '🎯 다음 학년 미리보기, 이렇게 준비해라!', site: '교육부 보도자료', url: eduSites.moeNews }
+        { title: '🎄 기말고사 끝 — 방학 전 꼭 할 것', site: '교육 뉴스', url: gNews('방학 전 학습 정리 복습') },
+        { title: '⛷️ 겨울방학 수학 특강 — 효과 있을까', site: '교육 뉴스', url: gNews('겨울방학 수학 특강 학원') },
+        { title: '🎯 다음 학년 미리보기', site: '교육 뉴스', url: gNews('새 학년 선행학습 수학 중학교') }
       ]
     };
-    
+
     return newsData[month] || newsData[0];
   };
   
@@ -20258,7 +20250,9 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
     
     const newsLinksHtml = currentNewsLinksForWord.map(news => {
       const tagStyle = tagColorsForWord[news.tag] || { bg: '#f3f4f6', color: '#374151', border: '#e5e7eb' };
-      return `<a href="${news.url}" style="display:block;margin:6px 0;padding:8px 12px;background:white;border:1px solid #e0e7ff;border-radius:6px;text-decoration:none;border-left:3px solid ${tagStyle.color};"> <span style="display:inline-block;padding:2px 8px;background:${tagStyle.bg};color:${tagStyle.color};border-radius:4px;font-size:9px;font-weight:bold;margin-right:8px;">${news.tag}</span> <span style="color:#1e40af;font-size:10px;font-weight:600;">${news.title}</span> <span style="color:#6366f1;margin-left:4px;">→</span> </a>`;
+      // 제목 기반 Google 뉴스 검색 — 항상 실제 기사로 연결
+      const gNewsUrl = `https://news.google.com/search?q=${encodeURIComponent(news.title)}&hl=ko&gl=KR&ceid=KR:ko`;
+      return `<a href="${gNewsUrl}" target="_blank" style="display:block;margin:6px 0;padding:8px 12px;background:white;border:1px solid #e0e7ff;border-radius:6px;text-decoration:none;border-left:3px solid ${tagStyle.color};"> <span style="display:inline-block;padding:2px 8px;background:${tagStyle.bg};color:${tagStyle.color};border-radius:4px;font-size:9px;font-weight:bold;margin-right:8px;">${news.tag}</span> <span style="color:#1e40af;font-size:10px;font-weight:600;">${news.title}</span> <span style="color:#6366f1;margin-left:4px;">→</span> </a>`;
     }).join('');
     
     // 이번 주 교육 소식 HTML (항상 표시)
@@ -26888,23 +26882,27 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                       <div className="mt-3 pt-3 border-t border-indigo-200">
                         <p className="text-xs font-medium text-indigo-700 mb-2">📌 이번 주 추천 교육 뉴스</p>
                         <div className="space-y-2">
-                          {currentNewsLinks.map((news, idx) => (
-                            <a 
-                              key={idx}
-                              href={news.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 p-2 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-100 transition-all group"
-                            >
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium border ${tagColors[news.tag] || 'bg-gray-100 text-gray-700'}`}>
-                                {news.tag}
-                              </span>
-                              <span className="flex-1 text-sm text-gray-700 group-hover:text-indigo-700 font-medium">
-                                {news.title}
-                              </span>
-                              <span className="text-indigo-400 group-hover:text-indigo-600">→</span>
-                            </a>
-                          ))}
+                          {currentNewsLinks.map((news, idx) => {
+                            // 제목 기반 Google 뉴스 검색 — 항상 실제 기사로 연결 (홈페이지 URL 깨짐 방지)
+                            const gNewsUrl = `https://news.google.com/search?q=${encodeURIComponent(news.title)}&hl=ko&gl=KR&ceid=KR:ko`;
+                            return (
+                              <a
+                                key={idx}
+                                href={gNewsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 p-2 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-100 transition-all group"
+                              >
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium border ${tagColors[news.tag] || 'bg-gray-100 text-gray-700'}`}>
+                                  {news.tag}
+                                </span>
+                                <span className="flex-1 text-sm text-gray-700 group-hover:text-indigo-700 font-medium">
+                                  {news.title}
+                                </span>
+                                <span className="text-indigo-400 group-hover:text-indigo-600">→</span>
+                              </a>
+                            );
+                          })}
                         </div>
                         <p className="text-xs text-gray-400 mt-2">※ 제목을 클릭하면 관련 페이지로 이동합니다</p>
                       </div>
