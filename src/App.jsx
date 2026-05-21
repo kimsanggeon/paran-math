@@ -28979,19 +28979,23 @@ function GamificationTab({ students, saveStudents }) {
 
   return (
     <div className="space-y-6">
-      {/* ★ 서브 탭 전환: 몰입의 탑 / EXP 관리 */}
-      <div className="flex gap-2 bg-white rounded-xl shadow p-2">
+      {/* ★ 서브 탭 전환: 몰입의 탑 / 영토 / EXP / 자습 영웅 */}
+      <div className="flex gap-2 bg-white rounded-xl shadow p-2 flex-wrap">
         <button onClick={() => setGamifView('tower')}
-          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'tower' ? 'bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+          className={`flex-1 min-w-[100px] py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'tower' ? 'bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
           🏰 몰입의 탑
         </button>
         <button onClick={() => setGamifView('territory')}
-          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'territory' ? 'bg-gradient-to-r from-slate-700 to-indigo-800 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+          className={`flex-1 min-w-[100px] py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'territory' ? 'bg-gradient-to-r from-slate-700 to-indigo-800 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
           🗺️ 영토
         </button>
         <button onClick={() => setGamifView('exp')}
-          className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'exp' ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+          className={`flex-1 min-w-[100px] py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'exp' ? 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
           ⭐ EXP
+        </button>
+        <button onClick={() => setGamifView('studyhero')}
+          className={`flex-1 min-w-[100px] py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${gamifView === 'studyhero' ? 'bg-gradient-to-r from-teal-500 to-emerald-600 text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+          🏆 자습 영웅
         </button>
       </div>
 
@@ -29744,6 +29748,9 @@ function GamificationTab({ students, saveStudents }) {
       )}
       </>)}
 
+      {/* ========== 🏆 자습 영웅 뷰 ========== */}
+      {gamifView === 'studyhero' && <SelfStudyHeroView students={students} saveStudents={saveStudents} />}
+
       {/* ⭐ 포인트 지급 모달 — 소수점 지원 + 누적 안전성 */}
       {grantModal && (() => {
         const target = students.find(s => s.id === grantModal.studentId);
@@ -29854,6 +29861,376 @@ function GamificationTab({ students, saveStudents }) {
         );
       })()}
     </div>
+  );
+}
+
+
+// ============================================================
+// 🏆 자습 영웅 — 자습 시간 동기부여 시스템
+//   ① 반별/주간/월간 랭킹  ② 연속 자습 스트릭  ③ 주간 목표 + 보너스
+// ============================================================
+function SelfStudyHeroView({ students, saveStudents }) {
+  const [period, setPeriod] = useState('week'); // week | month | total
+  const [classFilter, setClassFilter] = useState('all');
+  const [showAnonymous, setShowAnonymous] = useState(false);
+  const [studyData, setStudyData] = useState({}); // { studentId: { weekMin, monthMin, totalMin, streak, dates:[] } }
+  const [loading, setLoading] = useState(true);
+  const [goalEditor, setGoalEditor] = useState(null); // { studentId, studentName, hours }
+
+  // 모든 학생의 reportData 에서 자습 시간 정보 추출
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const today = new Date();
+      const ymd = (d) => d.toISOString().split('T')[0];
+      // 주의 시작 (월요일) 계산
+      const dayOfWeek = today.getDay() || 7; // 일=0→7
+      const weekStart = new Date(today);
+      weekStart.setHours(0,0,0,0);
+      weekStart.setDate(today.getDate() - (dayOfWeek - 1));
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      const data = {};
+      for (const st of students) {
+        try {
+          let rd = null;
+          if (window.storage) {
+            const r = await window.storage.get(`paran:report:${st.name}`, true);
+            if (r?.value) rd = JSON.parse(r.value);
+            if (!rd) { const r2 = await window.storage.get(`report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
+          }
+          if (!rd) { const s = localStorage.getItem(`paran:report:${st.name}`) || localStorage.getItem(`report:${st.name}`); if (s) rd = JSON.parse(s); }
+          const sessions = rd?.sessions || [];
+          let weekMin = 0, monthMin = 0, totalMin = 0;
+          const studyDates = new Set();
+          sessions.forEach(s => {
+            const mins = parseInt(s.studyTime) || 0;
+            if (mins <= 0) return;
+            totalMin += mins;
+            if (s.date) {
+              studyDates.add(s.date);
+              const d = new Date(s.date);
+              if (!isNaN(d)) {
+                if (d >= monthStart) monthMin += mins;
+                if (d >= weekStart) weekMin += mins;
+              }
+            }
+          });
+          // 연속 자습 스트릭 계산 (오늘부터 거꾸로)
+          let streak = 0;
+          const cur = new Date(today);
+          cur.setHours(0,0,0,0);
+          // 자습 인증이 있는 가장 최근 날부터 거꾸로 연속 일자 세기
+          // 오늘 안 했으면 어제부터 (1일 유예) — 자정 직후 가혹 방지
+          let cursorStr = ymd(cur);
+          if (!studyDates.has(cursorStr)) {
+            cur.setDate(cur.getDate() - 1);
+            cursorStr = ymd(cur);
+          }
+          while (studyDates.has(cursorStr)) {
+            streak += 1;
+            cur.setDate(cur.getDate() - 1);
+            cursorStr = ymd(cur);
+          }
+          // 최장 스트릭
+          const sortedDates = [...studyDates].sort();
+          let longestStreak = 0, run = 0, prev = null;
+          for (const ds of sortedDates) {
+            const d = new Date(ds);
+            if (prev) {
+              const diff = (d - prev) / 86400000;
+              if (diff === 1) { run += 1; }
+              else { run = 1; }
+            } else { run = 1; }
+            if (run > longestStreak) longestStreak = run;
+            prev = d;
+          }
+          data[st.id] = { weekMin, monthMin, totalMin, streak, longestStreak, lastStudyDate: sortedDates[sortedDates.length-1] };
+        } catch (e) {
+          data[st.id] = { weekMin:0, monthMin:0, totalMin:0, streak:0, longestStreak:0 };
+        }
+      }
+      setStudyData(data);
+      setLoading(false);
+    };
+    load();
+    // 자정에 자동 새로고침은 사용자가 화면 재진입 시 갱신
+  }, [students]);
+
+  const classOptions = [...new Set(students.map(s => s.className).filter(Boolean))];
+  const filtered = classFilter === 'all' ? students : students.filter(s => s.className === classFilter);
+
+  // 랭킹 정렬
+  const ranked = [...filtered].map(s => {
+    const d = studyData[s.id] || { weekMin:0, monthMin:0, totalMin:0, streak:0, longestStreak:0 };
+    const key = period === 'week' ? 'weekMin' : period === 'month' ? 'monthMin' : 'totalMin';
+    return { student: s, data: d, score: d[key] || 0 };
+  }).sort((a, b) => b.score - a.score);
+
+  // 평균 / 최고
+  const avgMin = ranked.length > 0 ? Math.round(ranked.reduce((s, r) => s + r.score, 0) / ranked.length) : 0;
+  const totalMin = ranked.reduce((s, r) => s + r.score, 0);
+
+  const fmtMin = (m) => {
+    if (m < 60) return `${m}분`;
+    const h = Math.floor(m / 60); const mn = m % 60;
+    return mn === 0 ? `${h}시간` : `${h}시간 ${mn}분`;
+  };
+
+  // 주간 목표 (기본 5시간 = 300분)
+  const getWeeklyGoal = (st) => st.weeklyStudyGoalMin || 300;
+  // 보너스 클레임 키 (이번 주 월요일)
+  const getThisWeekKey = () => {
+    const today = new Date();
+    const dow = today.getDay() || 7;
+    const monday = new Date(today);
+    monday.setHours(0,0,0,0);
+    monday.setDate(today.getDate() - (dow - 1));
+    return monday.toISOString().split('T')[0];
+  };
+
+  // 100% 달성 자동 보너스 (한 학생당 한 번만)
+  const tryGrantWeeklyBonus = (student, weekMin) => {
+    const goal = getWeeklyGoal(student);
+    if (weekMin < goal) return false;
+    const weekKey = getThisWeekKey();
+    if (student.tower?.weeklyGoalBonusClaimedFor === weekKey) return false;
+    const bonus = 2; // +2P
+    const updated = students.map(st => {
+      if (st.id !== student.id) return st;
+      const cl = st.tower?.manualPoints || 0;
+      const cb = (st.tower?.pointBalance !== undefined && st.tower?.pointBalance !== null) ? st.tower.pointBalance : cl;
+      return { ...st, tower: { ...(st.tower || {}),
+        manualPoints: Math.round((cl + bonus) * 10) / 10,
+        pointBalance: Math.round((cb + bonus) * 10) / 10,
+        weeklyGoalBonusClaimedFor: weekKey,
+        pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: bonus, reason: `주간 자습 목표 달성 (${Math.round(weekMin/60*10)/10}h)`, type: 'study-goal' }]
+      } };
+    });
+    saveStudents(updated);
+    return true;
+  };
+
+  const saveWeeklyGoal = (studentId, hours) => {
+    const mins = Math.max(0, Math.round(parseFloat(hours) * 60));
+    const updated = students.map(st => st.id === studentId ? { ...st, weeklyStudyGoalMin: mins } : st);
+    saveStudents(updated);
+    setGoalEditor(null);
+  };
+
+  const periodLabel = { week: '이번 주', month: '이번 달', total: '누적' }[period];
+  const goalAvailable = period === 'week'; // 목표 진행률은 주간에서만
+
+  return (
+    <>
+      {/* 헤더 */}
+      <div className="bg-gradient-to-br from-teal-500 via-emerald-500 to-green-600 rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 text-[140px] opacity-10 leading-none">🏆</div>
+        <h2 className="text-2xl font-black mb-1 relative z-10">🏆 자습 영웅</h2>
+        <p className="text-emerald-100 text-sm relative z-10">또래 경쟁 · 연속 스트릭 · 목표 달성으로 자습 동기 부여</p>
+
+        {/* 요약 통계 */}
+        <div className="grid grid-cols-3 gap-2 mt-4 relative z-10">
+          <div className="bg-white/15 backdrop-blur rounded-xl p-3 text-center">
+            <p className="text-[10px] text-emerald-100">{periodLabel} 총합</p>
+            <p className="text-xl font-black">{fmtMin(totalMin)}</p>
+          </div>
+          <div className="bg-white/15 backdrop-blur rounded-xl p-3 text-center">
+            <p className="text-[10px] text-emerald-100">학생당 평균</p>
+            <p className="text-xl font-black">{fmtMin(avgMin)}</p>
+          </div>
+          <div className="bg-white/15 backdrop-blur rounded-xl p-3 text-center">
+            <p className="text-[10px] text-emerald-100">최장 스트릭</p>
+            <p className="text-xl font-black">🔥 {Math.max(...ranked.map(r => r.data.longestStreak || 0), 0)}일</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 컨트롤 바 */}
+      <div className="bg-white rounded-xl shadow p-3 flex gap-2 flex-wrap items-center">
+        {/* 기간 토글 */}
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          {['week','month','total'].map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${period === p ? 'bg-emerald-500 text-white shadow' : 'text-gray-500 hover:bg-white'}`}>
+              {p === 'week' ? '📅 주간' : p === 'month' ? '🗓 월간' : '∞ 누적'}
+            </button>
+          ))}
+        </div>
+        {/* 반 필터 */}
+        {classOptions.length > 0 && (
+          <select value={classFilter} onChange={e => setClassFilter(e.target.value)}
+            className="px-3 py-1.5 border rounded-lg text-xs">
+            <option value="all">전체 반</option>
+            {classOptions.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+        {/* 익명 모드 토글 */}
+        <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer ml-auto">
+          <input type="checkbox" checked={showAnonymous} onChange={e => setShowAnonymous(e.target.checked)}
+            className="w-4 h-4 accent-emerald-500" />
+          🙈 익명 표시 (낮은 순위 보호)
+        </label>
+      </div>
+
+      {/* 랭킹 */}
+      {loading ? (
+        <div className="bg-white rounded-xl shadow p-10 text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-emerald-500 border-t-transparent mx-auto" />
+          <p className="text-gray-500 mt-3 text-sm">자습 데이터 집계 중...</p>
+        </div>
+      ) : ranked.length === 0 ? (
+        <div className="bg-white rounded-xl shadow p-10 text-center text-gray-400">학생이 없습니다.</div>
+      ) : (
+        <div className="bg-white rounded-xl shadow overflow-hidden">
+          {/* TOP 3 포디움 */}
+          {ranked.length >= 3 && ranked[0].score > 0 && (
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-5 border-b">
+              <p className="text-xs font-bold text-emerald-700 mb-3 text-center">🏆 {periodLabel} 자습 영웅 TOP 3</p>
+              <div className="flex items-end justify-center gap-4">
+                {[ranked[1], ranked[0], ranked[2]].map((r, displayIdx) => {
+                  const actualRank = displayIdx === 0 ? 2 : displayIdx === 1 ? 1 : 3;
+                  const medals = ['','🥇','🥈','🥉'];
+                  const colors = ['','from-yellow-400 to-amber-500','from-gray-300 to-gray-500','from-amber-500 to-orange-600'];
+                  const heights = ['','h-24','h-16','h-12'];
+                  const sizes = ['','text-3xl','text-2xl','text-2xl'];
+                  const name = showAnonymous ? '익명' + actualRank : r.student.name;
+                  return (
+                    <div key={r.student.id} className="flex flex-col items-center" style={{ width: 90 }}>
+                      <span className={`${sizes[actualRank]} mb-1`}>{medals[actualRank]}</span>
+                      <p className="font-bold text-gray-800 text-xs truncate w-full text-center">{name}</p>
+                      <p className="text-emerald-700 font-black text-sm">{fmtMin(r.score)}</p>
+                      {r.data.streak > 0 && <p className="text-[10px] text-orange-500">🔥 {r.data.streak}일</p>}
+                      <div className={`w-full ${heights[actualRank]} bg-gradient-to-t ${colors[actualRank]} rounded-t-lg mt-1 flex items-center justify-center`}>
+                        <span className="text-white font-bold text-lg">{actualRank}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 전체 리스트 */}
+          <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+            {ranked.map((r, idx) => {
+              const goal = getWeeklyGoal(r.student);
+              const weekMin = r.data.weekMin || 0;
+              const goalPct = goal > 0 ? Math.min(100, Math.round(weekMin / goal * 100)) : 0;
+              const goalDone = goalAvailable && weekMin >= goal;
+              const claimedKey = r.student.tower?.weeklyGoalBonusClaimedFor;
+              const bonusClaimed = claimedKey === getThisWeekKey();
+              const displayName = showAnonymous && idx > 2 ? `학생 ${idx+1}` : r.student.name;
+              return (
+                <div key={r.student.id} className={`flex items-center gap-3 px-4 py-3 ${idx === 0 ? 'bg-yellow-50' : idx < 3 ? 'bg-emerald-50/40' : ''}`}>
+                  {/* 순위 */}
+                  <span className="w-8 text-center font-bold text-sm">{idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx+1}</span>
+                  {/* 학생 정보 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-gray-800 text-sm">{displayName}</span>
+                      {r.student.className && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{r.student.className}</span>}
+                      {r.data.streak >= 7 && <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">🔥 {r.data.streak}일 연속</span>}
+                      {r.data.streak >= 14 && r.data.streak < 30 && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">⚡ 꾸준이</span>}
+                      {r.data.streak >= 30 && <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">🏅 철인</span>}
+                    </div>
+                    {/* 자습 시간 */}
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {periodLabel}: <span className="font-bold text-emerald-700">{fmtMin(r.score)}</span>
+                      {r.data.longestStreak > r.data.streak && <span className="ml-2 text-gray-400">· 최장 {r.data.longestStreak}일</span>}
+                    </p>
+                    {/* 주간 목표 진행률 */}
+                    {goalAvailable && (
+                      <div className="mt-1.5">
+                        <div className="flex items-center justify-between text-[10px] mb-0.5">
+                          <span className="text-gray-500">🎯 주간 목표 {fmtMin(goal)}</span>
+                          <span className={goalDone ? 'font-bold text-emerald-600' : 'text-gray-500'}>{goalPct}% {goalDone && '✅'}</span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full ${goalDone ? 'bg-gradient-to-r from-emerald-400 to-green-500' : goalPct >= 80 ? 'bg-gradient-to-r from-yellow-400 to-orange-400' : 'bg-gradient-to-r from-sky-300 to-blue-400'} rounded-full transition-all`}
+                            style={{ width: `${goalPct}%` }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* 액션 */}
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    {/* 100% 달성 + 미수령 → 보너스 지급 버튼 */}
+                    {goalAvailable && goalDone && !bonusClaimed && (
+                      <button onClick={() => {
+                        const ok = tryGrantWeeklyBonus(r.student, weekMin);
+                        if (ok) alert(`✅ ${r.student.name} 학생에게 주간 자습 목표 달성 보너스 +2P 지급 완료!`);
+                      }}
+                        className="px-2.5 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[10px] font-bold rounded-full shadow animate-pulse">
+                        🎁 +2P 지급
+                      </button>
+                    )}
+                    {goalAvailable && bonusClaimed && (
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded">✓ 보너스</span>
+                    )}
+                    {/* 목표 수정 */}
+                    {goalAvailable && (
+                      <button onClick={() => setGoalEditor({ studentId: r.student.id, studentName: r.student.name, hours: String(goal/60) })}
+                        className="px-2 py-0.5 text-[10px] text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded">
+                        ✏️ 목표
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 안내 */}
+      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-200">
+        <p className="text-xs font-bold text-emerald-800 mb-2">💡 자습 동기부여 시스템 안내</p>
+        <ul className="text-xs text-emerald-700 space-y-1 list-disc list-inside">
+          <li><strong>🏆 또래 경쟁</strong> — 주간/월간 랭킹이 매주 갱신되어 또래와 선의의 경쟁</li>
+          <li><strong>🔥 스트릭</strong> — 7일 → 14일 "꾸준이" → 30일 "철인" 자동 뱃지. 끊기지 않도록 매일 자습 인증</li>
+          <li><strong>🎯 주간 목표</strong> — 기본 5시간(300분). 100% 달성 시 자동 보너스 <strong>+2P</strong> 지급 (주 1회)</li>
+          <li><strong>🙈 익명 모드</strong> — 낮은 순위 학생 보호. 4위 이하 이름을 "학생 N"으로 표시</li>
+        </ul>
+      </div>
+
+      {/* 목표 수정 모달 */}
+      {goalEditor && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setGoalEditor(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <div className="bg-emerald-500 px-4 py-3 rounded-t-xl flex items-center justify-between">
+              <p className="font-bold text-white text-sm">🎯 {goalEditor.studentName} 주간 자습 목표 설정</p>
+              <button onClick={() => setGoalEditor(null)} className="text-white text-xl font-bold leading-none">×</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1.5">주간 목표 시간 (단위: 시간, 소수점 가능)</label>
+                <input type="number" step="0.5" min="0" value={goalEditor.hours}
+                  onChange={e => setGoalEditor({ ...goalEditor, hours: e.target.value })}
+                  className="w-full p-3 border-2 border-emerald-300 rounded-lg text-xl font-bold text-center focus:border-emerald-500 outline-none"
+                  placeholder="예: 5" autoFocus />
+                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                  {[3, 5, 7, 10].map(h => (
+                    <button key={h} type="button" onClick={() => setGoalEditor({ ...goalEditor, hours: String(h) })}
+                      className="py-1.5 text-xs font-bold rounded border-2 bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100">
+                      {h}시간
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-500">💡 학생 수준에 맞게 조정하세요. 너무 높으면 좌절감, 너무 낮으면 동기부여가 약해집니다.</p>
+            </div>
+            <div className="border-t bg-gray-50 px-4 py-3 rounded-b-xl flex items-center justify-end gap-2">
+              <button onClick={() => setGoalEditor(null)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded-lg">취소</button>
+              <button onClick={() => saveWeeklyGoal(goalEditor.studentId, goalEditor.hours)}
+                className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg">
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
