@@ -29868,7 +29868,117 @@ function GamificationTab({ students, saveStudents }) {
 // ============================================================
 // 🏆 자습 영웅 — 자습 시간 동기부여 시스템
 //   ① 반별/주간/월간 랭킹  ② 연속 자습 스트릭  ③ 주간 목표 + 보너스
+//   * 데이터 소스 통합 — paran:studytime (학생 자가 로그) +
+//                       paran:report sessions[].studyTime (선생님 보고서)
 // ============================================================
+
+// 한 학생의 일자별 자습 시간 맵 로드 (두 소스 통합, 같은 날짜는 최대값)
+async function loadStudentStudyDayMap(studentName) {
+  const dayMap = {};
+  // Source 1: paran:studytime 로그 (학생 자가 기록)
+  let logs = [];
+  try {
+    if (typeof window !== 'undefined' && window.storage) {
+      const r = await window.storage.get(`paran:studytime:${studentName}`, true);
+      if (r?.value) logs = JSON.parse(r.value);
+    }
+  } catch(e) {}
+  if (!logs || logs.length === 0) {
+    try {
+      const s = localStorage.getItem(`paran:studytime:${studentName}`);
+      if (s) logs = JSON.parse(s);
+    } catch(e) {}
+  }
+  (logs || []).forEach(l => {
+    if (!l?.date) return;
+    const hw = parseInt(l.hwMinutes) || 0;
+    const ex = parseInt(l.extraMinutes) || 0;
+    const total = hw + ex;
+    if (total <= 0) return;
+    dayMap[l.date] = Math.max(dayMap[l.date] || 0, total);
+  });
+  // Source 2: paran:report → sessions[].studyTime (선생님 보고서)
+  let report = null;
+  try {
+    if (typeof window !== 'undefined' && window.storage) {
+      const r = await window.storage.get(`paran:report:${studentName}`, true);
+      if (r?.value) report = JSON.parse(r.value);
+      if (!report) { const r2 = await window.storage.get(`report:${studentName}`, true); if (r2?.value) report = JSON.parse(r2.value); }
+    }
+  } catch(e) {}
+  if (!report) {
+    try {
+      const s = localStorage.getItem(`paran:report:${studentName}`) || localStorage.getItem(`report:${studentName}`);
+      if (s) report = JSON.parse(s);
+    } catch(e) {}
+  }
+  const sessions = report?.sessions || [];
+  sessions.forEach(s => {
+    if (!s?.date) return;
+    const mins = parseInt(s.studyTime) || 0;
+    if (mins <= 0) return;
+    dayMap[s.date] = Math.max(dayMap[s.date] || 0, mins);
+  });
+  return dayMap;
+}
+
+// dayMap 으로부터 주간/월간/누적/스트릭 지표 계산
+function computeStudyMetrics(dayMap) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ymd = (d) => d.toISOString().split('T')[0];
+  const dow = today.getDay() || 7;
+  const weekStart = new Date(today); weekStart.setDate(today.getDate() - (dow - 1));
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  let weekMin = 0, monthMin = 0, totalMin = 0;
+  const dates = Object.keys(dayMap).sort();
+  for (const d of dates) {
+    const mins = dayMap[d] || 0;
+    if (mins <= 0) continue;
+    totalMin += mins;
+    const dt = new Date(d);
+    if (isNaN(dt)) continue;
+    if (dt >= monthStart) monthMin += mins;
+    if (dt >= weekStart) weekMin += mins;
+  }
+  // 현재 스트릭 (오늘 또는 어제부터 거꾸로)
+  const studySet = new Set(dates.filter(d => (dayMap[d]||0) > 0));
+  let streak = 0;
+  const cur = new Date(today);
+  let cursorStr = ymd(cur);
+  if (!studySet.has(cursorStr)) {
+    cur.setDate(cur.getDate() - 1);
+    cursorStr = ymd(cur);
+  }
+  while (studySet.has(cursorStr)) {
+    streak += 1;
+    cur.setDate(cur.getDate() - 1);
+    cursorStr = ymd(cur);
+  }
+  // 최장 스트릭
+  let longestStreak = 0, run = 0, prev = null;
+  for (const ds of dates) {
+    if ((dayMap[ds]||0) <= 0) continue;
+    const d = new Date(ds);
+    if (prev) {
+      const diff = Math.round((d - prev) / 86400000);
+      run = (diff === 1) ? (run + 1) : 1;
+    } else { run = 1; }
+    if (run > longestStreak) longestStreak = run;
+    prev = d;
+  }
+  return { weekMin, monthMin, totalMin, streak, longestStreak, lastStudyDate: dates[dates.length-1] };
+}
+
+// 이번 주(월요일) 키
+function getThisWeekKey() {
+  const today = new Date();
+  const dow = today.getDay() || 7;
+  const monday = new Date(today);
+  monday.setHours(0,0,0,0);
+  monday.setDate(today.getDate() - (dow - 1));
+  return monday.toISOString().split('T')[0];
+}
+
 function SelfStudyHeroView({ students, saveStudents }) {
   const [period, setPeriod] = useState('week'); // week | month | total
   const [classFilter, setClassFilter] = useState('all');
@@ -29877,75 +29987,15 @@ function SelfStudyHeroView({ students, saveStudents }) {
   const [loading, setLoading] = useState(true);
   const [goalEditor, setGoalEditor] = useState(null); // { studentId, studentName, hours }
 
-  // 모든 학생의 reportData 에서 자습 시간 정보 추출
+  // 모든 학생의 자습 시간 데이터 — 통합 헬퍼 사용 (학생 자가 로그 + 선생님 보고서)
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const today = new Date();
-      const ymd = (d) => d.toISOString().split('T')[0];
-      // 주의 시작 (월요일) 계산
-      const dayOfWeek = today.getDay() || 7; // 일=0→7
-      const weekStart = new Date(today);
-      weekStart.setHours(0,0,0,0);
-      weekStart.setDate(today.getDate() - (dayOfWeek - 1));
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
       const data = {};
       for (const st of students) {
         try {
-          let rd = null;
-          if (window.storage) {
-            const r = await window.storage.get(`paran:report:${st.name}`, true);
-            if (r?.value) rd = JSON.parse(r.value);
-            if (!rd) { const r2 = await window.storage.get(`report:${st.name}`, true); if (r2?.value) rd = JSON.parse(r2.value); }
-          }
-          if (!rd) { const s = localStorage.getItem(`paran:report:${st.name}`) || localStorage.getItem(`report:${st.name}`); if (s) rd = JSON.parse(s); }
-          const sessions = rd?.sessions || [];
-          let weekMin = 0, monthMin = 0, totalMin = 0;
-          const studyDates = new Set();
-          sessions.forEach(s => {
-            const mins = parseInt(s.studyTime) || 0;
-            if (mins <= 0) return;
-            totalMin += mins;
-            if (s.date) {
-              studyDates.add(s.date);
-              const d = new Date(s.date);
-              if (!isNaN(d)) {
-                if (d >= monthStart) monthMin += mins;
-                if (d >= weekStart) weekMin += mins;
-              }
-            }
-          });
-          // 연속 자습 스트릭 계산 (오늘부터 거꾸로)
-          let streak = 0;
-          const cur = new Date(today);
-          cur.setHours(0,0,0,0);
-          // 자습 인증이 있는 가장 최근 날부터 거꾸로 연속 일자 세기
-          // 오늘 안 했으면 어제부터 (1일 유예) — 자정 직후 가혹 방지
-          let cursorStr = ymd(cur);
-          if (!studyDates.has(cursorStr)) {
-            cur.setDate(cur.getDate() - 1);
-            cursorStr = ymd(cur);
-          }
-          while (studyDates.has(cursorStr)) {
-            streak += 1;
-            cur.setDate(cur.getDate() - 1);
-            cursorStr = ymd(cur);
-          }
-          // 최장 스트릭
-          const sortedDates = [...studyDates].sort();
-          let longestStreak = 0, run = 0, prev = null;
-          for (const ds of sortedDates) {
-            const d = new Date(ds);
-            if (prev) {
-              const diff = (d - prev) / 86400000;
-              if (diff === 1) { run += 1; }
-              else { run = 1; }
-            } else { run = 1; }
-            if (run > longestStreak) longestStreak = run;
-            prev = d;
-          }
-          data[st.id] = { weekMin, monthMin, totalMin, streak, longestStreak, lastStudyDate: sortedDates[sortedDates.length-1] };
+          const dayMap = await loadStudentStudyDayMap(st.name);
+          data[st.id] = computeStudyMetrics(dayMap);
         } catch (e) {
           data[st.id] = { weekMin:0, monthMin:0, totalMin:0, streak:0, longestStreak:0 };
         }
@@ -29954,7 +30004,6 @@ function SelfStudyHeroView({ students, saveStudents }) {
       setLoading(false);
     };
     load();
-    // 자정에 자동 새로고침은 사용자가 화면 재진입 시 갱신
   }, [students]);
 
   const classOptions = [...new Set(students.map(s => s.className).filter(Boolean))];
@@ -29979,15 +30028,6 @@ function SelfStudyHeroView({ students, saveStudents }) {
 
   // 주간 목표 (기본 5시간 = 300분)
   const getWeeklyGoal = (st) => st.weeklyStudyGoalMin || 300;
-  // 보너스 클레임 키 (이번 주 월요일)
-  const getThisWeekKey = () => {
-    const today = new Date();
-    const dow = today.getDay() || 7;
-    const monday = new Date(today);
-    monday.setHours(0,0,0,0);
-    monday.setDate(today.getDate() - (dow - 1));
-    return monday.toISOString().split('T')[0];
-  };
 
   // 100% 달성 자동 보너스 (한 학생당 한 번만)
   const tryGrantWeeklyBonus = (student, weekMin) => {
@@ -30231,6 +30271,198 @@ function SelfStudyHeroView({ students, saveStudents }) {
         </div>
       )}
     </>
+  );
+}
+
+
+// ============================================================
+// 🏆 자습 영웅 — 단일 학생 카드 (오답노트 등 다른 화면에서 재사용)
+//   같은 데이터 소스·같은 규칙으로 '자습 영웅'과 완전 연동
+// ============================================================
+function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
+  const [metrics, setMetrics] = useState(null);
+  const [allMetrics, setAllMetrics] = useState({}); // 반 내 랭킹 계산용
+  const [loading, setLoading] = useState(true);
+  const [goalEditOpen, setGoalEditOpen] = useState(false);
+  const [goalHoursDraft, setGoalHoursDraft] = useState('');
+
+  // 본인 + 동급 반 학생 자습 데이터 로드 (랭킹 계산용)
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const selfMap = await loadStudentStudyDayMap(student.name);
+        setMetrics(computeStudyMetrics(selfMap));
+        // 같은 반 학생들의 주간 자습 시간만 빠르게 (랭킹용)
+        const classmates = (students || []).filter(s => s.className && s.className === student.className);
+        const all = {};
+        for (const st of classmates) {
+          if (st.id === student.id) continue;
+          const m = await loadStudentStudyDayMap(st.name);
+          all[st.id] = computeStudyMetrics(m);
+        }
+        setAllMetrics(all);
+      } catch(e) {
+        setMetrics({ weekMin:0, monthMin:0, totalMin:0, streak:0, longestStreak:0 });
+      }
+      setLoading(false);
+    };
+    load();
+  }, [student?.id, student?.name, student?.className, students?.length]);
+
+  const fmtMin = (m) => {
+    if (m < 60) return `${m}분`;
+    const h = Math.floor(m / 60); const mn = m % 60;
+    return mn === 0 ? `${h}시간` : `${h}시간 ${mn}분`;
+  };
+
+  if (loading) {
+    return <div className="bg-white rounded-xl p-4 text-center text-sm text-gray-400">자습 영웅 지표 로딩 중...</div>;
+  }
+  if (!metrics) return null;
+
+  const goal = student.weeklyStudyGoalMin || 300;
+  const weekMin = metrics.weekMin || 0;
+  const goalPct = goal > 0 ? Math.min(100, Math.round(weekMin / goal * 100)) : 0;
+  const goalDone = weekMin >= goal;
+  const weekKey = getThisWeekKey();
+  const bonusClaimed = student.tower?.weeklyGoalBonusClaimedFor === weekKey;
+
+  // 같은 반 랭킹 (주간 기준)
+  const classmates = (students || []).filter(s => s.className && s.className === student.className);
+  let rank = '-', rankTotal = 0;
+  if (classmates.length > 0) {
+    const all = classmates.map(s => ({
+      id: s.id,
+      weekMin: s.id === student.id ? weekMin : (allMetrics[s.id]?.weekMin || 0)
+    })).sort((a, b) => b.weekMin - a.weekMin);
+    rank = all.findIndex(x => x.id === student.id) + 1;
+    rankTotal = all.length;
+  }
+
+  const grantBonus = () => {
+    if (!goalDone || bonusClaimed) return;
+    const bonus = 2;
+    const updated = students.map(st => {
+      if (st.id !== student.id) return st;
+      const cl = st.tower?.manualPoints || 0;
+      const cb = (st.tower?.pointBalance !== undefined && st.tower?.pointBalance !== null) ? st.tower.pointBalance : cl;
+      return { ...st, tower: { ...(st.tower || {}),
+        manualPoints: Math.round((cl + bonus) * 10) / 10,
+        pointBalance: Math.round((cb + bonus) * 10) / 10,
+        weeklyGoalBonusClaimedFor: weekKey,
+        pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: bonus, reason: `주간 자습 목표 달성 (${Math.round(weekMin/60*10)/10}h)`, type: 'study-goal' }]
+      } };
+    });
+    saveStudents(updated);
+    alert(`✅ ${student.name} 학생에게 주간 자습 목표 달성 보너스 +${bonus}P 지급 완료!`);
+  };
+
+  const openGoalEdit = () => {
+    setGoalHoursDraft(String(goal / 60));
+    setGoalEditOpen(true);
+  };
+  const saveGoal = () => {
+    const mins = Math.max(0, Math.round(parseFloat(goalHoursDraft) * 60));
+    const updated = students.map(s => s.id === student.id ? { ...s, weeklyStudyGoalMin: mins } : s);
+    saveStudents(updated);
+    setGoalEditOpen(false);
+  };
+
+  // 스트릭 뱃지
+  const streakBadge = metrics.streak >= 30 ? { label:'🏅 철인', cls:'bg-purple-100 text-purple-700' }
+                    : metrics.streak >= 14 ? { label:'⚡ 꾸준이', cls:'bg-red-100 text-red-700' }
+                    : metrics.streak >= 7  ? { label:`🔥 ${metrics.streak}일 연속`, cls:'bg-orange-100 text-orange-700' }
+                    : null;
+
+  return (
+    <div className="bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 border border-emerald-200 rounded-xl p-3 space-y-3">
+      {/* 헤더 — 자습 영웅 연동 안내 */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-xs font-bold text-emerald-800 flex items-center gap-1">
+          🏆 자습 영웅 지표 <span className="text-[10px] font-normal text-emerald-600">— 게이미피케이션 ＞ 자습 영웅과 완전 연동</span>
+        </p>
+        {streakBadge && (
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${streakBadge.cls}`}>{streakBadge.label}</span>
+        )}
+      </div>
+
+      {/* 4가지 핵심 지표 */}
+      <div className="grid grid-cols-4 gap-2">
+        <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
+          <p className="text-[10px] text-gray-500">📅 이번 주</p>
+          <p className="text-base font-black text-emerald-700">{fmtMin(metrics.weekMin)}</p>
+        </div>
+        <div className="bg-white rounded-lg p-2 text-center border border-emerald-100">
+          <p className="text-[10px] text-gray-500">🗓 이번 달</p>
+          <p className="text-base font-black text-emerald-700">{fmtMin(metrics.monthMin)}</p>
+        </div>
+        <div className="bg-white rounded-lg p-2 text-center border border-orange-100">
+          <p className="text-[10px] text-gray-500">🔥 스트릭</p>
+          <p className="text-base font-black text-orange-700">{metrics.streak}일</p>
+          {metrics.longestStreak > metrics.streak && (
+            <p className="text-[9px] text-gray-400">최장 {metrics.longestStreak}일</p>
+          )}
+        </div>
+        <div className="bg-white rounded-lg p-2 text-center border border-indigo-100">
+          <p className="text-[10px] text-gray-500">🏅 반 랭킹</p>
+          <p className="text-base font-black text-indigo-700">{rank === '-' ? '-' : `${rank}위`}</p>
+          {rankTotal > 0 && <p className="text-[9px] text-gray-400">/ {rankTotal}명</p>}
+        </div>
+      </div>
+
+      {/* 주간 목표 진행률 */}
+      <div className="bg-white rounded-lg p-3 border border-emerald-100">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-gray-700">🎯 주간 자습 목표</span>
+            <button onClick={openGoalEdit} className="text-[10px] text-emerald-600 hover:bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">✏️ 수정</button>
+          </div>
+          <span className={`text-xs font-bold ${goalDone ? 'text-emerald-600' : 'text-gray-500'}`}>
+            {fmtMin(weekMin)} / {fmtMin(goal)} ({goalPct}%) {goalDone && '✅'}
+          </span>
+        </div>
+        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${goalDone ? 'bg-gradient-to-r from-emerald-400 to-green-500' : goalPct >= 80 ? 'bg-gradient-to-r from-yellow-400 to-orange-400' : 'bg-gradient-to-r from-sky-300 to-blue-400'}`}
+            style={{ width: `${goalPct}%` }}
+          />
+        </div>
+        {goalDone && !bonusClaimed && (
+          <button onClick={grantBonus}
+            className="mt-2 w-full py-1.5 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold rounded-lg shadow animate-pulse">
+            🎁 주간 목표 달성! +2P 보너스 지급하기
+          </button>
+        )}
+        {bonusClaimed && (
+          <p className="mt-2 text-[11px] text-emerald-600 text-center font-bold">✓ 이번 주 보너스 지급 완료</p>
+        )}
+      </div>
+
+      {/* 목표 수정 인라인 폼 */}
+      {goalEditOpen && (
+        <div className="bg-white rounded-lg p-3 border-2 border-emerald-300">
+          <p className="text-xs font-bold text-emerald-800 mb-2">주간 목표 시간 (시간 단위, 소수점 가능)</p>
+          <div className="flex items-center gap-2">
+            <input type="number" step="0.5" min="0" value={goalHoursDraft}
+              onChange={e => setGoalHoursDraft(e.target.value)}
+              className="flex-1 p-2 border-2 border-emerald-300 rounded-lg text-base font-bold text-center"
+              placeholder="예: 5" autoFocus />
+            <span className="text-xs text-gray-500">시간</span>
+            <button onClick={saveGoal} className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg">저장</button>
+            <button onClick={() => setGoalEditOpen(false)} className="px-3 py-2 bg-gray-200 text-gray-600 text-xs rounded-lg">취소</button>
+          </div>
+          <div className="grid grid-cols-4 gap-1 mt-2">
+            {[3, 5, 7, 10].map(h => (
+              <button key={h} onClick={() => setGoalHoursDraft(String(h))}
+                className="py-1 text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-700 rounded hover:bg-emerald-100">
+                {h}시간
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -35242,12 +35474,17 @@ function WrongNotesTab({ students, saveStudents, isReadOnly = false }) {
 
               <div style={isReadOnly ? { pointerEvents: 'none' } : {}}>
 
-              {/* ⏱ 자습 시간 현황 */}
+              {/* ⏱ 자습 시간 현황 — 🏆 자습 영웅과 연동 */}
               <details key={'study-' + selectedStudent.id} className="bg-teal-50 border border-teal-200 rounded-xl">
                 <summary className="px-4 py-3 cursor-pointer font-bold text-teal-800 flex items-center gap-2 list-none">
-                  ⏱ 자습 시간 현황 <span className="text-xs bg-teal-200 text-teal-700 px-2 py-0.5 rounded-full font-normal">클릭해서 열기</span>
+                  ⏱ 자습 시간 현황
+                  <span className="text-xs bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-bold">🏆 자습 영웅 연동</span>
+                  <span className="text-xs bg-teal-200 text-teal-700 px-2 py-0.5 rounded-full font-normal">클릭해서 열기</span>
                 </summary>
-                <div className="px-4 pb-4">
+                <div className="px-4 pb-4 space-y-3">
+                  {/* 🏆 자습 영웅 지표 카드 (게이미피케이션과 동일 데이터 소스·동일 규칙) */}
+                  <StudentSelfStudyHeroCard student={selectedStudent} students={students} saveStudents={saveStudents} />
+                  {/* 상세 자습 일지 (학생 자가 기록) */}
                   <StudyTimeViewer key={'st-' + selectedStudent.id + '-' + selectedStudent.name} studentName={selectedStudent.name} studentGrade={selectedStudent.grade} userType="teacher" />
                 </div>
               </details>
