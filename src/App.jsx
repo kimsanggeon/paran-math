@@ -29872,6 +29872,15 @@ function GamificationTab({ students, saveStudents }) {
 //                       paran:report sessions[].studyTime (선생님 보고서)
 // ============================================================
 
+// 자습 시간 sanitization — 비정상 값(음수·24시간 초과)을 0으로 무시
+//   학생 오타·키패드 길게 누름 등으로 들어간 22222222 같은 값으로부터 시스템을 보호
+const SANE_MIN_PER_FIELD = 1440; // 24시간 = 한 필드당 최대
+function saneMinutes(n) {
+  const v = parseInt(n) || 0;
+  if (v < 0 || v > SANE_MIN_PER_FIELD) return 0;
+  return v;
+}
+
 // 한 학생의 일자별 자습 시간 맵 로드 (두 소스 통합, 같은 날짜는 최대값)
 async function loadStudentStudyDayMap(studentName) {
   const dayMap = {};
@@ -29891,9 +29900,12 @@ async function loadStudentStudyDayMap(studentName) {
   }
   (logs || []).forEach(l => {
     if (!l?.date) return;
-    const hw = parseInt(l.hwMinutes) || 0;
-    const ex = parseInt(l.extraMinutes) || 0;
-    const total = hw + ex;
+    // ★ 각 필드 1440분(24시간) 초과는 무시 — 오작동 데이터 방어
+    const hw = saneMinutes(l.hwMinutes);
+    const ex = saneMinutes(l.extraMinutes);
+    let total = hw + ex;
+    // 합계도 1440분 초과 방지 (두 필드 합이 비정상적으로 클 때)
+    if (total > SANE_MIN_PER_FIELD) total = SANE_MIN_PER_FIELD;
     if (total <= 0) return;
     dayMap[l.date] = Math.max(dayMap[l.date] || 0, total);
   });
@@ -29915,7 +29927,7 @@ async function loadStudentStudyDayMap(studentName) {
   const sessions = report?.sessions || [];
   sessions.forEach(s => {
     if (!s?.date) return;
-    const mins = parseInt(s.studyTime) || 0;
+    const mins = saneMinutes(s.studyTime);
     if (mins <= 0) return;
     dayMap[s.date] = Math.max(dayMap[s.date] || 0, mins);
   });
@@ -33776,6 +33788,11 @@ function StudyTimeViewer({ studentName, studentGrade, userType = 'parent' }) {
     const hw = Number(teacherForm.hwMinutes) || 0;
     const ex = Number(teacherForm.extraMinutes) || 0;
     if (hw + ex <= 0) { alert('숙제 또는 자습 시간을 1분 이상 입력하세요.'); return; }
+    // ★ 검증: 음수·비현실적 큰 값 차단 (한 필드 최대 720분=12시간, 합계 1440분=24시간)
+    if (hw < 0 || ex < 0) { alert('음수는 입력할 수 없습니다.'); return; }
+    if (hw > 720) { alert('숙제 시간은 한 번에 12시간(720분)까지만 입력 가능합니다.\n입력값: ' + hw + '분'); return; }
+    if (ex > 720) { alert('자습 시간은 한 번에 12시간(720분)까지만 입력 가능합니다.\n입력값: ' + ex + '분'); return; }
+    if (hw + ex > 1440) { alert('하루 합계는 24시간(1440분)을 초과할 수 없습니다.'); return; }
     const newLog = {
       id: Date.now(),
       date: teacherForm.date,
@@ -33797,6 +33814,10 @@ function StudyTimeViewer({ studentName, studentGrade, userType = 'parent' }) {
     const hw = Number(teacherForm.hwMinutes) || 0;
     const ex = Number(teacherForm.extraMinutes) || 0;
     if (hw + ex <= 0) { alert('숙제 또는 자습 시간을 1분 이상 입력하세요.'); return; }
+    // ★ 검증: 음수·비현실적 큰 값 차단
+    if (hw < 0 || ex < 0) { alert('음수는 입력할 수 없습니다.'); return; }
+    if (hw > 720 || ex > 720) { alert('한 항목당 12시간(720분)까지만 입력 가능합니다.'); return; }
+    if (hw + ex > 1440) { alert('하루 합계는 24시간(1440분)을 초과할 수 없습니다.'); return; }
     const updated = logs.map(l => l.id === id ? {
       ...l,
       date: teacherForm.date,
@@ -34089,13 +34110,24 @@ function StudyTimeViewer({ studentName, studentGrade, userType = 'parent' }) {
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs font-bold text-blue-600">📚 숙제 시간 (분)</label>
-          <input type="number" min="0" value={teacherForm.hwMinutes} onChange={e => setTeacherForm(p => ({...p, hwMinutes: e.target.value}))}
+          <label className="text-xs font-bold text-blue-600">📚 숙제 시간 (분, 최대 720)</label>
+          <input type="number" min="0" max="720" value={teacherForm.hwMinutes} onChange={e => {
+            // 입력 즉시 720 초과 차단 (UI 단계 방어)
+            const v = e.target.value;
+            if (v === '' || (parseInt(v) >= 0 && parseInt(v) <= 720)) {
+              setTeacherForm(p => ({...p, hwMinutes: v}));
+            }
+          }}
             placeholder="0" className="w-full mt-0.5 p-2 border rounded-lg text-sm focus:outline-none focus:border-blue-400" />
         </div>
         <div>
-          <label className="text-xs font-bold text-teal-600">➕ 자습 시간 (분)</label>
-          <input type="number" min="0" value={teacherForm.extraMinutes} onChange={e => setTeacherForm(p => ({...p, extraMinutes: e.target.value}))}
+          <label className="text-xs font-bold text-teal-600">➕ 자습 시간 (분, 최대 720)</label>
+          <input type="number" min="0" max="720" value={teacherForm.extraMinutes} onChange={e => {
+            const v = e.target.value;
+            if (v === '' || (parseInt(v) >= 0 && parseInt(v) <= 720)) {
+              setTeacherForm(p => ({...p, extraMinutes: v}));
+            }
+          }}
             placeholder="0" className="w-full mt-0.5 p-2 border rounded-lg text-sm focus:outline-none focus:border-teal-400" />
         </div>
       </div>
