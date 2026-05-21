@@ -29991,28 +29991,136 @@ function getThisWeekKey() {
   return monday.toISOString().split('T')[0];
 }
 
+// ── 누적 자습 마일스톤 정의 (단위: 분) ───────────────────────
+const STUDY_MILESTONES = [
+  { mins: 600,    label: '⏱ 10시간 달성',  reward: '+5P',                bonus: 5,  icon: '⏱' },
+  { mins: 3000,   label: '🌱 50시간 달성',  reward: '+10P · 색연필 면제권', bonus: 10, icon: '🌱' },
+  { mins: 6000,   label: '🌿 100시간 달성', reward: '+20P · 숙제 면제권',  bonus: 20, icon: '🌿' },
+  { mins: 12000,  label: '🌳 200시간 달성', reward: '+50P · 재시험 면제권', bonus: 50, icon: '🌳' },
+  { mins: 30000,  label: '🏅 500시간 — 자습 마스터', reward: '+100P · 칭호', bonus: 100, icon: '🏅' },
+  { mins: 60000,  label: '👑 1000시간 — 자습 영주', reward: '+200P · 칭호', bonus: 200, icon: '👑' },
+];
+function getNextMilestone(totalMin, claimedList) {
+  return STUDY_MILESTONES.find(m => totalMin < m.mins && !(claimedList || []).includes(m.mins))
+       || STUDY_MILESTONES[STUDY_MILESTONES.length - 1];
+}
+function getUnclaimedMilestones(totalMin, claimedList) {
+  return STUDY_MILESTONES.filter(m => totalMin >= m.mins && !(claimedList || []).includes(m.mins));
+}
+
+// ── 자습 캘린더 히트맵 (GitHub 스타일) ──────────────────────
+function StudyHeatmap({ dayMap, weeks = 13, compact = false }) {
+  // 오늘부터 거꾸로 weeks*7일
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ymd = (d) => d.toISOString().split('T')[0];
+  const totalDays = weeks * 7;
+  // 시작일: 오늘 - (totalDays - 1) 의 가장 가까운 월요일
+  const start = new Date(today);
+  start.setDate(today.getDate() - (totalDays - 1));
+  // 시작 요일을 월요일로 정렬
+  const dow = start.getDay() || 7;
+  start.setDate(start.getDate() - (dow - 1));
+
+  const cellSize = compact ? 10 : 14;
+  const gap = compact ? 2 : 3;
+  // 색상 단계 (분 단위)
+  const colorFor = (mins) => {
+    if (mins <= 0) return '#f1f5f9'; // gray-100
+    if (mins < 30)  return '#d1fae5'; // emerald-100
+    if (mins < 60)  return '#86efac'; // green-300
+    if (mins < 120) return '#34d399'; // emerald-400
+    if (mins < 240) return '#10b981'; // emerald-500
+    return '#047857';                  // emerald-700
+  };
+
+  // 가로축: 주 (총 weeks+여유 1), 세로축: 월~일
+  const realWeeks = Math.ceil((totalDays + (dow - 1)) / 7) + 1;
+  const cells = [];
+  for (let w = 0; w < realWeeks; w++) {
+    const col = [];
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + w * 7 + d);
+      const key = ymd(date);
+      const mins = dayMap[key] || 0;
+      const isFuture = date > today;
+      col.push({ date: key, mins, isFuture });
+    }
+    cells.push(col);
+  }
+
+  const dayLabels = ['월','수','금'];
+  return (
+    <div className="overflow-x-auto">
+      <div style={{ display:'inline-flex', gap }}>
+        {/* 요일 라벨 */}
+        <div style={{ display:'flex', flexDirection:'column', gap, paddingRight: 4 }}>
+          {[0,1,2,3,4,5,6].map(i => (
+            <div key={i} style={{ width: 16, height: cellSize, fontSize: 9, color:'#94a3b8', display:'flex', alignItems:'center', justifyContent:'flex-end' }}>
+              {i === 0 ? '월' : i === 2 ? '수' : i === 4 ? '금' : ''}
+            </div>
+          ))}
+        </div>
+        {cells.map((col, ci) => (
+          <div key={ci} style={{ display:'flex', flexDirection:'column', gap }}>
+            {col.map(cell => (
+              <div
+                key={cell.date}
+                title={cell.isFuture ? cell.date : `${cell.date}: ${cell.mins > 0 ? cell.mins + '분 자습' : '자습 기록 없음'}`}
+                style={{
+                  width: cellSize, height: cellSize, borderRadius: 2,
+                  background: cell.isFuture ? 'transparent' : colorFor(cell.mins),
+                  opacity: cell.isFuture ? 0 : 1,
+                  border: cell.isFuture ? 'none' : '0.5px solid rgba(0,0,0,0.05)'
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      {!compact && (
+        <div className="flex items-center gap-2 mt-2 text-[10px] text-gray-500">
+          <span>적음</span>
+          {['#f1f5f9','#d1fae5','#86efac','#34d399','#10b981','#047857'].map(c => (
+            <span key={c} style={{ width: 10, height: 10, background: c, borderRadius: 2 }} />
+          ))}
+          <span>많음</span>
+          <span className="ml-2">· {weeks}주 (90일)</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SelfStudyHeroView({ students, saveStudents }) {
   const [period, setPeriod] = useState('week'); // week | month | total
   const [classFilter, setClassFilter] = useState('all');
   const [showAnonymous, setShowAnonymous] = useState(false);
   const [studyData, setStudyData] = useState({}); // { studentId: { weekMin, monthMin, totalMin, streak, dates:[] } }
+  const [dayMaps, setDayMaps] = useState({}); // { studentId: dayMap } 히트맵·오늘 자습 시간용
   const [loading, setLoading] = useState(true);
   const [goalEditor, setGoalEditor] = useState(null); // { studentId, studentName, hours }
+  const [praiseModal, setPraiseModal] = useState(null); // { studentName, todayMin, message }
+  const [praiseCopied, setPraiseCopied] = useState(false);
 
   // 모든 학생의 자습 시간 데이터 — 통합 헬퍼 사용 (학생 자가 로그 + 선생님 보고서)
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       const data = {};
+      const maps = {};
       for (const st of students) {
         try {
           const dayMap = await loadStudentStudyDayMap(st.name);
+          maps[st.id] = dayMap;
           data[st.id] = computeStudyMetrics(dayMap);
         } catch (e) {
+          maps[st.id] = {};
           data[st.id] = { weekMin:0, monthMin:0, totalMin:0, streak:0, longestStreak:0 };
         }
       }
       setStudyData(data);
+      setDayMaps(maps);
       setLoading(false);
     };
     load();
@@ -30097,6 +30205,127 @@ function SelfStudyHeroView({ students, saveStudents }) {
           </div>
         </div>
       </div>
+
+      {/* ⑤ 오늘 자습 1시간↑ 학생 → 즉시 칭찬 카톡 */}
+      {(() => {
+        const today = new Date().toISOString().split('T')[0];
+        const praisable = filtered.map(s => {
+          const todayMin = (dayMaps[s.id] || {})[today] || 0;
+          return { student: s, todayMin };
+        }).filter(x => x.todayMin >= 60).sort((a, b) => b.todayMin - a.todayMin);
+        if (praisable.length === 0) return null;
+        return (
+          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">👏</span>
+              <p className="font-bold text-amber-800 text-sm">오늘 1시간 이상 자습한 학생 {praisable.length}명 — 칭찬 한 마디가 다음 자습을 부릅니다</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {praisable.slice(0, 10).map(p => (
+                <button key={p.student.id}
+                  onClick={() => {
+                    const msg = `안녕하세요 ${p.student.name} 학부모님!\n\n오늘 ${p.student.name} 학생이 ${Math.floor(p.todayMin/60)}시간 ${p.todayMin%60}분 동안 집중해서 자습했습니다. 👏\n꾸준함이 진짜 실력을 만듭니다. 가정에서도 격려 한 마디 부탁드립니다!\n\n— 파란수학학원 몰입관`;
+                    setPraiseCopied(false);
+                    setPraiseModal({ studentName: p.student.name, todayMin: p.todayMin, message: msg });
+                  }}
+                  className="px-3 py-2 bg-white border border-amber-300 hover:bg-amber-100 rounded-lg flex items-center gap-2 transition-all">
+                  <span className="text-xs font-bold text-amber-700">👏 {p.student.name}</span>
+                  <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">{Math.floor(p.todayMin/60)}h{p.todayMin%60 ? ` ${p.todayMin%60}m`:''}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ④ 누적 자습 마일스톤 미수령 학생 알림 */}
+      {(() => {
+        const pending = filtered.map(s => {
+          const totalMin = (studyData[s.id]?.totalMin) || 0;
+          const claimed = s.tower?.studyMilestonesClaimed || [];
+          const unclaimed = getUnclaimedMilestones(totalMin, claimed);
+          return { student: s, totalMin, unclaimed };
+        }).filter(x => x.unclaimed.length > 0);
+        if (pending.length === 0) return null;
+        return (
+          <div className="bg-gradient-to-r from-emerald-50 to-cyan-50 border border-emerald-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">🎁</span>
+              <p className="font-bold text-emerald-800 text-sm">누적 자습 마일스톤 달성 — {pending.length}명 보상 대기 중</p>
+            </div>
+            <div className="space-y-1.5">
+              {pending.map(p => (
+                <div key={p.student.id} className="flex items-center justify-between bg-white rounded-lg p-2 border border-emerald-100">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-gray-800 text-sm">{p.student.name}</span>
+                    <span className="text-[10px] text-gray-500">누적 {Math.floor(p.totalMin/60)}시간</span>
+                    {p.unclaimed.map(m => (
+                      <span key={m.mins} className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">{m.icon} {m.label} → {m.reward}</span>
+                    ))}
+                  </div>
+                  <button onClick={() => {
+                    // 모든 미수령 마일스톤 한 번에 지급
+                    const totalBonus = p.unclaimed.reduce((s, m) => s + m.bonus, 0);
+                    const milestoneIds = p.unclaimed.map(m => m.mins);
+                    const updated = students.map(st => {
+                      if (st.id !== p.student.id) return st;
+                      const cl = st.tower?.manualPoints || 0;
+                      const cb = (st.tower?.pointBalance !== undefined && st.tower?.pointBalance !== null) ? st.tower.pointBalance : cl;
+                      const prevClaimed = st.tower?.studyMilestonesClaimed || [];
+                      return { ...st, tower: { ...(st.tower || {}),
+                        manualPoints: Math.round((cl + totalBonus) * 10) / 10,
+                        pointBalance: Math.round((cb + totalBonus) * 10) / 10,
+                        studyMilestonesClaimed: [...prevClaimed, ...milestoneIds],
+                        pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: totalBonus, reason: `자습 마일스톤 — ${p.unclaimed.map(m => m.label).join(', ')}`, type: 'study-milestone' }]
+                      } };
+                    });
+                    saveStudents(updated);
+                    alert(`✅ ${p.student.name} 학생에게 마일스톤 보상 +${totalBonus}P 지급 완료!`);
+                  }}
+                    className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg whitespace-nowrap">
+                    🎁 일괄 지급
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ⑦ 반 전체 자습 챌린지 — 주간만 표시 */}
+      {period === 'week' && classFilter !== 'all' && (() => {
+        const targetMin = filtered.length * 300; // 학생당 5시간 × 인원
+        const currentMin = filtered.reduce((s, st) => s + ((studyData[st.id]?.weekMin) || 0), 0);
+        const pct = targetMin > 0 ? Math.min(100, Math.round(currentMin / targetMin * 100)) : 0;
+        const done = currentMin >= targetMin;
+        return (
+          <div className={`rounded-xl p-4 border ${done ? 'bg-gradient-to-r from-emerald-100 to-green-100 border-emerald-400' : 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">{done ? '🏆' : '🤝'}</span>
+              <p className={`font-bold text-sm ${done ? 'text-emerald-800' : 'text-indigo-800'}`}>
+                이번 주 <span className="font-black">{classFilter}</span> 반 자습 챌린지 — 목표 {Math.floor(targetMin/60)}시간 ({filtered.length}명 × 5시간)
+              </p>
+            </div>
+            <div className="flex items-center justify-between text-xs mb-1.5">
+              <span className={done ? 'text-emerald-700 font-bold' : 'text-indigo-700 font-bold'}>{fmtMin(currentMin)} / {fmtMin(targetMin)}</span>
+              <span className={`font-black text-base ${done ? 'text-emerald-700' : 'text-indigo-700'}`}>{pct}% {done && '✅ 달성!'}</span>
+            </div>
+            <div className="h-3 bg-white rounded-full overflow-hidden border border-indigo-100">
+              <div
+                className={`h-full rounded-full transition-all ${done ? 'bg-gradient-to-r from-emerald-400 to-green-500' : pct >= 80 ? 'bg-gradient-to-r from-yellow-400 to-orange-400' : 'bg-gradient-to-r from-indigo-400 to-purple-500'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            {done && <p className="text-xs text-emerald-700 mt-2 text-center font-bold">🎉 반 전체가 목표를 달성했습니다! 단체 격려 메시지 보내기 권장</p>}
+            {!done && pct >= 80 && <p className="text-xs text-orange-700 mt-2 text-center">🔥 80% 도달! 마지막 스퍼트 — 학생들에게 격려를</p>}
+          </div>
+        );
+      })()}
+      {period === 'week' && classFilter === 'all' && classOptions.length > 0 && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-center">
+          <p className="text-xs text-indigo-700">💡 반 전체 자습 챌린지 진행률을 보려면 위에서 반을 선택하세요.</p>
+        </div>
+      )}
 
       {/* 컨트롤 바 */}
       <div className="bg-white rounded-xl shadow p-3 flex gap-2 flex-wrap items-center">
@@ -30282,6 +30511,54 @@ function SelfStudyHeroView({ students, saveStudents }) {
           </div>
         </div>
       )}
+
+      {/* ⑤ 즉시 칭찬 메시지 미리보기 모달 */}
+      {praiseModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setPraiseModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-3 rounded-t-xl flex items-center justify-between">
+              <p className="font-bold text-amber-900 text-sm">👏 {praiseModal.studentName} 학부모님께 칭찬 메시지</p>
+              <button onClick={() => setPraiseModal(null)} className="text-amber-900 text-xl font-bold leading-none">×</button>
+            </div>
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                <p className="font-bold mb-1">📌 사용 방법</p>
+                <p>① 아래 <strong>📋 메시지 복사</strong> 버튼 → ② 카카오톡에서 학부모님 채팅창에 붙여넣기 → ③ 보내기</p>
+              </div>
+              <textarea value={praiseModal.message} onChange={e => setPraiseModal({ ...praiseModal, message: e.target.value })}
+                rows={8}
+                className="w-full p-3 border border-gray-300 rounded-lg text-xs bg-gray-50 font-mono resize-y"
+                style={{ lineHeight: 1.6 }} />
+              <p className="text-[11px] text-gray-500">메시지는 보내기 전 직접 수정하실 수 있습니다.</p>
+            </div>
+            <div className="border-t bg-gray-50 px-4 py-3 rounded-b-xl flex items-center justify-end gap-2">
+              <button onClick={() => setPraiseModal(null)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded-lg">닫기</button>
+              <button onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(praiseModal.message);
+                  setPraiseCopied(true);
+                } catch (e) {
+                  const ta = document.createElement('textarea');
+                  ta.value = praiseModal.message; document.body.appendChild(ta); ta.select();
+                  try { document.execCommand('copy'); setPraiseCopied(true); } catch (_) {}
+                  document.body.removeChild(ta);
+                }
+              }}
+                className={`px-4 py-2 ${praiseCopied ? 'bg-green-500 hover:bg-green-600' : 'bg-amber-500 hover:bg-amber-600'} text-white text-sm font-bold rounded-lg shadow-sm`}>
+                {praiseCopied ? '✅ 복사 완료' : '📋 메시지 복사'}
+              </button>
+              {/Mobi|Android|iPhone/i.test(navigator.userAgent) && (
+                <button onClick={async () => {
+                  if (navigator.share) { try { await navigator.share({ text: praiseModal.message }); } catch(_) {} }
+                }}
+                  className="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-sm font-bold rounded-lg shadow-sm">
+                  📤 공유
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -30293,6 +30570,7 @@ function SelfStudyHeroView({ students, saveStudents }) {
 // ============================================================
 function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
   const [metrics, setMetrics] = useState(null);
+  const [dayMap, setDayMap] = useState({});
   const [allMetrics, setAllMetrics] = useState({}); // 반 내 랭킹 계산용
   const [loading, setLoading] = useState(true);
   const [goalEditOpen, setGoalEditOpen] = useState(false);
@@ -30304,6 +30582,7 @@ function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
       setLoading(true);
       try {
         const selfMap = await loadStudentStudyDayMap(student.name);
+        setDayMap(selfMap);
         setMetrics(computeStudyMetrics(selfMap));
         // 같은 반 학생들의 주간 자습 시간만 빠르게 (랭킹용)
         const classmates = (students || []).filter(s => s.className && s.className === student.className);
@@ -30449,6 +30728,71 @@ function StudentSelfStudyHeroCard({ student, students, saveStudents }) {
         {bonusClaimed && (
           <p className="mt-2 text-[11px] text-emerald-600 text-center font-bold">✓ 이번 주 보너스 지급 완료</p>
         )}
+      </div>
+
+      {/* ④ 누적 마일스톤 진행률 + 미수령 보상 */}
+      {(() => {
+        const totalMin = metrics.totalMin || 0;
+        const claimed = student.tower?.studyMilestonesClaimed || [];
+        const next = getNextMilestone(totalMin, claimed);
+        const unclaimed = getUnclaimedMilestones(totalMin, claimed);
+        const milestonePct = next ? Math.min(100, Math.round(totalMin / next.mins * 100)) : 100;
+        const grantAllMilestones = () => {
+          const totalBonus = unclaimed.reduce((s, m) => s + m.bonus, 0);
+          const milestoneIds = unclaimed.map(m => m.mins);
+          const updated = students.map(st => {
+            if (st.id !== student.id) return st;
+            const cl = st.tower?.manualPoints || 0;
+            const cb = (st.tower?.pointBalance !== undefined && st.tower?.pointBalance !== null) ? st.tower.pointBalance : cl;
+            const prevClaimed = st.tower?.studyMilestonesClaimed || [];
+            return { ...st, tower: { ...(st.tower || {}),
+              manualPoints: Math.round((cl + totalBonus) * 10) / 10,
+              pointBalance: Math.round((cb + totalBonus) * 10) / 10,
+              studyMilestonesClaimed: [...prevClaimed, ...milestoneIds],
+              pointHistory: [...(st.tower?.pointHistory || []), { date: new Date().toISOString(), amount: totalBonus, reason: `자습 마일스톤 — ${unclaimed.map(m => m.label).join(', ')}`, type: 'study-milestone' }]
+            } };
+          });
+          saveStudents(updated);
+          alert(`✅ ${student.name} 학생에게 마일스톤 보상 +${totalBonus}P 지급 완료!`);
+        };
+        return (
+          <div className="bg-white rounded-lg p-3 border border-emerald-100">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold text-gray-700">🎁 누적 자습 마일스톤 ({Math.floor(totalMin/60)}시간 / 다음 {next.icon} {Math.floor(next.mins/60)}시간)</span>
+              {unclaimed.length > 0 && (
+                <button onClick={grantAllMilestones}
+                  className="px-2.5 py-0.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-[10px] font-bold rounded shadow animate-pulse">
+                  🎁 보상 {unclaimed.length}건 지급
+                </button>
+              )}
+            </div>
+            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-emerald-400 via-green-400 to-teal-500 rounded-full transition-all" style={{ width: `${milestonePct}%` }} />
+            </div>
+            {/* 마일스톤 마커 */}
+            <div className="flex justify-between mt-1 text-[9px] text-gray-400">
+              {STUDY_MILESTONES.slice(0, 4).map(m => (
+                <span key={m.mins} className={totalMin >= m.mins ? 'text-emerald-600 font-bold' : ''}>
+                  {totalMin >= m.mins ? '✅' : ''} {m.icon} {Math.floor(m.mins/60)}h
+                </span>
+              ))}
+            </div>
+            {unclaimed.length > 0 && (
+              <div className="mt-2 p-2 bg-emerald-50 rounded text-[11px] text-emerald-700">
+                <strong>달성한 미수령 마일스톤:</strong>
+                <ul className="mt-1 ml-2 space-y-0.5">
+                  {unclaimed.map(m => <li key={m.mins}>· {m.label} → {m.reward}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ⑥ 자습 캘린더 히트맵 — 최근 13주 (90일) */}
+      <div className="bg-white rounded-lg p-3 border border-emerald-100">
+        <p className="text-xs font-bold text-gray-700 mb-2">📅 자습 캘린더 — 최근 13주</p>
+        <StudyHeatmap dayMap={dayMap} weeks={13} />
       </div>
 
       {/* 목표 수정 인라인 폼 */}
@@ -31770,6 +32114,22 @@ function SelfStudyTab({ student }) {
   const QUIZ_INTERVAL = 30 * 60; // 30분마다 (초)
   const QUIZ_TIMEOUT = 60; // 60초 내 응답
 
+  // ⑧ 자습↔성적 상관관계용 reportData
+  const [studentReport, setStudentReport] = useState(null);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (window.storage) {
+          const r = await window.storage.get(`paran:report:${studentName}`, true);
+          if (r?.value) { setStudentReport(JSON.parse(r.value)); return; }
+        }
+        const s = localStorage.getItem(`paran:report:${studentName}`);
+        if (s) setStudentReport(JSON.parse(s));
+      } catch (e) {}
+    };
+    if (studentName && studentName !== '__unknown__') load();
+  }, [studentName]);
+
   // 수학 퀴즈 생성
   const generateQuiz = () => {
     const types = ['add', 'sub', 'mul', 'mixed'];
@@ -32295,6 +32655,9 @@ function SelfStudyTab({ student }) {
 
   return (
     <div className="space-y-4">
+      {/* ⑧ 자습 시간 ↔ 시험 성적 상관관계 — 학생 동기부여용 */}
+      {studentReport && <StudyTimeScoreCorrelation studentName={studentName} reportData={studentReport} />}
+
       {/* ★ 랜덤 확인 퀴즈 팝업 */}
       {quizPopup && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4">
