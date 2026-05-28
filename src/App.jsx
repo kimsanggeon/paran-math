@@ -45062,16 +45062,21 @@ function DiagnosisTab({ students, saveStudents }) {
     }
   };
 
-  const saveDiagnosisData = async (newData) => {
-    try {
-      if (typeof window !== 'undefined' && window.storage) {
-        await window.storage.set('paran:diagnosis', JSON.stringify(newData, true));
+  // ★ 부분 업데이트(merge) — 항상 최신 state(prev)에 병합해 다른 진단 결과가
+  //   덮어써지지 않도록 함. (예: 학습 유형 저장 시 수학 불안 결과 유실 방지)
+  const saveDiagnosisData = (patch) => {
+    setDiagnosisData(prev => {
+      const newData = { ...prev, ...patch };
+      try {
+        localStorage.setItem('paran:diagnosis', JSON.stringify(newData));
+        if (typeof window !== 'undefined' && window.storage) {
+          window.storage.set('paran:diagnosis', JSON.stringify(newData, true));
+        }
+      } catch (e) {
+        console.log('진단 데이터 저장 오류:', e);
       }
-      localStorage.setItem('paran:diagnosis', JSON.stringify(newData));
-      setDiagnosisData(newData);
-    } catch (e) {
-      console.log('진단 데이터 저장 오류:', e);
-    }
+      return newData;
+    });
   };
 
   // 수학 불안 측정 문항
@@ -45244,8 +45249,8 @@ function AnxietyAssessment({ student, questions, diagnosisData, saveDiagnosisDat
   };
 
   const handleSubmit = () => {
+    // 자신의 키만 전달 — saveDiagnosisData 가 최신 state 에 병합 (다른 진단 결과 보존)
     saveDiagnosisData({
-      ...diagnosisData,
       [`anxiety_${student.id}`]: answers,
       [`anxiety_${student.id}_date`]: new Date().toISOString()
     });
@@ -45395,8 +45400,8 @@ function LearningStyleAssessment({ student, questions, diagnosisData, saveDiagno
   };
 
   const handleSubmit = () => {
+    // 자신의 키만 전달 — saveDiagnosisData 가 최신 state 에 병합 (수학 불안 결과 보존)
     saveDiagnosisData({
-      ...diagnosisData,
       [`learning_${student.id}`]: answers,
       [`learning_${student.id}_date`]: new Date().toISOString()
     });
