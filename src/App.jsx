@@ -41883,6 +41883,23 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
   };
 
   const getOption = (studentName, key) => prepNotes[activeDate]?.[studentName]?.[key] || '';
+  // '__none__'(명시적 해제)은 "값 없음"으로 취급 — 카드 완료 아이콘·카톡·워드에서 무시
+  const getOptionClean = (studentName, key) => {
+    const v = getOption(studentName, key);
+    return v === '__none__' ? '' : v;
+  };
+
+  // 체크리스트 전체 항목 키 목록
+  const CHECKLIST_KEYS = ['hwDone','hwProcess','hwCorrect','hwQuality','attitudeSleepy','attitudeDistract','attitudeMotivation','parentSign','odalNote','retestCheck'];
+
+  // ★ 체크리스트 전체 해제 — 모든 버튼을 미선택(빈) 상태로. autoValue 자동표시도 끔.
+  const clearAllChecklist = (studentName) => {
+    const updated = { ...prepNotes };
+    if (!updated[activeDate]) updated[activeDate] = {};
+    if (!updated[activeDate][studentName]) updated[activeDate][studentName] = {};
+    CHECKLIST_KEYS.forEach(k => { updated[activeDate][studentName][k] = '__none__'; });
+    savePrepNotes(updated);
+  };
 
   // 소제목별 자유 메모 (예: 숙제 검사 → 완료 여부에 대한 부가 메모)
   const setSubMemo = (studentName, key, text) => {
@@ -42058,7 +42075,7 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
       {filtered.length > 0 && (() => {
         const allCheckKeys = ['hwDone','hwProcess','hwCorrect','hwQuality','attitudeSleepy','attitudeDistract','attitudeMotivation','parentSign','odalNote','retestCheck'];
         const total = filtered.length * allCheckKeys.length;
-        const done = filtered.reduce((s, st) => s + allCheckKeys.filter(k => !!getOption(st.name, k)).length, 0);
+        const done = filtered.reduce((s, st) => s + allCheckKeys.filter(k => !!getOptionClean(st.name, k)).length, 0);
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         return (
           <div className="bg-white rounded-xl shadow p-3">
@@ -42094,9 +42111,11 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
           //   리마운트되지 않아 입력 포커스/IME 조합이 유지됨. 호출: {OptionGroup({...})}
           const OptionGroup = ({ stName, stId, label, icon, optKey, options, autoValue }) => {
             const stored = getOption(stName, optKey);
-            // 표시값: 수동 선택이 있으면 그것을, 없으면 autoValue(보고서 자동)
-            const val = stored || autoValue || '';
-            const isAuto = !stored && !!autoValue;
+            // '__none__' = 명시적 해제(미선택) — autoValue 자동 표시까지 끔
+            const cleared = stored === '__none__';
+            // 표시값: 해제면 없음, 수동 선택이 있으면 그것을, 없으면 autoValue(보고서 자동)
+            const val = cleared ? '' : (stored || autoValue || '');
+            const isAuto = !cleared && !stored && !!autoValue;
             const memoVal = getSubMemo(stName, optKey);
             return (
               <div className="space-y-1" key={`og-${stId}-${optKey}`}>
@@ -42105,10 +42124,10 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                     {icon} {label}
                     {isAuto && <span className="ml-1 text-[9px] text-indigo-400 block">보고서↑</span>}
                   </span>
-                  <div className="flex gap-1 flex-wrap">
+                  <div className="flex gap-1 flex-wrap items-center">
                     {options.map(opt => {
-                      // 현재 선택 표시: 수동 저장값 우선, 없으면 autoValue 와 비교
-                      const selected = stored ? stored === opt.value : (isAuto && autoValue === opt.value);
+                      // 현재 선택 표시: 해제 상태면 모두 미선택, 수동값 우선, 없으면 autoValue 비교
+                      const selected = cleared ? false : (stored && stored !== '__none__' ? stored === opt.value : (isAuto && autoValue === opt.value));
                       return (
                         <button key={opt.value} onClick={() => setOption(stName, optKey, opt.value)}
                           className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${ selected ? `${opt.active} border-transparent shadow-sm${(isAuto && !stored)?' ring-2 ring-indigo-300 ring-offset-1':''}` : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300' }`}>
@@ -42116,6 +42135,13 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                         </button>
                       );
                     })}
+                    {/* ✕ 해제 — 이 항목을 미선택(빈 상태)으로. 다시 누르면 기본 복귀 */}
+                    <button
+                      onClick={() => setOption(stName, optKey, '__none__')}
+                      title={cleared ? '해제됨 — 다시 누르면 기본값 복귀' : '이 항목 선택 해제'}
+                      className={`px-1.5 py-1 rounded-full text-[10px] font-medium border transition-all ${ cleared ? 'bg-gray-400 text-white border-transparent shadow-sm' : 'bg-white text-gray-300 border-gray-200 hover:border-gray-300 hover:text-gray-500' }`}>
+                      {cleared ? '✕ 해제됨' : '✕'}
+                    </button>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pl-[7.25rem]">
@@ -42161,13 +42187,13 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                     <p className="text-xs text-gray-500 truncate mt-0.5">진도: {summary.lastProgress}</p>
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
-                    {(['hwDone','hwProcess','hwCorrect','hwQuality'].every(k => !!(k==='hwDone'?(getOption(st.name,k)||hwAutoStatus):getOption(st.name,k)))) &&
+                    {(['hwDone','hwProcess','hwCorrect','hwQuality'].every(k => !!(k==='hwDone'?(getOptionClean(st.name,k)||hwAutoStatus):getOptionClean(st.name,k)))) &&
                       <span className="w-5 h-5 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-xs">📚</span>}
-                    {(['attitudeSleepy','attitudeDistract','attitudeMotivation'].every(k => !!getOption(st.name,k))) &&
+                    {(['attitudeSleepy','attitudeDistract','attitudeMotivation'].every(k => !!getOptionClean(st.name,k))) &&
                       <span className="w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs">🧠</span>}
-                    {(['parentSign','odalNote'].every(k => !!getOption(st.name,k))) &&
+                    {(['parentSign','odalNote'].every(k => !!getOptionClean(st.name,k))) &&
                       <span className="w-5 h-5 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xs">📋</span>}
-                    {!!getOption(st.name,'retestCheck') &&
+                    {!!getOptionClean(st.name,'retestCheck') &&
                       <span className="w-5 h-5 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-xs">🎯</span>}
                   </div>
                   <span className="text-gray-400 text-lg">{isOpen ? '▲' : '▼'}</span>
@@ -42201,8 +42227,8 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            // 메시지 빌드 — 학부모 시점의 친근한 톤
-                            const opt = (k) => getOption(st.name, k);
+                            // 메시지 빌드 — 학부모 시점의 친근한 톤 ('__none__' 해제값은 제외)
+                            const opt = (k) => getOptionClean(st.name, k);
                             const mem = (k) => getSubMemo(st.name, k);
                             const ov  = (f) => getOverride(st.name, f);
                             const lines = [];
@@ -42586,7 +42612,16 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
 
                     {/* ── 체크리스트 ── */}
                     <div className="space-y-3">
-                      <p className="text-xs font-bold text-gray-700">✅ 수업 전 체크리스트</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-gray-700">✅ 수업 전 체크리스트</p>
+                        <button
+                          type="button"
+                          onClick={() => clearAllChecklist(st.name)}
+                          title="모든 체크리스트 버튼을 미선택 상태로 되돌립니다"
+                          className="px-2 py-1 text-[10px] font-bold rounded border bg-white text-gray-500 border-gray-300 hover:bg-gray-50 hover:text-gray-700">
+                          🔄 전체 해제
+                        </button>
+                      </div>
 
                       {/* 1. 숙제 검사 */}
                       <div className="bg-green-50 rounded-lg p-2.5 border border-green-100 space-y-2">
