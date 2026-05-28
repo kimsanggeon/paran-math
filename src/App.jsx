@@ -41624,6 +41624,35 @@ function downloadConceptDiagnosisReport({ student, test, session, teacherName })
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ── 수업 준비 노트 전용 안정 입력 컴포넌트 ──────────────────
+//   로컬 state로 표시를 구동 → 부모 재렌더가 잦아도 한글 IME 조합이
+//   끊기지 않고, 포커스도 유지됨. 변경 즉시 onCommit 으로 부모에 저장.
+//   key 가 바뀔 때(학생/날짜/항목 변경)만 initialValue 로 재초기화.
+function PrepTextInput({ initialValue = '', onCommit, placeholder, className }) {
+  const [local, setLocal] = useState(initialValue);
+  return (
+    <input
+      type="text"
+      value={local}
+      onChange={(e) => { setLocal(e.target.value); onCommit(e.target.value); }}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+function PrepTextarea({ initialValue = '', onCommit, placeholder, className, rows = 4 }) {
+  const [local, setLocal] = useState(initialValue);
+  return (
+    <textarea
+      value={local}
+      onChange={(e) => { setLocal(e.target.value); onCommit(e.target.value); }}
+      placeholder={placeholder}
+      rows={rows}
+      className={className}
+    />
+  );
+}
+
 // ========== 📝 수업 준비 노트 탭 ==========
 function LessonPrepTab({ students, saveStudents, teachers = [] }) {
   const [selectedClass, setSelectedClass] = useState('all');
@@ -42061,31 +42090,39 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
           filtered.forEach(s => { const tid=s.teacherId||'__none__'; if(!teacherMap[tid])teacherMap[tid]={}; const cn=s.className||'__unassigned__'; if(!teacherMap[tid][cn])teacherMap[tid][cn]=[]; teacherMap[tid][cn].push(s); });
 
           // 인라인 OptionGroup 컴포넌트 — 소제목별로 기타 메모 한 줄 추가
-          const OptionGroup = ({ stName, label, icon, optKey, options, autoValue }) => {
-            const val = getOption(stName, optKey) || autoValue || '';
-            const isAuto = !getOption(stName, optKey) && !!autoValue;
+          // ★ 컴포넌트(<OptionGroup/>)가 아니라 "렌더 함수"로 사용 — 부모 재렌더 시
+          //   리마운트되지 않아 입력 포커스/IME 조합이 유지됨. 호출: {OptionGroup({...})}
+          const OptionGroup = ({ stName, stId, label, icon, optKey, options, autoValue }) => {
+            const stored = getOption(stName, optKey);
+            // 표시값: 수동 선택이 있으면 그것을, 없으면 autoValue(보고서 자동)
+            const val = stored || autoValue || '';
+            const isAuto = !stored && !!autoValue;
             const memoVal = getSubMemo(stName, optKey);
             return (
-              <div className="space-y-1">
+              <div className="space-y-1" key={`og-${stId}-${optKey}`}>
                 <div className="flex items-start gap-2 flex-wrap">
                   <span className="text-xs text-gray-600 w-28 flex-shrink-0 pt-1">
                     {icon} {label}
                     {isAuto && <span className="ml-1 text-[9px] text-indigo-400 block">보고서↑</span>}
                   </span>
                   <div className="flex gap-1 flex-wrap">
-                    {options.map(opt => (
-                      <button key={opt.value} onClick={() => setOption(stName, optKey, opt.value)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${ val === opt.value ? `${opt.active} border-transparent shadow-sm${isAuto?' ring-2 ring-indigo-300 ring-offset-1':''}` : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300' }`}>
-                        {opt.label}
-                      </button>
-                    ))}
+                    {options.map(opt => {
+                      // 현재 선택 표시: 수동 저장값 우선, 없으면 autoValue 와 비교
+                      const selected = stored ? stored === opt.value : (isAuto && autoValue === opt.value);
+                      return (
+                        <button key={opt.value} onClick={() => setOption(stName, optKey, opt.value)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${ selected ? `${opt.active} border-transparent shadow-sm${(isAuto && !stored)?' ring-2 ring-indigo-300 ring-offset-1':''}` : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300' }`}>
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pl-[7.25rem]">
-                  <input
-                    type="text"
-                    value={memoVal}
-                    onChange={e => setSubMemo(stName, optKey, e.target.value)}
+                  <PrepTextInput
+                    key={`memo-${stId}-${optKey}-${activeDate}`}
+                    initialValue={memoVal}
+                    onCommit={(v) => setSubMemo(stName, optKey, v)}
                     placeholder="✏️ 기타 메모 (선택)"
                     className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-[11px] bg-white/70 focus:bg-white focus:border-indigo-300 placeholder:text-gray-300"
                   />
@@ -42384,9 +42421,10 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                       </p>
 
                       {editing ? (
-                        <textarea
-                          value={overrideSess}
-                          onChange={e => setOverride(st.name, 'overrideLastSession', e.target.value)}
+                        <PrepTextarea
+                          key={`ovr-sess-${st.id}-${activeDate}`}
+                          initialValue={overrideSess}
+                          onCommit={(v) => setOverride(st.name, 'overrideLastSession', v)}
                           rows={6}
                           className="w-full p-2 border border-blue-200 rounded text-xs bg-white resize-y mb-1"
                           placeholder="직전 수업 요약을 직접 입력하세요"
@@ -42510,12 +42548,13 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                           </button>
                         </p>
                         {editingHw ? (
-                          <textarea
-                            value={overrideHw}
-                            onChange={e => setOverride(st.name, 'overrideLastHomework', e.target.value)}
+                          <PrepTextarea
+                            key={`ovr-hw-${st.id}-${activeDate}`}
+                            initialValue={overrideHw}
+                            onCommit={(v) => setOverride(st.name, 'overrideLastHomework', v)}
                             rows={4}
                             className="w-full p-2 border border-indigo-200 rounded text-xs bg-white resize-y"
-                            placeholder="• 쎈 p.93~96&#10;• 오답노트 5문제"
+                            placeholder="• 쎈 p.93~96, 오답노트 5문제"
                           />
                         ) : summary.lastHomework.map((hw, i) => (
                           <div key={i} className="flex items-center gap-2 mb-0.5">
@@ -42552,83 +42591,85 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                       {/* 1. 숙제 검사 */}
                       <div className="bg-green-50 rounded-lg p-2.5 border border-green-100 space-y-2">
                         <p className="text-[11px] font-bold text-green-700">📚 숙제 검사</p>
-                        <OptionGroup stName={st.name} label="완료 여부" icon="📌" optKey="hwDone" autoValue={hwAutoStatus}
-                          options={[
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "완료 여부", icon: "📌", optKey: "hwDone", autoValue: hwAutoStatus,
+                          options: [
                             { value:'done',    label:'✅ 완료',     active:'bg-green-500 text-white' },
                             { value:'partial', label:'🔶 약간 미완', active:'bg-orange-400 text-white' },
                             { value:'notdone', label:'❌ 미완료',   active:'bg-red-500 text-white' },
-                          ]} />
-                        <OptionGroup stName={st.name} label="풀이 과정" icon="📝" optKey="hwProcess"
-                          options={[
+                          ] })}
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "풀이 과정", icon: "📝", optKey: "hwProcess",
+                          options: [
                             { value:'good', label:'👍 충분', active:'bg-blue-500 text-white' },
                             { value:'weak', label:'👎 미흡', active:'bg-red-400 text-white' },
-                          ]} />
-                        <OptionGroup stName={st.name} label="틀린 문제 수정" icon="✏️" optKey="hwCorrect"
-                          options={[
+                          ] })}
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "틀린 문제 수정", icon: "✏️", optKey: "hwCorrect",
+                          options: [
                             { value:'done',    label:'✅ 완료',   active:'bg-green-500 text-white' },
                             { value:'notdone', label:'❌ 미완료', active:'bg-red-500 text-white' },
-                          ]} />
-                        <OptionGroup stName={st.name} label="숙제 성실도" icon="⭐" optKey="hwQuality"
-                          options={[
+                          ] })}
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "숙제 성실도", icon: "⭐", optKey: "hwQuality",
+                          options: [
                             { value:'sincere', label:'😊 확실히 했음', active:'bg-emerald-500 text-white' },
                             { value:'lazy',    label:'😑 대충 했음',   active:'bg-amber-500 text-white' },
-                          ]} />
+                          ] })}
                       </div>
 
                       {/* 2. 수업 태도 (지난 이해도 제거) */}
                       <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100 space-y-2">
                         <p className="text-[11px] font-bold text-blue-700">🧠 수업 태도 점검</p>
-                        <OptionGroup stName={st.name} label="졸음·무기력" icon="😴" optKey="attitudeSleepy"
-                          options={[
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "졸음·무기력", icon: "😴", optKey: "attitudeSleepy",
+                          options: [
                             { value:'fine',   label:'😊 괜찮음',    active:'bg-green-500 text-white' },
                             { value:'abit',   label:'😪 약간 졸림', active:'bg-yellow-500 text-white' },
                             { value:'sleepy', label:'😴 많이 졸림', active:'bg-red-500 text-white' },
-                          ]} />
-                        <OptionGroup stName={st.name} label="집중·산만" icon="🎯" optKey="attitudeDistract"
-                          options={[
+                          ] })}
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "집중·산만", icon: "🎯", optKey: "attitudeDistract",
+                          options: [
                             { value:'focused',  label:'🎯 집중함',    active:'bg-blue-500 text-white' },
                             { value:'abit',     label:'🙂 약간 산만', active:'bg-yellow-500 text-white' },
                             { value:'distract', label:'😵 많이 산만', active:'bg-red-500 text-white' },
-                          ]} />
-                        <OptionGroup stName={st.name} label="학습 의욕" icon="💪" optKey="attitudeMotivation"
-                          options={[
+                          ] })}
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "학습 의욕", icon: "💪", optKey: "attitudeMotivation",
+                          options: [
                             { value:'high', label:'🔥 높음', active:'bg-orange-500 text-white' },
                             { value:'mid',  label:'😐 보통', active:'bg-gray-400 text-white' },
                             { value:'low',  label:'😞 낮음', active:'bg-slate-500 text-white' },
-                          ]} />
+                          ] })}
                       </div>
 
                       {/* 3. 행정 (준비물 제거, 오답노트 작성/미작성) */}
                       <div className="bg-amber-50 rounded-lg p-2.5 border border-amber-100 space-y-2">
                         <p className="text-[11px] font-bold text-amber-700">📋 행정</p>
-                        <OptionGroup stName={st.name} label="부모님 사인" icon="✍️" optKey="parentSign"
-                          options={[
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "부모님 사인", icon: "✍️", optKey: "parentSign",
+                          options: [
                             { value:'done',    label:'✅ 받음',   active:'bg-green-500 text-white' },
                             { value:'notdone', label:'❌ 미확인', active:'bg-red-500 text-white' },
-                          ]} />
-                        <OptionGroup stName={st.name} label="오답노트" icon="📓" optKey="odalNote"
-                          options={[
+                          ] })}
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "오답노트", icon: "📓", optKey: "odalNote",
+                          options: [
                             { value:'written',    label:'✅ 작성',   active:'bg-green-500 text-white' },
                             { value:'notwritten', label:'❌ 미작성', active:'bg-red-500 text-white' },
-                          ]} />
+                          ] })}
                       </div>
 
                       {/* 4. 수업 계획 (재시험 통과/재시험) */}
                       <div className="bg-purple-50 rounded-lg p-2.5 border border-purple-100 space-y-2">
                         <p className="text-[11px] font-bold text-purple-700">🎯 수업 계획</p>
-                        <OptionGroup stName={st.name} label="재시험" icon="🔄" optKey="retestCheck"
-                          options={[
+                        {OptionGroup({ stName: st.name, stId: st.id, label: "재시험", icon: "🔄", optKey: "retestCheck",
+                          options: [
                             { value:'pass',   label:'✅ 통과',   active:'bg-green-500 text-white' },
                             { value:'retest', label:'🔄 재시험', active:'bg-red-500 text-white' },
-                          ]} />
+                          ] })}
                       </div>
 
                       {/* 메모 */}
                       <div>
                         <p className="text-[11px] font-bold text-gray-600 mb-1">📝 메모</p>
-                        <textarea
-                          value={getMemo(st.name)}
-                          onChange={e => setMemo(st.name, e.target.value)}
+                        <PrepTextarea
+                          key={`memo-overall-${st.id}-${activeDate}`}
+                          initialValue={getMemo(st.name)}
+                          onCommit={(v) => setMemo(st.name, v)}
+                          rows={3}
                           placeholder="특이사항·전달사항 (예: 오늘 피곤해 보임, 부모님 전화 필요 등)"
                           className="w-full border rounded-lg p-2 text-xs resize-none h-16 bg-gray-50 focus:bg-white focus:border-blue-300 transition-colors"
                         />
