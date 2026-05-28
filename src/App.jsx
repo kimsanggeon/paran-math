@@ -42455,87 +42455,45 @@ function LessonPrepTab({ students, saveStudents, teachers = [] }) {
                           className="w-full p-2 border border-blue-200 rounded text-xs bg-white resize-y mb-1"
                           placeholder="직전 수업 요약을 직접 입력하세요"
                         />
-                      ) : (<>
-
-                      {/* 보충 케이스: 정규 + 보충 두 블록 */}
-                      {summary.wasSupplement ? (
-                        <div className="space-y-2 mb-2">
-                          {/* 정규 수업 내용 */}
-                          <div className="bg-white rounded p-2 border border-blue-200">
-                            <p className="text-[10px] font-bold text-blue-700 mb-1">📘 정규 수업 내용{summary.regularSessionDate && <span className="font-normal text-blue-400 ml-1">({summary.regularSessionDate})</span>}</p>
-                            {summary.lastSessionContents.length > 0 ? (
-                              <div className="space-y-0.5">
-                                {summary.lastSessionContents.map((c, ci) => {
-                                  const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
-                                  return (
-                                    <div key={ci} className="flex items-start gap-1 text-xs text-gray-700">
-                                      <span className="text-blue-400 flex-shrink-0">•</span>
-                                      <span>
-                                        {tb && <span className="font-medium">{tb}</span>}
-                                        {c.grade && <span className="text-gray-400 ml-1">{c.grade}</span>}
-                                        {c.pages && <span className="text-blue-600 ml-1">p.{c.pages}</span>}
-                                        {c.detailUnit && <span className="text-gray-500 ml-1">— {c.detailUnit}</span>}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-[11px] text-gray-400">기록 없음</p>
-                            )}
-                          </div>
-                          {/* 보충 수업 내용 */}
-                          <div className="bg-orange-50 rounded p-2 border border-orange-200">
-                            <p className="text-[10px] font-bold text-orange-700 mb-1">🟠 보충 수업 내용{summary.supplementDate && <span className="font-normal text-orange-400 ml-1">({summary.supplementDate})</span>}</p>
-                            {summary.supplementContents.length > 0 ? (
-                              <div className="space-y-0.5">
-                                {summary.supplementContents.map((c, ci) => {
-                                  const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
-                                  return (
-                                    <div key={ci} className="flex items-start gap-1 text-xs text-gray-700">
-                                      <span className="text-orange-400 flex-shrink-0">•</span>
-                                      <span>
-                                        {tb && <span className="font-medium">{tb}</span>}
-                                        {c.grade && <span className="text-gray-400 ml-1">{c.grade}</span>}
-                                        {c.pages && <span className="text-orange-600 ml-1">p.{c.pages}</span>}
-                                        {c.detailUnit && <span className="text-gray-500 ml-1">— {c.detailUnit}</span>}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-[11px] text-gray-400">기록 없음</p>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        /* 평소(또는 결석 폴백) 케이스: 단일 블록 */
-                        summary.lastSessionContents.length > 0 && (
-                          <div className="mb-2 space-y-0.5">
-                            {summary.lastSessionContents.map((c, ci) => {
-                              const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
-                              return (
-                                <div key={ci} className="flex items-start gap-1 text-xs text-gray-700">
-                                  <span className="text-blue-400 flex-shrink-0">•</span>
-                                  <span>
-                                    {tb && <span className="font-medium">{tb}</span>}
-                                    {c.grade && <span className="text-gray-400 ml-1">{c.grade}</span>}
-                                    {c.pages && <span className="text-blue-600 ml-1">p.{c.pages}</span>}
-                                    {c.detailUnit && <span className="text-gray-500 ml-1">— {c.detailUnit}</span>}
-                                  </span>
+                      ) : (() => {
+                        // ── 자동 간단 요약 ──────────────────────────────
+                        // 한 회차 내용을 "교재 p.페이지 (소단원)" 한 줄로 압축
+                        const fmtC = (c) => {
+                          const tb = c.textbook === '기타' ? (c.customTextbook||'') : (c.textbook||'');
+                          return [tb, c.grade, c.pages ? `p.${c.pages}` : '', c.detailUnit ? `(${c.detailUnit})` : '']
+                            .filter(Boolean).join(' ');
+                        };
+                        const regularLine = (summary.lastSessionContents || []).map(fmtC).filter(Boolean).join(' · ');
+                        const supplementLine = (summary.supplementContents || []).map(fmtC).filter(Boolean).join(' · ');
+                        return (
+                          <>
+                            {summary.wasSupplement ? (
+                              // 보충 케이스: 보충 내용 + 바로 전 정규 내용 간단 요약
+                              <div className="space-y-1.5 mb-2">
+                                <div className="flex items-start gap-1.5 text-xs">
+                                  <span className="text-[10px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded flex-shrink-0">🟠 보충</span>
+                                  <span className="text-gray-700 leading-snug">{supplementLine || <span className="text-gray-400">기록 없음</span>}</span>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )
-                      )}
+                                <div className="flex items-start gap-1.5 text-xs">
+                                  <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">📘 직전 정규{summary.regularSessionDate ? ` ${summary.regularSessionDate.slice(5)}` : ''}</span>
+                                  <span className="text-gray-700 leading-snug">{regularLine || <span className="text-gray-400">기록 없음</span>}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              // 정규(또는 결석 폴백) 케이스: 직전 정규 수업 내용 간단 요약
+                              <div className="mb-2 text-xs text-gray-700 leading-snug">
+                                {regularLine || <span className="text-gray-400">직전 수업 기록 없음</span>}
+                              </div>
+                            )}
 
-                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                        {summary.lastTest && <span><span className="text-gray-500">시험:</span> <span className="font-medium">{summary.lastTest.name} {summary.lastTest.score}/{summary.lastTest.total}점</span></span>}
-                        {summary.lastUnderstanding && <span><span className="text-gray-500">이해도:</span> <span>{'⭐'.repeat(summary.lastUnderstanding)}</span></span>}
-                      </div>
-                      </>)}
+                            {/* 시험·이해도 */}
+                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                              {summary.lastTest && <span><span className="text-gray-500">시험:</span> <span className="font-medium">{summary.lastTest.name} {summary.lastTest.score}/{summary.lastTest.total}점</span></span>}
+                              {summary.lastUnderstanding && <span><span className="text-gray-500">이해도:</span> <span>{'⭐'.repeat(summary.lastUnderstanding)}</span></span>}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                     ); })()}
 
