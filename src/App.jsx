@@ -44393,163 +44393,194 @@ function PaymentModal({ student, month, fee, payment, onSave, onClose }) {
 // HTML을 application/msword로 저장하면 워드에서 깔끔하게 열림
 function downloadDiagnosisDoc({ student, type, data }) {
   const today = new Date().toLocaleDateString('ko-KR');
+  // 타입별 강조 색상 테마
+  const THEME = {
+    anxiety:  { main: '#9d174d', deep: '#831843', soft: '#fdf2f8', band: '#9d174d', en: 'MATH ANXIETY REPORT' },
+    learning: { main: '#1d4ed8', deep: '#1e3a8a', soft: '#eff6ff', band: '#1e3a8a', en: 'LEARNING STYLE REPORT' },
+    analysis: { main: '#047857', deep: '#065f46', soft: '#ecfdf5', band: '#065f46', en: 'PERFORMANCE REPORT' },
+    report:   { main: '#5b21b6', deep: '#4c1d95', soft: '#f5f3ff', band: '#4c1d95', en: 'COMPREHENSIVE REPORT' },
+  }[type] || { main: '#4c1d95', deep: '#312e81', soft: '#f5f3ff', band: '#312e81', en: 'DIAGNOSTIC REPORT' };
+
   const STYLE = `
-    @page { margin: 1.6cm 1.4cm; }
+    @page { margin: 1.4cm 1.3cm; }
     body {
       font-family: 'Pretendard', 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif;
-      color: #111827;
+      color: #1f2937;
       line-height: 1.65;
       letter-spacing: -0.1pt;
       font-size: 10.5pt;
     }
-    /* ── 타이틀 / 헤더 ─────────────────────────────────── */
-    h1 {
-      color: #1e1b4b;
-      font-size: 24pt;
+
+    /* ── 표지형 헤더 밴드 (테이블 기반 — 워드 호환) ───── */
+    table.cover { width: 100%; border-collapse: collapse; margin-bottom: 4pt; }
+    table.cover td { padding: 0; border: none; }
+    .cover-band {
+      background: ${THEME.band};
+      padding: 20pt 22pt 18pt;
+    }
+    .cover-en {
+      color: rgba(255,255,255,0.65);
+      font-size: 8.5pt;
+      font-weight: 700;
+      letter-spacing: 2.5pt;
+      margin: 0 0 6pt;
+    }
+    .cover-title {
+      color: #ffffff;
+      font-size: 25pt;
       font-weight: 800;
       letter-spacing: -0.6pt;
-      padding-bottom: 8pt;
-      margin: 0 0 4pt;
-      border-bottom: 0.5pt solid #312e81;
+      margin: 0;
+      line-height: 1.2;
     }
+    .cover-brand {
+      color: rgba(255,255,255,0.8);
+      font-size: 9.5pt;
+      font-weight: 500;
+      margin: 8pt 0 0;
+      letter-spacing: 0.2pt;
+    }
+    /* 헤더 하단 정보 줄 */
+    .cover-meta-band {
+      background: ${THEME.soft};
+      border-bottom: 1.5pt solid ${THEME.main};
+      padding: 9pt 22pt;
+    }
+    .cover-meta-band td { padding: 0 20pt 0 0; border: none; font-size: 10pt; }
+    .meta-label { color: #6b7280; font-weight: 500; margin-right: 5pt; letter-spacing: 0.1pt; }
+    .meta-val { color: ${THEME.deep}; font-weight: 800; }
+
+    /* ── 섹션 헤더 ─────────────────────────────────────── */
     h2 {
-      color: #312e81;
-      font-size: 14pt;
-      font-weight: 700;
+      color: ${THEME.deep};
+      font-size: 13.5pt;
+      font-weight: 800;
       letter-spacing: -0.3pt;
-      padding: 0 0 4pt 10pt;
-      margin: 26pt 0 10pt;
-      border-left: 2.25pt solid #4f46e5;
+      padding: 5pt 0 5pt 11pt;
+      margin: 24pt 0 11pt;
+      border-left: 3.5pt solid ${THEME.main};
+      background: ${THEME.soft};
     }
     h3 {
-      color: #3730a3;
+      color: ${THEME.main};
       font-size: 11.5pt;
       font-weight: 700;
       letter-spacing: -0.2pt;
       margin: 16pt 0 6pt;
-    }
-    .subtitle {
-      color: #6b7280;
-      font-size: 10pt;
-      letter-spacing: 0.2pt;
-      margin: 4pt 0 22pt;
+      padding-left: 2pt;
     }
 
-    /* ── 메타 박스 (학생 정보) — 바탕색 제거, 테두리만 ── */
-    .meta {
-      border: 0.5pt solid #d1d5db;
-      padding: 12pt 16pt;
-      margin-bottom: 20pt;
-    }
-    .meta-row { display: flex; gap: 24pt; flex-wrap: wrap; }
-    .meta-item { font-size: 10pt; }
-    .meta-label { color: #6b7280; font-weight: 500; margin-right: 4pt; letter-spacing: 0.1pt; }
-    .meta-val { color: #111827; font-weight: 700; }
-
-    /* ── 통계 카드 (테이블 기반 가로 배치, 바탕색 없음) ─ */
+    /* ── 통계 카드 (연한 컬러 배경 + 상단 컬러 바) ─────── */
     table.stat-grid {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 6pt 0;
       margin: 12pt 0 16pt;
       border: none;
     }
     table.stat-grid > tbody > tr > td {
       width: 25%;
-      padding: 12pt 14pt;
-      border: 0.5pt solid #d1d5db;
+      padding: 0;
+      border: none;
       vertical-align: top;
-      background: transparent !important;
+    }
+    .stat-card {
+      background: #f8fafc;
+      border: 0.5pt solid #e2e8f0;
+      border-top: 2.5pt solid ${THEME.main};
+      padding: 11pt 13pt 12pt;
     }
     .stat-card .stat-label {
-      font-size: 9pt;
-      color: #6b7280;
-      margin-bottom: 4pt;
-      letter-spacing: 0.2pt;
-      text-transform: uppercase;
-      font-weight: 600;
+      font-size: 8.5pt;
+      color: #64748b;
+      margin-bottom: 5pt;
+      letter-spacing: 0.3pt;
+      font-weight: 700;
     }
     .stat-card .stat-value {
-      font-size: 20pt;
+      font-size: 21pt;
       font-weight: 800;
       letter-spacing: -0.5pt;
-      line-height: 1.15;
-      color: #312e81;
+      line-height: 1.1;
+      color: ${THEME.deep};
     }
     .stat-card .stat-sub {
-      font-size: 9pt;
-      color: #6b7280;
+      font-size: 8.5pt;
+      color: #64748b;
       margin-top: 5pt;
       letter-spacing: 0.1pt;
     }
+    .stat-card.green { border-top-color: #059669; background: #f0fdf4; }
     .stat-card.green .stat-value { color: #065f46; }
+    .stat-card.amber { border-top-color: #d97706; background: #fffbeb; }
     .stat-card.amber .stat-value { color: #92400e; }
+    .stat-card.rose  { border-top-color: #e11d48; background: #fff1f2; }
     .stat-card.rose  .stat-value { color: #9f1239; }
 
-    /* ── 테이블 (얇고 선명한 테두리, 바탕색 없음) ──────── */
+    /* ── 테이블 (헤더 컬러 밴드 + 줄무늬) ──────────────── */
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 6pt 0 10pt;
-      border: 0.5pt solid #d1d5db;
+      margin: 6pt 0 12pt;
+      border: 0.5pt solid #e2e8f0;
     }
     th {
-      padding: 7pt 10pt;
+      padding: 8pt 10pt;
       text-align: left;
       font-size: 9.5pt;
       font-weight: 700;
       letter-spacing: 0.15pt;
-      border: 0.5pt solid #d1d5db;
-      color: #111827;
-      background: transparent;
-      border-bottom: 1pt solid #1f2937;
+      border: 0.5pt solid ${THEME.deep};
+      color: #ffffff;
+      background: ${THEME.deep};
     }
     td {
       padding: 7pt 10pt;
       border: 0.5pt solid #e5e7eb;
       font-size: 10pt;
       vertical-align: middle;
-      background: transparent;
+      background: #ffffff;
     }
+    tbody tr:nth-child(even) td { background: #f8fafc; }
 
-    /* ── 레벨 배지 (테두리만, 바탕색 없음) ──────────── */
+    /* ── 레벨 배지 (연한 컬러 칩) ──────────────────────── */
     .level-badge {
       display: inline-block;
-      padding: 2pt 8pt;
-      border-radius: 10pt;
+      padding: 2pt 9pt;
+      border-radius: 9pt;
       font-size: 9.5pt;
       font-weight: 700;
       letter-spacing: 0.1pt;
-      border: 0.5pt solid;
-      background: transparent;
     }
-    .level-green  { color: #047857; border-color: #047857; }
-    .level-yellow { color: #b45309; border-color: #b45309; }
-    .level-red    { color: #b91c1c; border-color: #b91c1c; }
-    .level-blue   { color: #1d4ed8; border-color: #1d4ed8; }
+    .level-green  { color: #065f46; background: #d1fae5; }
+    .level-yellow { color: #92400e; background: #fef3c7; }
+    .level-red    { color: #9f1239; background: #ffe4e6; }
+    .level-blue   { color: #1e3a8a; background: #dbeafe; }
 
-    /* ── 인용 박스 (좌측 라인만) ──────────────────────── */
+    /* ── 인용 박스 (연한 배경 + 좌측 라인) ─────────────── */
     .quote {
-      border-left: 2pt solid #d97706;
-      padding: 8pt 14pt;
+      background: ${THEME.soft};
+      border-left: 3pt solid ${THEME.main};
+      padding: 11pt 15pt;
       margin: 12pt 0;
-      color: #78350f;
       font-size: 10pt;
       line-height: 1.7;
     }
-    .quote p { margin: 0 0 6pt; color: #4b5563; }
+    .quote p { margin: 0 0 7pt; color: #374151; }
     .quote p:last-child { margin-bottom: 0; }
-    .quote strong { color: #1f2937; }
+    .quote strong { color: ${THEME.deep}; }
 
-    /* ── 강점/보완점 2단 박스 (테두리만) ──────────────── */
-    .insight-row { width: 100%; border-collapse: collapse; margin: 8pt 0; }
+    /* ── 강점/보완점 2단 박스 (연한 배경) ──────────────── */
+    .insight-row { width: 100%; border-collapse: separate; border-spacing: 8pt 0; margin: 8pt 0; }
     .insight-row td {
       vertical-align: top;
       width: 50%;
-      padding: 12pt 16pt;
-      border: 0.5pt solid #d1d5db;
-      background: transparent;
+      padding: 13pt 16pt;
+      border: 0.5pt solid #e2e8f0;
     }
-    .insight-title { margin: 0 0 6pt; font-weight: 700; font-size: 10.5pt; letter-spacing: 0.1pt; }
+    .insight-row td.strength { background: #f0fdf4; border-top: 2.5pt solid #059669; }
+    .insight-row td.weakness { background: #fffbeb; border-top: 2.5pt solid #d97706; }
+    .insight-title { margin: 0 0 7pt; font-weight: 800; font-size: 10.5pt; letter-spacing: 0.1pt; }
     .insight-title.strength { color: #047857; }
     .insight-title.weakness { color: #b45309; }
     .insight-row ul { margin: 0; padding-left: 16pt; }
@@ -44558,37 +44589,40 @@ function downloadDiagnosisDoc({ student, type, data }) {
     /* ── 푸터 ──────────────────────────────────────────── */
     .footer {
       text-align: center;
-      color: #9ca3af;
+      color: #94a3b8;
       font-size: 8.5pt;
       letter-spacing: 0.3pt;
-      margin-top: 32pt;
-      padding-top: 10pt;
-      border-top: 0.5pt solid #d1d5db;
+      margin-top: 30pt;
+      padding-top: 11pt;
+      border-top: 0.5pt solid #e2e8f0;
     }
+    .footer strong { color: ${THEME.main}; }
 
     /* ── 일반 리스트 ───────────────────────────────────── */
     ul { padding-left: 18pt; margin: 6pt 0; }
-    li { margin: 3pt 0; font-size: 10pt; line-height: 1.6; }
+    li { margin: 4pt 0; font-size: 10pt; line-height: 1.6; }
     p { margin: 6pt 0; }
 
     .highlight {
-      padding: 0 4pt;
-      border-bottom: 1.25pt solid #d97706;
+      padding: 1pt 4pt;
+      background: #fef3c7;
       font-weight: 700;
       color: #92400e;
     }
 
-    /* ── 막대 그래프 (월별 추이용, 바탕색 없음) ──────── */
+    /* ── 막대 그래프 (월별 추이용) ─────────────────────── */
     .bar-track {
       display: inline-block;
-      width: 55%;
-      height: 9pt;
-      border: 0.5pt solid #d1d5db;
+      width: 52%;
+      height: 10pt;
+      background: #eef2f7;
+      border: 0.5pt solid #e2e8f0;
       vertical-align: middle;
-      margin-right: 6pt;
+      margin-right: 7pt;
       overflow: hidden;
+      border-radius: 5pt;
     }
-    .bar-fill { height: 100%; }
+    .bar-fill { height: 100%; border-radius: 5pt; }
   `;
 
   let title = '';
@@ -44792,17 +44826,24 @@ function downloadDiagnosisDoc({ student, type, data }) {
   }
 
   const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${title}</title><style>${STYLE}</style></head><body>
-    <h1>${title}</h1>
-    <p class="subtitle">파란수학학원 몰입관 · 진단/분석 리포트</p>
-    <div class="meta">
-      <div class="meta-row">
-        <div class="meta-item"><span class="meta-label">학생:</span><span class="meta-val">${student.name || ''}</span></div>
-        <div class="meta-item"><span class="meta-label">학년/반:</span><span class="meta-val">${student.grade || '-'} / ${student.className || student.class || '-'}</span></div>
-        <div class="meta-item"><span class="meta-label">발행일:</span><span class="meta-val">${today}</span></div>
-      </div>
-    </div>
+    <table class="cover"><tbody>
+      <tr><td>
+        <div class="cover-band">
+          <p class="cover-en">${THEME.en}</p>
+          <p class="cover-title">${title}</p>
+          <p class="cover-brand">🔵 파란수학학원 몰입관 · 진단/분석 리포트</p>
+        </div>
+      </td></tr>
+      <tr><td>
+        <table class="cover-meta-band"><tbody><tr>
+          <td><span class="meta-label">학생</span><span class="meta-val">${student.name || ''}</span></td>
+          <td><span class="meta-label">학년 / 반</span><span class="meta-val">${student.grade || '-'} / ${student.className || student.class || '-'}</span></td>
+          <td><span class="meta-label">발행일</span><span class="meta-val">${today}</span></td>
+        </tr></tbody></table>
+      </td></tr>
+    </tbody></table>
     ${body}
-    <div class="footer">© 파란수학학원 몰입관 — 본 리포트는 학습 지도 참고용입니다.</div>
+    <div class="footer">© 파란수학학원 몰입관 — 본 리포트는 학습 지도 참고용입니다. · <strong>Paran Math Immersion Center</strong></div>
   </body></html>`;
 
   const filename = `${student.name || '학생'}_${title.replace(/[^\w가-힣]/g, '')}_${today.replace(/\./g, '').replace(/\s/g, '')}.doc`;
