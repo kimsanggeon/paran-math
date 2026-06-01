@@ -987,6 +987,8 @@ export default function ParanMathSystem() {
         <ParentView
           student={loggedInStudent}
           students={students}
+          saveStudents={saveStudents}
+          setLoggedInStudent={setLoggedInStudent}
           onLogout={handleLogout}
         />
       </ErrorBoundary>
@@ -3153,7 +3155,7 @@ function PVReportStats({ reportData, pvPage, setPvPage, showReportDetail, setSho
 
 }
 
-function ParentView({ student, students, onLogout }) {
+function ParentView({ student, students, saveStudents, setLoggedInStudent, onLogout }) {
   const [reportData, setReportData] = useState(null);
   const [isLoading, setIsLoading] = useState(true); // 로딩 상태 추가
   const [showReportDetail, setShowReportDetail] = useState(false);
@@ -3248,7 +3250,55 @@ function ParentView({ student, students, onLogout }) {
     todayDueTotal: allTodayDueProblems.length,
     totalReviewCount: allParentReview.reduce((sum, p) => sum + (p.reviewHistory?.length || 0), 0)
   };
-  
+
+  // ✋ 학부모 승인 대기 목록 (학생이 "풀이 완료 보고"한 오답)
+  const PV_REVIEW_INTERVALS = [1, 3, 7, 14, 30];
+  const pendingApprovalNotes = (student.wrongNotes || []).filter(n => n.pendingParentApproval && !n.conquered);
+
+  // ✋ 학부모 승인/반려 처리 (자녀의 wrongNotes 갱신 + Firebase 동기화)
+  const parentApproveReview = async (noteId, approve) => {
+    const nowIso = new Date().toISOString();
+    const updateNote = (n) => {
+      if (n.id !== noteId) return n;
+      if (approve) {
+        const nh = [...(n.reviewHistory || []), { date: nowIso, success: true, parentApproved: true }];
+        const sc = nh.filter(h => h.success).length;
+        const ni = PV_REVIEW_INTERVALS[Math.min(sc, PV_REVIEW_INTERVALS.length - 1)] || 1;
+        const nd = new Date(); nd.setDate(nd.getDate() + ni);
+        return {
+          ...n,
+          reviewHistory: nh,
+          nextReviewDate: nd.toISOString().split('T')[0],
+          lastReviewDate: nowIso.slice(0, 10),
+          conquered: sc >= 5,
+          pendingParentApproval: false,
+          pendingApprovalSubmittedAt: null,
+          lastParentApprovalAt: nowIso,
+        };
+      } else {
+        return {
+          ...n,
+          pendingParentApproval: false,
+          pendingApprovalSubmittedAt: null,
+          lastParentRejectedAt: nowIso,
+        };
+      }
+    };
+    const updNotes = (student.wrongNotes || []).map(updateNote);
+    // 즉시 화면 반영 (학부모 본인 화면 prop)
+    if (setLoggedInStudent) setLoggedInStudent({ ...student, wrongNotes: updNotes });
+    // 전체 학생 배열 갱신 + Firebase/localStorage/window.storage 저장
+    if (students && saveStudents) {
+      saveStudents(students.map(s => s.id === student.id ? { ...s, wrongNotes: updNotes } : s));
+    }
+    // 학생 측 폴백 저장소도 갱신 (학생 앱이 즉시 동기화)
+    try {
+      const ss = JSON.stringify(updNotes);
+      localStorage.setItem(`paran:wrongbank:${student.name}`, ss);
+      if (window.storage) await window.storage.set(`paran:wrongbank:${student.name}`, ss, true);
+    } catch (e) {}
+  };
+
   // ★ 보고서 로드 함수 (재사용 가능)
   const loadReport = React.useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
@@ -4212,6 +4262,74 @@ function ParentView({ student, students, onLogout }) {
         {reviewControl.customMessage && !reviewControl.paused && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
             <p className="text-xs text-blue-700">💬 선생님: {reviewControl.customMessage}</p>
+          </div>
+        )}
+
+        {/* ✋ 학부모 승인 대기 — 자녀가 "풀이 완료 보고"한 오답을 학부모가 직접 승인 */}
+        {pendingApprovalNotes.length > 0 && (
+          <div className="bg-white rounded-xl shadow border-2 border-amber-300 overflow-hidden">
+            <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">✋</span>
+                <div>
+                  <h3 className="font-bold">학부모 승인이 필요해요</h3>
+                  <p className="text-amber-50 text-xs">자녀가 오답 풀이를 완료했다고 보고했습니다. 직접 확인하신 뒤 승인해 주세요.</p>
+                </div>
+              </div>
+              <span className="text-2xl font-bold bg-white/20 px-3 py-1 rounded-full">{pendingApprovalNotes.length}</span>
+            </div>
+            <div className="p-3 space-y-2 max-h-96 overflow-y-auto">
+              {pendingApprovalNotes.map(n => {
+                const isTest = n.textbook === '시험';
+                const displayName = isTest
+                  ? (n.customTextbook || '시험')
+                  : (n.textbook === '기타' ? (n.customTextbook || '교재') : (n.textbook || '교재'));
+                const reviewCount = (n.reviewHistory || []).length;
+                const submittedAgo = n.pendingApprovalSubmittedAt
+                  ? Math.max(0, Math.round((Date.now() - new Date(n.pendingApprovalSubmittedAt).getTime()) / 60000))
+                  : null;
+                return (
+                  <div key={n.id} className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-start gap-2 mb-2">
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${isTest ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {isTest ? '📝시험' : '📖교재'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-800 text-sm">
+                          {displayName}
+                          {n.page && ` · p.${n.page}`}
+                          {n.problemNumber && ` · ${n.problemNumber}번`}
+                        </p>
+                        {n.unit && <p className="text-xs text-gray-500">{n.unit}</p>}
+                        <p className="text-xs text-amber-700 mt-1">
+                          누적 복습 {reviewCount}회{submittedAgo !== null && ` · 보고 ${submittedAgo < 60 ? `${submittedAgo}분 전` : `${Math.round(submittedAgo/60)}시간 전`}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => parentApproveReview(n.id, true)}
+                        className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition-colors whitespace-nowrap"
+                      >
+                        ✅ 승인
+                      </button>
+                      <button
+                        onClick={() => parentApproveReview(n.id, false)}
+                        className="flex-1 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-lg text-sm font-bold transition-colors whitespace-nowrap"
+                      >
+                        ↩️ 반려
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-4 py-2 bg-amber-50 border-t border-amber-200">
+              <p className="text-xs text-amber-700">
+                💡 <strong>승인</strong>하시면 복습 1회로 기록되고 5회 누적 시 '정복' 처리됩니다.
+                실제로 자녀가 그 문제를 다시 풀었는지 직접 확인 후 승인해 주세요.
+              </p>
+            </div>
           </div>
         )}
 
@@ -5893,7 +6011,9 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
       createdAt: n.createdAt || new Date().toISOString(),
       nextReviewDate: n.nextReviewDate || n.sessionDate || today,
       fromWrongNotes: true,
-      source: n.source || (n.textbook === '시험' ? 'test' : 'textbook')
+      source: n.source || (n.textbook === '시험' ? 'test' : 'textbook'),
+      pendingParentApproval: !!n.pendingParentApproval,
+      pendingApprovalSubmittedAt: n.pendingApprovalSubmittedAt || null,
     }));
     // 중복 제거: fromBank에 이미 있으면 fromNotes에서 제외
     const bankIds = new Set(fromBank.map(p => `${p.textbook}|${p.page}|${p.problemNumber}|${p.date}`));
@@ -5991,6 +6111,31 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
     } catch (e) { console.log('반복 학습 저장 오류:', e); }
     
     if (success) alert('✅ 복습 완료! +5 EXP');
+  };
+
+  // ★ 학부모 승인 요청 (학생이 풀이 완료 보고 → pendingParentApproval=true)
+  //   학생은 더 이상 자가 승인할 수 없고, 학부모 화면에서 ✅ 승인을 눌러야 reviewHistory에 기록됩니다.
+  const submitForParentApproval = async (problemId) => {
+    const nowIso = new Date().toISOString();
+    // wrongNotes state(교재 오답)와 student.wrongNotes(prop) 모두에 반영
+    const updateNote = (n) => n.id === problemId
+      ? { ...n, pendingParentApproval: true, pendingApprovalSubmittedAt: nowIso }
+      : n;
+    const updNotes = (wrongNotes || []).map(updateNote);
+    const updStudentNotes = (student.wrongNotes || []).map(updateNote);
+    setWrongNotes(updNotes);
+    // reviewProblems(은행)에도 표식 (오늘 목록 즉시 갱신)
+    setReviewProblems(prev => prev.map(p => p.id === problemId
+      ? { ...p, pendingParentApproval: true, pendingApprovalSubmittedAt: nowIso } : p));
+    try {
+      const s = JSON.stringify(updNotes);
+      localStorage.setItem(`paran:wrongbank:${student.name}`, s);
+      if (window.storage) await window.storage.set(`paran:wrongbank:${student.name}`, s, true);
+    } catch(e) {}
+    if (students && saveStudents) {
+      saveStudents(students.map(s => s.id === student.id ? { ...s, wrongNotes: updStudentNotes } : s));
+    }
+    alert('📨 학부모님께 풀이 완료를 보고했어요!\n학부모님이 앱에서 승인해 주시면 복습 1회로 기록됩니다.');
   };
 
   // 오늘의 미션 계산
@@ -6955,18 +7100,26 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                         )}
                       </div>
                       <div className="flex gap-1.5">
-                        <button
-                          onClick={() => markReviewComplete(problem.id, true)}
-                          className="flex-1 px-2 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors whitespace-nowrap"
-                        >
-                          ✅완료
-                        </button>
-                        <button
-                          onClick={() => markReviewComplete(problem.id, false)}
-                          className="flex-1 px-2 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors whitespace-nowrap"
-                        >
-                          🔄다시
-                        </button>
+                        {problem.pendingParentApproval ? (
+                          <div className="flex-1 px-2 py-1.5 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold text-center whitespace-nowrap border border-amber-300">
+                            ✋ 학부모 승인 대기 중
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => submitForParentApproval(problem.id)}
+                              className="flex-1 px-2 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors whitespace-nowrap"
+                            >
+                              📤 풀이 완료 보고
+                            </button>
+                            <button
+                              onClick={() => markReviewComplete(problem.id, false)}
+                              className="flex-1 px-2 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors whitespace-nowrap"
+                            >
+                              🔄다시
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                     );
