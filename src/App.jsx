@@ -3361,6 +3361,33 @@ function ParentView({ student, students, saveStudents, setLoggedInStudent, onLog
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, [loadReport]);
 
+  // ✋ 자녀 학생 데이터(특히 wrongNotes의 pendingParentApproval) 자동 새로고침
+  //   학생이 "풀이 완료 보고"를 누르면 Firebase에 반영되는데, 이 폴링으로 학부모 화면에 바로 보이게 함
+  useEffect(() => {
+    if (!student?.name || !setLoggedInStudent) return;
+    let stopped = false;
+    const refreshChild = async () => {
+      try {
+        const list = await loadStudentsFromFirebase();
+        if (!list || stopped) return;
+        const fresh = list.find(s => s.name === student.name);
+        if (!fresh) return;
+        const prevPending = JSON.stringify((student.wrongNotes||[]).filter(n=>n.pendingParentApproval).map(n=>n.id).sort());
+        const newPending  = JSON.stringify((fresh.wrongNotes||[]).filter(n=>n.pendingParentApproval).map(n=>n.id).sort());
+        const prevWNCount = (student.wrongNotes||[]).length;
+        const newWNCount  = (fresh.wrongNotes||[]).length;
+        if (prevPending !== newPending || prevWNCount !== newWNCount) {
+          setLoggedInStudent({ ...student, ...fresh });
+        }
+      } catch(e) { /* 무음 처리: 폴링 실패 시 다음 주기에 재시도 */ }
+    };
+    refreshChild(); // 즉시 1회
+    const iv = setInterval(refreshChild, 20000); // 20초 폴링
+    const onVis = () => { if (document.visibilityState === 'visible') refreshChild(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { stopped = true; clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, [student?.name, setLoggedInStudent]);
+
   // 메시지 로드 - Firebase 포함
   useEffect(() => {
     const loadMessages = async () => {
@@ -6115,26 +6142,67 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
 
   // ★ 학부모 승인 요청 (학생이 풀이 완료 보고 → pendingParentApproval=true)
   //   학생은 더 이상 자가 승인할 수 없고, 학부모 화면에서 ✅ 승인을 눌러야 reviewHistory에 기록됩니다.
+  //   강건한 매칭: id가 일치하지 않더라도 textbook/page/problemNumber 조합으로 wrongNote를 찾고,
+  //   없으면 새 wrongNote를 추가해 학부모가 볼 수 있도록 합니다.
   const submitForParentApproval = async (problemId) => {
     const nowIso = new Date().toISOString();
-    // wrongNotes state(교재 오답)와 student.wrongNotes(prop) 모두에 반영
-    const updateNote = (n) => n.id === problemId
-      ? { ...n, pendingParentApproval: true, pendingApprovalSubmittedAt: nowIso }
-      : n;
-    const updNotes = (wrongNotes || []).map(updateNote);
-    const updStudentNotes = (student.wrongNotes || []).map(updateNote);
+    // 오늘 표시 중인 문제 객체를 찾는다 (bank/notes 어느 쪽에서 왔든)
+    const problem = allReviewProblems.find(p => p.id === problemId) || {};
+    const keyOf = (x) => [x.textbook||'', x.customTextbook||'', x.page||'', String(x.problemNumber||'')].join('|');
+    const probKey = keyOf(problem);
+
+    // 1) wrongNotes state(교재 은행) 업데이트
+    const updNotes = (wrongNotes || []).map(n => (n.id === problemId || keyOf(n) === probKey)
+      ? { ...n, pendingParentApproval: true, pendingApprovalSubmittedAt: nowIso } : n);
     setWrongNotes(updNotes);
     // reviewProblems(은행)에도 표식 (오늘 목록 즉시 갱신)
     setReviewProblems(prev => prev.map(p => p.id === problemId
       ? { ...p, pendingParentApproval: true, pendingApprovalSubmittedAt: nowIso } : p));
+
+    // 2) student.wrongNotes(공식 데이터, 학부모가 읽는 곳) 업데이트
+    let matched = false;
+    let updStudentNotes = (student.wrongNotes || []).map(n => {
+      if (n.id === problemId || keyOf(n) === probKey) {
+        matched = true;
+        return { ...n, pendingParentApproval: true, pendingApprovalSubmittedAt: nowIso };
+      }
+      return n;
+    });
+    // 일치하는 wrongNote가 없으면 합성 항목 추가 (학부모가 승인할 수 있도록)
+    if (!matched) {
+      updStudentNotes = [...updStudentNotes, {
+        id: problemId,
+        textbook: problem.textbook || '',
+        customTextbook: problem.customTextbook || '',
+        page: problem.page || '',
+        problemNumber: problem.problemNumber || '',
+        unit: problem.unit || '',
+        sessionDate: problem.sessionDate || problem.date || today,
+        createdAt: problem.createdAt || nowIso,
+        conquered: false,
+        reviewHistory: [],
+        nextReviewDate: problem.nextReviewDate || today,
+        difficulty: 'medium', type: '', wrongAnswer: '', correctAnswer: '', explanation: '',
+        pendingParentApproval: true,
+        pendingApprovalSubmittedAt: nowIso,
+      }];
+    }
+
+    // 3) 저장 (localStorage + window.storage + Firebase 학생 doc)
     try {
       const s = JSON.stringify(updNotes);
       localStorage.setItem(`paran:wrongbank:${student.name}`, s);
       if (window.storage) await window.storage.set(`paran:wrongbank:${student.name}`, s, true);
-    } catch(e) {}
+    } catch(e) { console.log('wrongbank 저장 오류:', e); }
+
+    let saveTriggered = false;
     if (students && saveStudents) {
-      saveStudents(students.map(s => s.id === student.id ? { ...s, wrongNotes: updStudentNotes } : s));
+      try {
+        await saveStudents(students.map(s => s.id === student.id ? { ...s, wrongNotes: updStudentNotes } : s));
+        saveTriggered = true;
+      } catch(e) { console.log('saveStudents 오류:', e); }
     }
+    console.log('[승인 요청]', { problemId, matched, totalNotes: updStudentNotes.length, saveTriggered });
     alert('📨 학부모님께 풀이 완료를 보고했어요!\n학부모님이 앱에서 승인해 주시면 복습 1회로 기록됩니다.');
   };
 
