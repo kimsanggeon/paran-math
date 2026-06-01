@@ -7197,6 +7197,11 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                     const displayName = isTest
                       ? (problem.customTextbook || problem.testName || '시험')
                       : (problem.textbook === '기타' ? (problem.customTextbook || '교재') : (problem.textbook || '교재'));
+                    // ✅ 누적 풀이 횟수 (학부모 승인된 것만 카운트) — 5회 정복
+                    const TARGET = 5;
+                    const approvedCount = (problem.reviewHistory || []).filter(h => h.success).length;
+                    const nextRound = Math.min(TARGET, approvedCount + 1);
+                    const barColor = approvedCount >= 4 ? 'bg-rose-500' : approvedCount >= 2 ? 'bg-amber-500' : 'bg-emerald-500';
                     return (
                     <div key={problem.id || idx} className="p-3 bg-orange-50 border border-orange-200 rounded-lg flex flex-col">
                       <div className="flex-1 mb-2">
@@ -7205,7 +7210,15 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                             {isTest ? '📝시험' : '📖교재'}
                           </span>
                           {pDate && <span className="text-xs text-gray-400">{pDate.slice(5)}</span>}
-                          <span className="text-xs text-gray-400 ml-auto">복습 {problem.reviewHistory?.length || 0}회</span>
+                          <span className={`text-xs ml-auto px-1.5 py-0.5 rounded-full font-bold ${approvedCount >= 4 ? 'bg-rose-100 text-rose-700' : approvedCount >= 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                            ✅ {approvedCount}/{TARGET}회
+                          </span>
+                        </div>
+                        {/* 진행 막대 (5칸) */}
+                        <div className="flex gap-0.5 mt-1 mb-1.5">
+                          {Array.from({length: TARGET}).map((_, i) => (
+                            <div key={i} className={`flex-1 h-1.5 rounded-full ${i < approvedCount ? barColor : 'bg-gray-200'}`} />
+                          ))}
                         </div>
                         <p className="font-medium text-gray-800 text-xs leading-tight" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                           {displayName}
@@ -7220,15 +7233,16 @@ function StudentView({ student: rawStudent, students = [], saveStudents, onLogou
                       <div className="flex gap-1.5">
                         {problem.pendingParentApproval ? (
                           <div className="flex-1 px-2 py-1.5 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold text-center whitespace-nowrap border border-amber-300">
-                            ✋ 학부모 승인 대기 중
+                            ✋ 승인 대기 중 ({nextRound}회차)
                           </div>
                         ) : (
                           <>
                             <button
                               onClick={() => submitForParentApproval(problem.id)}
                               className="flex-1 px-2 py-1.5 bg-green-500 text-white rounded-lg text-xs font-medium hover:bg-green-600 transition-colors whitespace-nowrap"
+                              title={`${nextRound}회차 풀이를 학부모님께 보고합니다`}
                             >
-                              📤 풀이 완료 보고
+                              📤 {nextRound}회차 보고
                             </button>
                             <button
                               onClick={() => markReviewComplete(problem.id, false)}
