@@ -3251,9 +3251,25 @@ function ParentView({ student, students, saveStudents, setLoggedInStudent, onLog
     totalReviewCount: allParentReview.reduce((sum, p) => sum + (p.reviewHistory?.length || 0), 0)
   };
 
-  // ✋ 학부모 승인 대기 목록 (학생이 "풀이 완료 보고"한 오답)
+  // 📚 반복학습 승인 진행 목록
+  //   - 학생이 "풀이 완료 보고"한 항목(승인 버튼 표시)
+  //   - 이미 1회 이상 승인되었으나 아직 정복(5회)이 되지 않은 항목(누적 기록 유지)
+  //   둘 다 카드로 표시. 정복(5회) 시에만 카드가 사라집니다.
   const PV_REVIEW_INTERVALS = [1, 3, 7, 14, 30];
-  const pendingApprovalNotes = (student.wrongNotes || []).filter(n => n.pendingParentApproval && !n.conquered);
+  const PV_TARGET_APPROVALS = 5; // 정복 기준 (망각곡선 5회)
+  const approvalProgressNotes = (student.wrongNotes || [])
+    .filter(n => !n.conquered)
+    .map(n => ({ ...n, _approvedCount: (n.reviewHistory || []).filter(h => h.success).length }))
+    .filter(n => n.pendingParentApproval || n._approvedCount > 0)
+    .sort((a, b) => {
+      // 대기 중인 것 우선
+      const ap = a.pendingParentApproval ? 0 : 1;
+      const bp = b.pendingParentApproval ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      // 그 다음 진행도 높은 순(정복 임박부터)
+      return b._approvedCount - a._approvedCount;
+    });
+  const pendingApprovalNotes = approvalProgressNotes.filter(n => n.pendingParentApproval);
 
   // ✋ 학부모 승인/반려 처리 (자녀의 wrongNotes 갱신 + Firebase 동기화)
   const parentApproveReview = async (noteId, approve) => {
@@ -4292,31 +4308,38 @@ function ParentView({ student, students, saveStudents, setLoggedInStudent, onLog
           </div>
         )}
 
-        {/* ✋ 학부모 승인 대기 — 자녀가 "풀이 완료 보고"한 오답을 학부모가 직접 승인 */}
-        {pendingApprovalNotes.length > 0 && (
+        {/* 📚 반복학습 승인 진행 — 대기 중 + 누적 승인 기록 (정복 5회까지 카드 유지) */}
+        {approvalProgressNotes.length > 0 && (
           <div className="bg-white rounded-xl shadow border-2 border-amber-300 overflow-hidden">
             <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">✋</span>
+                <span className="text-3xl">📚</span>
                 <div>
-                  <h3 className="font-bold">학부모 승인이 필요해요</h3>
-                  <p className="text-amber-50 text-xs">자녀가 오답 풀이를 완료했다고 보고했습니다. 직접 확인하신 뒤 승인해 주세요.</p>
+                  <h3 className="font-bold">반복학습 승인 진행</h3>
+                  <p className="text-amber-50 text-xs">
+                    승인 대기 <strong>{pendingApprovalNotes.length}건</strong> · 진행 중 <strong>{approvalProgressNotes.length}건</strong> · 5회 승인 시 정복 처리
+                  </p>
                 </div>
               </div>
               <span className="text-2xl font-bold bg-white/20 px-3 py-1 rounded-full">{pendingApprovalNotes.length}</span>
             </div>
-            <div className="p-3 space-y-2 max-h-96 overflow-y-auto">
-              {pendingApprovalNotes.map(n => {
+            <div className="p-3 space-y-2 max-h-[28rem] overflow-y-auto">
+              {approvalProgressNotes.map(n => {
                 const isTest = n.textbook === '시험';
                 const displayName = isTest
                   ? (n.customTextbook || '시험')
                   : (n.textbook === '기타' ? (n.customTextbook || '교재') : (n.textbook || '교재'));
-                const reviewCount = (n.reviewHistory || []).length;
-                const submittedAgo = n.pendingApprovalSubmittedAt
+                const approvedCount = n._approvedCount || 0;
+                const pending = !!n.pendingParentApproval;
+                const submittedAgo = pending && n.pendingApprovalSubmittedAt
                   ? Math.max(0, Math.round((Date.now() - new Date(n.pendingApprovalSubmittedAt).getTime()) / 60000))
                   : null;
+                const cardBg = pending ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-200';
+                const nextRound = Math.min(PV_TARGET_APPROVALS, approvedCount + 1);
+                const progressPct = Math.min(100, (approvedCount / PV_TARGET_APPROVALS) * 100);
+                const progressColor = approvedCount >= 4 ? 'bg-rose-500' : approvedCount >= 2 ? 'bg-amber-500' : 'bg-emerald-500';
                 return (
-                  <div key={n.id} className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div key={n.id} className={`p-3 rounded-lg border-2 ${cardBg}`}>
                     <div className="flex items-start gap-2 mb-2">
                       <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${isTest ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'}`}>
                         {isTest ? '📝시험' : '📖교재'}
@@ -4328,33 +4351,60 @@ function ParentView({ student, students, saveStudents, setLoggedInStudent, onLog
                           {n.problemNumber && ` · ${n.problemNumber}번`}
                         </p>
                         {n.unit && <p className="text-xs text-gray-500">{n.unit}</p>}
-                        <p className="text-xs text-amber-700 mt-1">
-                          누적 복습 {reviewCount}회{submittedAgo !== null && ` · 보고 ${submittedAgo < 60 ? `${submittedAgo}분 전` : `${Math.round(submittedAgo/60)}시간 전`}`}
-                        </p>
                       </div>
+                      <span className={`text-xs font-bold flex-shrink-0 px-2 py-0.5 rounded-full ${pending ? 'bg-amber-200 text-amber-900' : 'bg-emerald-200 text-emerald-900'}`}>
+                        {approvedCount}/{PV_TARGET_APPROVALS}회 승인
+                      </span>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => parentApproveReview(n.id, true)}
-                        className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition-colors whitespace-nowrap"
-                      >
-                        ✅ 승인
-                      </button>
-                      <button
-                        onClick={() => parentApproveReview(n.id, false)}
-                        className="flex-1 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-lg text-sm font-bold transition-colors whitespace-nowrap"
-                      >
-                        ↩️ 반려
-                      </button>
+
+                    {/* 진행 막대 (5칸) */}
+                    <div className="flex gap-1 mb-2">
+                      {Array.from({length: PV_TARGET_APPROVALS}).map((_, i) => (
+                        <div
+                          key={i}
+                          className={`flex-1 h-2 rounded-full ${i < approvedCount ? progressColor : 'bg-gray-200'}`}
+                          title={`${i+1}회차 ${i < approvedCount ? '승인 완료' : '미승인'}`}
+                        />
+                      ))}
                     </div>
+
+                    {pending ? (
+                      <>
+                        <p className="text-xs text-amber-800 mb-2">
+                          ⏳ <strong>{nextRound}회차 승인 대기 중</strong>
+                          {submittedAgo !== null && ` · 보고 ${submittedAgo < 60 ? `${submittedAgo}분 전` : `${Math.round(submittedAgo/60)}시간 전`}`}
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => parentApproveReview(n.id, true)}
+                            className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold transition-colors whitespace-nowrap"
+                          >
+                            ✅ 승인
+                          </button>
+                          <button
+                            onClick={() => parentApproveReview(n.id, false)}
+                            className="flex-1 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-lg text-sm font-bold transition-colors whitespace-nowrap"
+                          >
+                            ↩️ 반려
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-emerald-800">
+                        ✅ <strong>{approvedCount}회 승인 완료</strong>
+                        {approvedCount >= 4
+                          ? ' · 1번만 더 승인하면 정복! 🎉'
+                          : ` · 다음 복습 대기 중 (다음 예정일: ${n.nextReviewDate || '-'})`}
+                      </p>
+                    )}
                   </div>
                 );
               })}
             </div>
             <div className="px-4 py-2 bg-amber-50 border-t border-amber-200">
-              <p className="text-xs text-amber-700">
-                💡 <strong>승인</strong>하시면 복습 1회로 기록되고 5회 누적 시 '정복' 처리됩니다.
-                실제로 자녀가 그 문제를 다시 풀었는지 직접 확인 후 승인해 주세요.
+              <p className="text-xs text-amber-700 leading-relaxed">
+                💡 <strong>승인을 5회 누적</strong>하면 해당 오답이 '정복' 처리되어 목록에서 사라집니다.
+                각 승인은 자녀의 실제 풀이 확인 후 눌러주세요. (망각곡선: 1·3·7·14·30일 간격)
               </p>
             </div>
           </div>
