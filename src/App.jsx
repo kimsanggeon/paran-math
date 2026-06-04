@@ -23581,19 +23581,20 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                                       <div className="flex items-start gap-1.5">
                                                         <span className="text-[11px] font-bold text-indigo-600 w-7 flex-shrink-0 text-center pt-1">{c.n}</span>
                                                         <p className="flex-1 text-[10.5px] text-gray-700 leading-snug pt-0.5">{c.title}</p>
-                                                        <div className="flex gap-0.5 flex-shrink-0">
-                                                          {[
-                                                            { v: 10, label: '✅', color: 'bg-green-500 text-white', name: '완전' },
-                                                            { v: 5,  label: '🔶', color: 'bg-orange-400 text-white', name: '부분' },
-                                                            { v: 0,  label: '❌', color: 'bg-red-500 text-white', name: '미흡' },
-                                                          ].map(b => (
-                                                            <button key={b.v} type="button"
-                                                              onClick={() => setGrade(u.roman, c.n, score === b.v ? undefined : b.v)}
-                                                              title={`${b.name} (${b.v}점)`}
-                                                              className={`w-7 h-7 rounded text-xs font-bold border ${ score === b.v ? b.color + ' border-transparent shadow' : 'bg-white text-gray-300 border-gray-200 hover:border-gray-400' }`}>
-                                                              {b.label}
-                                                            </button>
-                                                          ))}
+                                                        <div className="grid grid-cols-10 gap-0.5 flex-shrink-0 w-[210px]">
+                                                          {Array.from({ length: 10 }, (_, i) => i + 1).map(v => {
+                                                            const isSel = score === v;
+                                                            const bgClass = v >= 9 ? 'bg-emerald-500' : v >= 7 ? 'bg-lime-500' : v >= 5 ? 'bg-amber-500' : v >= 3 ? 'bg-orange-500' : 'bg-rose-500';
+                                                            const tip = v === 10 ? '완전 이해 (10점)' : v >= 7 ? `우수 (${v}점)` : v >= 5 ? `부분 이해 (${v}점)` : v >= 3 ? `재학습 필요 (${v}점)` : `미흡 (${v}점)`;
+                                                            return (
+                                                              <button key={v} type="button"
+                                                                onClick={() => setGrade(u.roman, c.n, isSel ? undefined : v)}
+                                                                title={tip}
+                                                                className={`h-7 rounded text-[10px] font-bold border transition-colors ${isSel ? `${bgClass} text-white border-transparent shadow` : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'}`}>
+                                                                {v}
+                                                              </button>
+                                                            );
+                                                          })}
                                                         </div>
                                                       </div>
                                                       <input type="text"
