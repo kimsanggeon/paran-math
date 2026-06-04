@@ -43581,22 +43581,51 @@ function AttendanceTab({ students, saveStudents, teachers = [], userType = 'teac
   const [filterClass, setFilterClass] = useState('all');
   const [filterTeacher, setFilterTeacher] = useState('all'); // 담당 선생님 필터 ('all' | teacherId | 'unassigned')
 
-  // 출결 데이터 로드
+  // 출결 데이터 로드 + 주기 동기화 (탭 포커스·30초 폴링)
   useEffect(() => {
     loadAttendance();
+    const onVis = () => { if (document.visibilityState === 'visible') loadAttendance(); };
+    document.addEventListener('visibilitychange', onVis);
+    const iv = setInterval(loadAttendance, 30000);
+    return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(iv); };
   }, []);
 
+  // ★ 경쟁 상태 방지: Firestore + localStorage 둘 다 읽고 각 기록의 updatedAt 비교해 더 최신 것을 채택
+  //   (방금 체크한 직후 컴포넌트 재마운트 시 Firestore가 아직 못 받은 옛 데이터로 덮어쓰는 버그 차단)
   const loadAttendance = async () => {
     try {
+      let fbData = {};
+      let lsData = {};
       if (typeof window !== 'undefined' && window.storage) {
-        const result = await window.storage.get('paran:attendance', true);
-        if (result?.value) {
-          setAttendanceRecords(JSON.parse(result.value));
-          return;
-        }
+        try {
+          const result = await window.storage.get('paran:attendance', true);
+          if (result?.value) fbData = JSON.parse(result.value) || {};
+        } catch (e) { console.log('출결 firestore 로드 오류:', e); }
       }
-      const saved = localStorage.getItem('paran:attendance');
-      if (saved) setAttendanceRecords(JSON.parse(saved));
+      try {
+        const saved = localStorage.getItem('paran:attendance');
+        if (saved) lsData = JSON.parse(saved) || {};
+      } catch (e) {}
+
+      // 병합: 키별로 updatedAt 비교, 더 최근 것 채택 (값이 없으면 살아있는 쪽 채택)
+      const merged = { ...fbData };
+      Object.entries(lsData).forEach(([key, lsRec]) => {
+        const fbRec = merged[key];
+        if (!fbRec) { merged[key] = lsRec; return; }
+        const lsT = new Date(lsRec?.updatedAt || 0).getTime();
+        const fbT = new Date(fbRec?.updatedAt || 0).getTime();
+        if (lsT > fbT) merged[key] = lsRec;
+      });
+
+      // 현재 state와 동일하면 setState 생략 (불필요한 리렌더 방지)
+      setAttendanceRecords(prev => {
+        try {
+          if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+        } catch (e) {}
+        return merged;
+      });
+      // 병합 결과를 localStorage에도 동기화 (다음 로드 시 더 최신 상태로 시작)
+      try { localStorage.setItem('paran:attendance', JSON.stringify(merged)); } catch (e) {}
     } catch (e) {
       console.log('출결 로드 오류:', e);
     }
