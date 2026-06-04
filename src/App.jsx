@@ -624,6 +624,10 @@ export default function ParanMathSystem() {
   const [activeTab, setActiveTab] = useState('gamification');
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]); // 선생님 목록
+  // 🪦 묘비 목록 (영구 삭제된 학생 이름) — 캐시된 state가 다시 저장하려 해도 자동 차단
+  const [tombstonedNames, setTombstonedNames] = useState([]);
+  const tombstonedRef = React.useRef([]);
+  React.useEffect(() => { tombstonedRef.current = tombstonedNames; }, [tombstonedNames]);
 
   // ★ 뒤로 가기: 탭 이동 히스토리
   const tabHistory = useRef([]); // 이전 탭 스택
@@ -782,15 +786,68 @@ export default function ParanMathSystem() {
     } catch (e) { console.log('학생 병합 오류:', e); return firebaseStudents; }
   };
 
+  // 🪦 묘비 목록 로드 — 영구 삭제된 학생이 어떤 캐시 경로로도 부활하지 않도록 필터
+  const loadTombstone = async () => {
+    try {
+      if (typeof window !== 'undefined' && window.storage) {
+        const r = await window.storage.get('paran:tombstone:students', true);
+        if (r?.value) {
+          const arr = JSON.parse(r.value);
+          if (Array.isArray(arr)) {
+            setTombstonedNames(arr);
+            tombstonedRef.current = arr;
+            try { localStorage.setItem('paran:tombstone:students', JSON.stringify(arr)); } catch (e) {}
+            return arr;
+          }
+        }
+      }
+    } catch (e) {}
+    try {
+      const saved = localStorage.getItem('paran:tombstone:students');
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) { setTombstonedNames(arr); tombstonedRef.current = arr; return arr; }
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  const filterTombstoned = (list) => {
+    const blocked = tombstonedRef.current || [];
+    if (!blocked.length || !Array.isArray(list)) return list;
+    return list.filter(s => !blocked.includes(s?.name));
+  };
+
+  // 🪦 학생 영구 차단 — 완전 삭제 시 호출. window 전역으로 노출해 어느 컴포넌트든 사용 가능.
+  React.useEffect(() => {
+    const fn = async (name) => {
+      if (!name) return;
+      const cur = tombstonedRef.current || [];
+      if (cur.includes(name)) return;
+      const upd = [...cur, name];
+      tombstonedRef.current = upd;
+      setTombstonedNames(upd);
+      try { localStorage.setItem('paran:tombstone:students', JSON.stringify(upd)); } catch (e) {}
+      try {
+        if (window.storage) await window.storage.set('paran:tombstone:students', JSON.stringify(upd), true);
+      } catch (e) { console.log('묘비 저장 오류:', e); }
+      console.log('🪦 학생 영구 차단됨:', name);
+    };
+    window.__tombstoneStudent = fn;
+    return () => { if (window.__tombstoneStudent === fn) delete window.__tombstoneStudent; };
+  }, []);
+
   const loadStudents = async () => {
     try {
+      // 묘비 목록 먼저 로드 (영구 삭제 학생 차단용)
+      await loadTombstone();
       // ★ 1순위: Firebase academies/default/students (개별 문서)
       if (isFirebaseConnected()) {
         const firebaseStudents = await loadStudentsFromFirebase();
         if (firebaseStudents && firebaseStudents.length > 0) {
           // Firebase 데이터에 빠진 schoolScores를 localStorage에서 병합 (Firebase 저장 실패 대비)
           const merged = mergeWithLocalSchoolScores(firebaseStudents);
-          const cleaned = sanitizeStudents(merged);
+          const cleaned = filterTombstoned(sanitizeStudents(merged));
           setStudents(cleaned);
           window.__paranStudents = cleaned;
           try { localStorage.setItem('paran:students', JSON.stringify(cleaned)); } catch(e) {}
@@ -804,7 +861,7 @@ export default function ParanMathSystem() {
           if (r?.value) {
             const list = JSON.parse(r.value);
             if (list.length > 0) {
-              const cleaned = sanitizeStudents(list);
+              const cleaned = filterTombstoned(sanitizeStudents(list));
               setStudents(cleaned);
               window.__paranStudents = cleaned;
               try { localStorage.setItem('paran:students', JSON.stringify(cleaned)); } catch(e) {}
@@ -817,7 +874,7 @@ export default function ParanMathSystem() {
       const lsData = localStorage.getItem('paran:students');
       if (lsData) {
         const list = JSON.parse(lsData);
-        const cleaned = sanitizeStudents(list);
+        const cleaned = filterTombstoned(sanitizeStudents(list));
         setStudents(cleaned);
         window.__paranStudents = cleaned;
       }
@@ -826,7 +883,7 @@ export default function ParanMathSystem() {
       try {
         const saved = localStorage.getItem('paran:students');
         if (saved) {
-          const p = sanitizeStudents(JSON.parse(saved));
+          const p = filterTombstoned(sanitizeStudents(JSON.parse(saved)));
           setStudents(p);
           window.__paranStudents = p;
         }
@@ -882,6 +939,8 @@ export default function ParanMathSystem() {
   };
 
   const saveStudents = async (newStudents) => {
+    // 🪦 묘비 학생 자동 제거 — 캐시된 state가 영구 삭제 학생을 다시 저장하려 해도 차단
+    newStudents = filterTombstoned(newStudents);
     // 1. 메모리 캐시 + React state 즉시 업데이트
     window.__paranStudents = newStudents;
     setStudents(newStudents);
@@ -11261,7 +11320,9 @@ function AcademyTransferView({ students, saveStudents, teachers }) {
   };
 
   // 영구 삭제
-  const permanentDelete = (student) => {
+  const permanentDelete = async (student) => {
+    // 🪦 묘비 등록 — 다른 기기 캐시에서 부활 차단
+    try { if (window.__tombstoneStudent) await window.__tombstoneStudent(student.name); } catch (e) {}
     const upd = students.filter(s => s.id !== student.id);
     saveStudents(upd);
     setDeleteConfirm(null);
@@ -11589,7 +11650,9 @@ function WithdrawnStudentsView({ students, saveStudents, teachers }) {
   };
 
   // 완전 삭제
-  const permanentDelete = (student) => {
+  const permanentDelete = async (student) => {
+    // 🪦 동일 이름 학생이 캐시된 다른 기기에서 부활하지 못하도록 묘비 등록
+    try { if (window.__tombstoneStudent) await window.__tombstoneStudent(student.name); } catch (e) {}
     const upd = students.filter(s => s.id !== student.id);
     saveStudents(upd);
     setDeleteConfirm(null);
@@ -38227,8 +38290,10 @@ function StudentManagementTab({ students, saveStudents, teachers = [], userType 
 
   const confirmDeleteStudent = async () => {
     if (!deleteConfirmStudent) return;
-    
+
     try {
+      // 🪦 묘비 등록 — 다른 기기 캐시에서 부활 차단
+      try { if (window.__tombstoneStudent) await window.__tombstoneStudent(deleteConfirmStudent.name); } catch (e) {}
       const newStudents = students.filter(s => String(s.id) !== String(deleteConfirmStudent.id));
       await saveStudents(newStudents);
       setDeleteConfirmStudent(null);
