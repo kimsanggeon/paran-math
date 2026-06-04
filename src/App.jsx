@@ -23452,7 +23452,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                   });
                                   updateTestField(testIndex, 'conceptGrades', next);
                                   if (totalMax > 0) {
-                                    updateTestField(testIndex, 'testScore', String(earned));
+                                    updateTestField(testIndex, 'testScore', String(Math.round(earned * 10) / 10));
                                     updateTestField(testIndex, 'testTotal', String(totalMax));
                                   }
                                 };
@@ -23476,7 +23476,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                     });
                                   });
                                   if (totalMax > 0) {
-                                    updateTestField(testIndex, 'testScore', String(earned));
+                                    updateTestField(testIndex, 'testScore', String(Math.round(earned * 10) / 10));
                                     updateTestField(testIndex, 'testTotal', String(totalMax));
                                   }
                                 };
@@ -23493,7 +23493,7 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                     });
                                   });
                                   if (totalMax > 0) {
-                                    updateTestField(testIndex, 'testScore', String(earned));
+                                    updateTestField(testIndex, 'testScore', String(Math.round(earned * 10) / 10));
                                     updateTestField(testIndex, 'testTotal', String(totalMax));
                                   }
                                 };
@@ -23581,20 +23581,41 @@ function LearningReportTab({ students, saveStudents, userType, loggedInTeacher, 
                                                       <div className="flex items-start gap-1.5">
                                                         <span className="text-[11px] font-bold text-indigo-600 w-7 flex-shrink-0 text-center pt-1">{c.n}</span>
                                                         <p className="flex-1 text-[10.5px] text-gray-700 leading-snug pt-0.5">{c.title}</p>
-                                                        <div className="grid grid-cols-10 gap-0.5 flex-shrink-0 w-[210px]">
-                                                          {Array.from({ length: 10 }, (_, i) => i + 1).map(v => {
-                                                            const isSel = score === v;
-                                                            const bgClass = v >= 9 ? 'bg-emerald-500' : v >= 7 ? 'bg-lime-500' : v >= 5 ? 'bg-amber-500' : v >= 3 ? 'bg-orange-500' : 'bg-rose-500';
-                                                            const tip = v === 10 ? '완전 이해 (10점)' : v >= 7 ? `우수 (${v}점)` : v >= 5 ? `부분 이해 (${v}점)` : v >= 3 ? `재학습 필요 (${v}점)` : `미흡 (${v}점)`;
-                                                            return (
-                                                              <button key={v} type="button"
-                                                                onClick={() => setGrade(u.roman, c.n, isSel ? undefined : v)}
-                                                                title={tip}
-                                                                className={`h-7 rounded text-[10px] font-bold border transition-colors ${isSel ? `${bgClass} text-white border-transparent shadow` : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'}`}>
-                                                                {v}
-                                                              </button>
-                                                            );
-                                                          })}
+                                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                                          {/* 소수점 1자리까지 입력 가능한 점수 필드 (0~10, 0.1 단위) */}
+                                                          <input
+                                                            type="number"
+                                                            min="0"
+                                                            max="10"
+                                                            step="0.1"
+                                                            value={typeof score === 'number' ? score : ''}
+                                                            placeholder="-"
+                                                            title="점수 (0~10, 소수점 1자리까지 가능 — 비우면 미채점)"
+                                                            onChange={(e) => {
+                                                              const raw = e.target.value;
+                                                              if (raw === '') { setGrade(u.roman, c.n, undefined); return; }
+                                                              let num = parseFloat(raw);
+                                                              if (isNaN(num)) return;
+                                                              num = Math.max(0, Math.min(10, Math.round(num * 10) / 10));
+                                                              setGrade(u.roman, c.n, num);
+                                                            }}
+                                                            onWheel={(e) => e.target.blur()}
+                                                            className={`w-14 h-7 px-1 rounded text-[11px] font-bold text-center border-2 outline-none transition-colors ${
+                                                              typeof score !== 'number' ? 'bg-white text-gray-400 border-gray-300' :
+                                                              score >= 9 ? 'bg-emerald-500 text-white border-emerald-600' :
+                                                              score >= 7 ? 'bg-lime-500 text-white border-lime-600' :
+                                                              score >= 5 ? 'bg-amber-500 text-white border-amber-600' :
+                                                              score >= 3 ? 'bg-orange-500 text-white border-orange-600' :
+                                                              'bg-rose-500 text-white border-rose-600'
+                                                            }`}
+                                                          />
+                                                          <span className="text-[10px] text-gray-400 font-normal">/10</span>
+                                                          {typeof score === 'number' && (
+                                                            <button type="button"
+                                                              onClick={() => setGrade(u.roman, c.n, undefined)}
+                                                              title="점수 지우기"
+                                                              className="w-5 h-5 rounded-full text-gray-400 hover:text-red-500 text-xs leading-none">✕</button>
+                                                          )}
                                                         </div>
                                                       </div>
                                                       <input type="text"
